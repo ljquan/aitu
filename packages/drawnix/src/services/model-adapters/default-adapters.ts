@@ -1,0 +1,158 @@
+import { defaultGeminiClient } from '../../utils/gemini-api';
+import { asyncImageAPIService } from '../async-image-api-service';
+import { videoAPIService } from '../video-api-service';
+import {
+  DEFAULT_IMAGE_MODEL_ID,
+  DEFAULT_VIDEO_MODEL_ID,
+  IMAGE_MODEL_MORE_OPTIONS,
+  IMAGE_MODEL_VIP_OPTIONS,
+  VIDEO_MODELS,
+  isAsyncImageModel,
+} from '../../constants/model-config';
+import type { UploadedVideoImage } from '../../types/video.types';
+import type {
+  ImageModelAdapter,
+  VideoModelAdapter,
+  ImageGenerationRequest,
+  VideoGenerationRequest,
+} from './types';
+import { registerModelAdapter } from './registry';
+import { registerKlingAdapter } from './kling-adapter';
+
+const imageModelIds = [
+  ...IMAGE_MODEL_VIP_OPTIONS,
+  ...IMAGE_MODEL_MORE_OPTIONS,
+].map((model) => model.id);
+
+const videoModelIds = VIDEO_MODELS.map((model) => model.id).filter(
+  (modelId) => !modelId.startsWith('kling')
+);
+
+const extractImageUrl = (
+  response: any,
+  prompt: string
+): { url: string; format: string; raw?: unknown } => {
+  if (
+    response?.data &&
+    Array.isArray(response.data) &&
+    response.data.length > 0
+  ) {
+    const imageData = response.data[0];
+    if (imageData.url) {
+      return { url: imageData.url, format: 'png', raw: response };
+    }
+    if (imageData.b64_json) {
+      return {
+        url: `data:image/png;base64,${imageData.b64_json}`,
+        format: 'png',
+        raw: response,
+      };
+    }
+  }
+
+  const message = response?.revised_prompt
+    ? String(response.revised_prompt).replace(
+        `Generate an image: ${prompt}: `,
+        ''
+      )
+    : JSON.stringify(response);
+
+  throw new Error(`API 未返回有效的图片数据: ${message}`);
+};
+
+const toUploadedVideoImages = (
+  referenceImages?: string[]
+): UploadedVideoImage[] | undefined => {
+  if (!referenceImages || referenceImages.length === 0) {
+    return undefined;
+  }
+
+  return referenceImages.map((url, index) => ({
+    slot: index,
+    url,
+    name: `reference-${index + 1}.png`,
+  }));
+};
+
+export const geminiImageAdapter: ImageModelAdapter = {
+  id: 'gemini-image-adapter',
+  label: 'Gemini Image',
+  kind: 'image',
+  docsUrl: 'https://tuzi-api.apifox.cn',
+  supportedModels: imageModelIds,
+  defaultModel: DEFAULT_IMAGE_MODEL_ID,
+  async generateImage(_context, request: ImageGenerationRequest) {
+    const model = request.model || DEFAULT_IMAGE_MODEL_ID;
+
+    if (isAsyncImageModel(model)) {
+      const result = await asyncImageAPIService.generateWithPolling({
+        model,
+        prompt: request.prompt,
+        size: request.size,
+      });
+      const { url, format } = asyncImageAPIService.extractUrlAndFormat(result);
+      return { url, format, raw: result };
+    }
+
+    const quality = request.params?.quality as '1k' | '2k' | '4k' | undefined;
+    const responseFormat = request.params?.response_format as
+      | 'url'
+      | 'b64_json'
+      | undefined;
+
+    const result = await defaultGeminiClient.generateImage(request.prompt, {
+      size: request.size,
+      image: request.referenceImages,
+      response_format: responseFormat || 'url',
+      quality,
+      model,
+    });
+
+    return extractImageUrl(result, request.prompt);
+  },
+};
+
+export const geminiVideoAdapter: VideoModelAdapter = {
+  id: 'gemini-video-adapter',
+  label: 'Gemini Video',
+  kind: 'video',
+  docsUrl: 'https://tuzi-api.apifox.cn',
+  supportedModels: videoModelIds,
+  defaultModel: DEFAULT_VIDEO_MODEL_ID,
+  async generateVideo(_context, request: VideoGenerationRequest) {
+    const model = (request.model || DEFAULT_VIDEO_MODEL_ID) as any;
+    const seconds = request.duration
+      ? String(request.duration)
+      : model?.toString().startsWith('sora')
+      ? '10'
+      : '8';
+    const size = request.size || '1280x720';
+    const inputReferences = toUploadedVideoImages(request.referenceImages);
+
+    const result = await videoAPIService.generateVideoWithPolling({
+      model,
+      prompt: request.prompt,
+      seconds,
+      size,
+      inputReferences,
+    });
+
+    const url = result.video_url || result.url;
+    if (!url) {
+      throw new Error('API 未返回有效的视频 URL');
+    }
+
+    return {
+      url,
+      format: 'mp4',
+      duration: parseInt(result.seconds || seconds, 10),
+      raw: result,
+    };
+  },
+};
+
+export function registerDefaultModelAdapters(): void {
+  registerModelAdapter(geminiImageAdapter);
+  registerModelAdapter(geminiVideoAdapter);
+  registerKlingAdapter();
+}

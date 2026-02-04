@@ -320,10 +320,26 @@ const SORA_DEFAULT_PARAMS: VideoModelDefaults = {
   aspectRatio: '16:9',
 };
 
+/** Kling 模型默认参数（5秒） */
+const KLING_DEFAULT_PARAMS: VideoModelDefaults = {
+  duration: '5',
+  size: '1280x720',
+  aspectRatio: '16:9',
+};
+
 /**
  * 视频模型配置
  */
 export const VIDEO_MODELS: ModelConfig[] = [
+  {
+    id: 'kling-v1-6',
+    label: 'Kling V1.6',
+    shortCode: 'k16',
+    description: '5s/10s 视频，支持文生视频和图生视频',
+    type: 'video',
+    supportsTools: true,
+    videoDefaults: KLING_DEFAULT_PARAMS,
+  },
   {
     id: 'veo3.1',
     label: 'Veo 3.1',

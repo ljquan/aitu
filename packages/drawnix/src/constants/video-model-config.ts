@@ -12,6 +12,28 @@ import type { VideoModel, VideoModelConfig } from '../types/video.types';
  * Each model has specific duration, size, and image upload options
  */
 export const VIDEO_MODEL_CONFIGS: Record<VideoModel, VideoModelConfig> = {
+  'kling-v1-6': {
+    id: 'kling-v1-6',
+    label: 'Kling V1.6',
+    provider: 'kling',
+    description: '5s/10s 视频，支持文生视频和图生视频',
+    durationOptions: [
+      { label: '5秒', value: '5' },
+      { label: '10秒', value: '10' },
+    ],
+    defaultDuration: '5',
+    sizeOptions: [
+      { label: '横屏 16:9', value: '1280x720', aspectRatio: '16:9' },
+      { label: '竖屏 9:16', value: '720x1280', aspectRatio: '9:16' },
+      { label: '方形 1:1', value: '1024x1024', aspectRatio: '1:1' },
+    ],
+    defaultSize: '1280x720',
+    imageUpload: {
+      maxCount: 1,
+      mode: 'reference',
+      labels: ['参考图'],
+    },
+  },
   // Sora models
   'sora-2': {
     id: 'sora-2',
@@ -70,14 +92,12 @@ export const VIDEO_MODEL_CONFIGS: Record<VideoModel, VideoModelConfig> = {
   },
 
   // Veo models
-  'veo3': {
+  veo3: {
     id: 'veo3',
     label: 'Veo 3',
     provider: 'veo',
     description: '8秒视频',
-    durationOptions: [
-      { label: '8秒', value: '8' },
-    ],
+    durationOptions: [{ label: '8秒', value: '8' }],
     defaultDuration: '8',
     sizeOptions: [
       { label: '横屏 16:9', value: '1280x720', aspectRatio: '16:9' },
@@ -95,9 +115,7 @@ export const VIDEO_MODEL_CONFIGS: Record<VideoModel, VideoModelConfig> = {
     label: 'Veo 3 Pro',
     provider: 'veo',
     description: '8秒高质量视频',
-    durationOptions: [
-      { label: '8秒', value: '8' },
-    ],
+    durationOptions: [{ label: '8秒', value: '8' }],
     defaultDuration: '8',
     sizeOptions: [
       { label: '横屏 16:9', value: '1280x720', aspectRatio: '16:9' },
@@ -115,9 +133,7 @@ export const VIDEO_MODEL_CONFIGS: Record<VideoModel, VideoModelConfig> = {
     label: 'Veo 3.1',
     provider: 'veo',
     description: '8秒快速模式，支持首尾帧',
-    durationOptions: [
-      { label: '8秒', value: '8' },
-    ],
+    durationOptions: [{ label: '8秒', value: '8' }],
     defaultDuration: '8',
     sizeOptions: [
       { label: '横屏 16:9', value: '1280x720', aspectRatio: '16:9' },
@@ -135,9 +151,7 @@ export const VIDEO_MODEL_CONFIGS: Record<VideoModel, VideoModelConfig> = {
     label: 'Veo 3.1 Pro',
     provider: 'veo',
     description: '8秒高质量模式，支持首尾帧',
-    durationOptions: [
-      { label: '8秒', value: '8' },
-    ],
+    durationOptions: [{ label: '8秒', value: '8' }],
     defaultDuration: '8',
     sizeOptions: [
       { label: '横屏 16:9', value: '1280x720', aspectRatio: '16:9' },
@@ -155,9 +169,7 @@ export const VIDEO_MODEL_CONFIGS: Record<VideoModel, VideoModelConfig> = {
     label: 'Veo 3.1 Components',
     provider: 'veo',
     description: '8秒模式，支持3张参考图',
-    durationOptions: [
-      { label: '8秒', value: '8' },
-    ],
+    durationOptions: [{ label: '8秒', value: '8' }],
     defaultDuration: '8',
     sizeOptions: [
       { label: '横屏 16:9', value: '1280x720', aspectRatio: '16:9' },
@@ -175,9 +187,7 @@ export const VIDEO_MODEL_CONFIGS: Record<VideoModel, VideoModelConfig> = {
     label: 'Veo 3.1 4K',
     provider: 'veo',
     description: '8秒4K模式，支持首尾帧',
-    durationOptions: [
-      { label: '8秒', value: '8' },
-    ],
+    durationOptions: [{ label: '8秒', value: '8' }],
     defaultDuration: '8',
     sizeOptions: [
       { label: '4K横屏 16:9', value: '3840x2160', aspectRatio: '16:9' },
@@ -195,9 +205,7 @@ export const VIDEO_MODEL_CONFIGS: Record<VideoModel, VideoModelConfig> = {
     label: 'Veo 3.1 Components 4K',
     provider: 'veo',
     description: '8秒4K模式，支持3张参考图',
-    durationOptions: [
-      { label: '8秒', value: '8' },
-    ],
+    durationOptions: [{ label: '8秒', value: '8' }],
     defaultDuration: '8',
     sizeOptions: [
       { label: '4K横屏 16:9', value: '3840x2160', aspectRatio: '16:9' },
@@ -215,9 +223,7 @@ export const VIDEO_MODEL_CONFIGS: Record<VideoModel, VideoModelConfig> = {
     label: 'Veo 3.1 Pro 4K',
     provider: 'veo',
     description: '8秒高质量4K模式，支持首尾帧',
-    durationOptions: [
-      { label: '8秒', value: '8' },
-    ],
+    durationOptions: [{ label: '8秒', value: '8' }],
     defaultDuration: '8',
     sizeOptions: [
       { label: '4K横屏 16:9', value: '3840x2160', aspectRatio: '16:9' },
@@ -243,7 +249,7 @@ export function getVideoModelConfig(model: VideoModel): VideoModelConfig {
  * Get all video model options for select component
  */
 export function getVideoModelOptions(): { label: string; value: VideoModel }[] {
-  return Object.values(VIDEO_MODEL_CONFIGS).map(config => ({
+  return Object.values(VIDEO_MODEL_CONFIGS).map((config) => ({
     label: config.label,
     value: config.id,
   }));
@@ -292,9 +298,11 @@ export function supportsStoryboardMode(model: VideoModel): boolean {
  */
 export function getStoryboardModeConfig(model: VideoModel) {
   const config = VIDEO_MODEL_CONFIGS[model];
-  return config.storyboardMode ?? {
-    supported: false,
-    maxScenes: 15,
-    minSceneDuration: 0.1,
-  };
+  return (
+    config.storyboardMode ?? {
+      supported: false,
+      maxScenes: 15,
+      minSceneDuration: 0.1,
+    }
+  );
 }

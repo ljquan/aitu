@@ -27,6 +27,10 @@ import { unifiedCacheService } from './unified-cache-service';
 import { convertAspectRatioToSize } from '../constants/image-aspect-ratios';
 import { asyncImageAPIService } from './async-image-api-service';
 import { isAsyncImageModel } from '../constants/model-config';
+import {
+  getAdapterContextFromSettings,
+  resolveAdapterForModel,
+} from './model-adapters';
 
 /**
  * Generation API Service
@@ -466,6 +470,60 @@ class GenerationAPIService {
     signal: AbortSignal
   ): Promise<TaskResult> {
     try {
+      const requestedModel = (params as any).model as string | undefined;
+      if (requestedModel && requestedModel.startsWith('kling')) {
+        const adapter = resolveAdapterForModel(requestedModel, 'video');
+        if (!adapter || adapter.kind !== 'video') {
+          throw new Error(`No adapter registered for model: ${requestedModel}`);
+        }
+
+        const uploadedImages = (params as any).uploadedImages as
+          | Array<{ url?: string }>
+          | undefined;
+        const referenceImages: string[] = [];
+        if (Array.isArray(uploadedImages)) {
+          uploadedImages.forEach((img) => {
+            if (img?.url) {
+              referenceImages.push(img.url);
+            }
+          });
+        }
+        if ((params as any).uploadedImage?.url) {
+          referenceImages.push((params as any).uploadedImage.url);
+        }
+        if (Array.isArray((params as any).referenceImages)) {
+          referenceImages.push(
+            ...((params as any).referenceImages as string[])
+          );
+        }
+
+        const durationValue =
+          (params as any).duration !== undefined
+            ? (params as any).duration
+            : (params as any).seconds;
+
+        const result = await adapter.generateVideo(
+          getAdapterContextFromSettings(),
+          {
+            prompt: params.prompt,
+            model: requestedModel,
+            size: (params as any).size,
+            duration:
+              durationValue !== undefined ? Number(durationValue) : undefined,
+            referenceImages:
+              referenceImages.length > 0 ? referenceImages : undefined,
+            params: (params as any).params,
+          }
+        );
+
+        return {
+          url: result.url,
+          format: result.format || 'mp4',
+          size: 0,
+          duration: result.duration || 0,
+        };
+      }
+
       // Mark task as submitting phase (before API call)
       // This helps identify tasks interrupted during submission
       taskQueueService.updateTaskStatus(taskId, 'processing' as any, {
