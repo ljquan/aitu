@@ -568,33 +568,6 @@ export class SWChannelClient {
     });
   }
 
-  /**
-   * 响应主线程工具请求
-   * @deprecated 使用 registerToolRequestHandler 直接返回结果，减少一次交互
-   */
-  async respondToToolRequest(
-    requestId: string,
-    success: boolean,
-    result?: unknown,
-    error?: string,
-    addSteps?: MainThreadToolResponse['addSteps']
-  ): Promise<TaskOperationResult> {
-    this.ensureInitialized();
-    const response = await this.channel!.call('workflow:respondTool', { 
-      requestId, 
-      success, 
-      result, 
-      error, 
-      addSteps 
-    });
-    
-    if (response.ret !== ReturnCode.Success) {
-      return { success: false, error: response.msg || 'Respond tool failed' };
-    }
-    
-    return response.data || { success: true };
-  }
-
   // ============================================================================
   // 缩略图方法
   // ============================================================================
@@ -944,6 +917,61 @@ export class SWChannelClient {
    */
   async deleteCache(url: string): Promise<TaskOperationResult> {
     return callOperation(this.channel, 'cache:delete', { url }, 'Delete cache failed');
+  }
+
+  // ============================================================================
+  // 执行器方法 (Media Executor)
+  // ============================================================================
+
+  /**
+   * 健康检查 - 用于检测 SW 是否可用
+   */
+  async ping(): Promise<boolean> {
+    if (!this.initialized || !this.channel) {
+      return false;
+    }
+    try {
+      const response = await this.channel.call('ping', undefined);
+      return response.ret === ReturnCode.Success;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * 调用执行器执行媒体生成任务
+   *
+   * SW 会在后台执行任务，结果直接写入 IndexedDB 的 tasks 表。
+   * 此方法立即返回，不等待任务完成。
+   *
+   * @param params 执行参数
+   * @returns 提交结果（不是执行结果）
+   */
+  async callExecutor(params: {
+    taskId: string;
+    type: 'image' | 'video' | 'ai_analyze';
+    params: Record<string, unknown>;
+  }): Promise<{ success: boolean; error?: string }> {
+    this.ensureInitialized();
+
+    try {
+      const response = await this.channel!.call('executor:execute', params);
+
+      if (response.ret !== ReturnCode.Success) {
+        return {
+          success: false,
+          error: response.msg || 'Executor call failed',
+        };
+      }
+
+      return response.data || { success: true };
+    } catch (error) {
+      console.error('[SWChannelClient] executor:execute error:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
   }
 
   // ============================================================================

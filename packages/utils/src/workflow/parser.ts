@@ -320,7 +320,23 @@ export function parseWorkflowJson(response: string): WorkflowJsonResponse | null
     return null;
   }
 
-  const next = Array.isArray(parsed.next) ? parsed.next : [];
+  let next = Array.isArray(parsed.next) ? parsed.next : [];
+
+  // 特殊处理：如果 content 本身是 JSON 数组字符串且 next 为空
+  // 这种情况发生在 AI 返回格式为 {"content": "[{\"mcp\":...,\"args\":...}]"} 时
+  if (next.length === 0 && parsed.content.trim().startsWith('[')) {
+    try {
+      const contentParsed = JSON.parse(parsed.content);
+      if (Array.isArray(contentParsed)) {
+        // content 是工具调用数组
+        next = contentParsed;
+        // content 设为空或提取描述
+        parsed.content = '';
+      }
+    } catch {
+      // content 不是有效 JSON，继续使用原始值
+    }
+  }
 
   // Validate next array items
   const validNext = next
@@ -370,19 +386,49 @@ export function parseToolCalls(response: string): ToolCall[] {
     }));
   }
 
+  // Try direct array format: [{"mcp": "...", "args": {...}}]
+  const cleaned = cleanLLMResponse(response);
+  if (cleaned.trim().startsWith('[')) {
+    try {
+      const parsed = JSON.parse(cleaned);
+      if (Array.isArray(parsed)) {
+        const mcpCalls = parsed
+          .filter(
+            (item: unknown): item is { mcp: string; args: Record<string, unknown> } =>
+              typeof item === 'object' &&
+              item !== null &&
+              typeof (item as { mcp?: unknown }).mcp === 'string' &&
+              typeof (item as { args?: unknown }).args === 'object'
+          )
+          .map((item, index) => ({
+            id: generateToolCallId(index),
+            name: item.mcp,
+            arguments: item.args,
+          }));
+        if (mcpCalls.length > 0) {
+          return mcpCalls;
+        }
+      }
+    } catch {
+      // Not valid JSON array, continue with other formats
+    }
+  }
+
   // Fallback to legacy formats
   const toolCalls: ToolCall[] = [];
 
   const createToolCall = (parsed: Record<string, unknown>): ToolCall | null => {
-    if (!parsed.name || typeof parsed.name !== 'string') {
+    // Support both "name" and "mcp" field names
+    const name = (parsed.name || parsed.mcp) as string | undefined;
+    if (!name || typeof name !== 'string') {
       return null;
     }
 
-    const args = parsed.arguments || parsed.params || parsed.parameters || {};
+    const args = parsed.arguments || parsed.args || parsed.params || parsed.parameters || {};
 
     return {
       id: generateToolCallId(),
-      name: parsed.name,
+      name,
       arguments: typeof args === 'object' && args !== null ? (args as Record<string, unknown>) : {},
     };
   };

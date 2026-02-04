@@ -301,6 +301,19 @@ export function useWorkflowSubmission(
   useEffect(() => {
     workflowSubmissionService.init();
 
+    // 启动工作流轮询服务
+    // 负责执行 pending_main_thread 状态的步骤（Canvas 操作等）
+    import('../services/workflow-polling-service').then(({ workflowPollingService }) => {
+      workflowPollingService.initialize().then(() => {
+        // 设置当前画布 ID，确保只处理当前画布发起的工作流
+        const board = boardRef.current;
+        if (board && 'id' in board) {
+          workflowPollingService.setBoardId((board as unknown as { id: string }).id);
+        }
+        workflowPollingService.start();
+      });
+    });
+
     // 注册 Canvas 操作处理器（双工通讯模式）
     // SW 发起请求，主线程直接返回结果，无需单独响应
     workflowSubmissionService.registerCanvasHandler(
@@ -326,11 +339,15 @@ export function useWorkflowSubmission(
     // This will query SW for any running workflows and restore UI state
     recoverWorkflowsOnMount();
 
-    // Note: Main thread tool requests are now handled by SWTaskQueueClient.handleMainThreadToolRequest
-    // which uses swCapabilitiesHandler. This avoids duplicate handling and race conditions.
-    // The workflowSubmissionService.subscribeToToolRequests is no longer used.
+    // Note: Main thread tool requests are now handled by WorkflowPollingService
+    // which polls IndexedDB for pending_main_thread steps and executes them.
+    // This avoids real-time communication issues.
 
     return () => {
+      // 停止轮询服务
+      import('../services/workflow-polling-service').then(({ workflowPollingService }) => {
+        workflowPollingService.stop();
+      });
       subscriptionsRef.current.forEach(sub => sub.unsubscribe());
       subscriptionsRef.current = [];
     };
@@ -405,6 +422,17 @@ export function useWorkflowSubmission(
 
           if (workZoneId && board) {
             WorkZoneTransforms.updateWorkflow(board, workZoneId, workflowData);
+            
+            // 检查是否还有 pending 或 running 步骤（AI 分析可能会添加后续步骤）
+            const hasPendingSteps = completedWorkflow.steps.some(
+              step => step.status === 'pending' || step.status === 'running'
+            );
+            
+            // 如果还有 pending 步骤，不要删除 WorkZone
+            if (hasPendingSteps) {
+              // console.log('[useWorkflowSubmission] Workflow has pending steps, not removing WorkZone');
+              break;
+            }
             
             // If no queued tasks (like generate_image), remove WorkZone after a delay
             // Queued tasks will be handled by useAutoInsertToCanvas when they complete AND are inserted
@@ -508,6 +536,10 @@ export function useWorkflowSubmission(
     const { swTaskQueueService } = await import('../services/sw-task-queue-service');
     await swTaskQueueService.initialize();
 
+    // 获取当前画布 ID，用于多画布场景下隔离工作流执行
+    const board = boardRef.current;
+    const initiatorBoardId = board && 'id' in board ? (board as unknown as { id: string }).id : undefined;
+
     // Convert to SW workflow format
     const swWorkflow: SWWorkflowDefinition = {
       id: legacyWorkflow.id,
@@ -534,6 +566,8 @@ export function useWorkflowSubmission(
         },
         referenceImages,
       },
+      // 记录发起工作流的画布 ID，用于隔离多画布场景
+      initiatorBoardId,
     };
 
     // Subscribe to workflow events

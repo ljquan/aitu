@@ -372,6 +372,7 @@ export class ChatHandler implements IChatHandler, TaskHandler {
       resultType: 'text',
       resultCount: 1,
       resultText: fullContent,
+      responseBody: fullContent, // 流式响应：记录累积的文本内容作为响应体
     });
 
     return fullContent;

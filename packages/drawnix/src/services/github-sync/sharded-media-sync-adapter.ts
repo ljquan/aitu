@@ -251,15 +251,6 @@ class ShardedMediaSyncAdapter {
   }
 
   /**
-   * 检查是否需要迁移到分片系统
-   * @deprecated 不再需要迁移，分片系统已是唯一的媒体存储方式
-   */
-  async shouldMigrateToSharding(_threshold = 200): Promise<boolean> {
-    // 不再需要迁移，分片系统已是唯一的媒体存储方式
-    return false;
-  }
-
-  /**
    * 清理过期的 tombstones
    */
   async cleanupExpiredTombstones(): Promise<number> {

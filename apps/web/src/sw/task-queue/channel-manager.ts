@@ -111,6 +111,13 @@ interface ChatStartParams {
   systemPrompt?: string;
 }
 
+// Executor types (媒体执行器 - SW 可选降级方案)
+interface ExecutorExecuteParams {
+  taskId: string;
+  type: 'image' | 'video' | 'ai_analyze';
+  params: Record<string, unknown>;
+}
+
 // ============================================================================
 // 通道管理器
 // ============================================================================
@@ -484,11 +491,6 @@ export class SWChannelManager {
       // Note: WORKFLOW_GET_STATUS 和 WORKFLOW_GET_ALL 已移除
       // 主线程现在直接从 IndexedDB 读取工作流数据
       
-      // Deprecated: Use sendToolRequest() which receives response directly
-      [RPC_METHODS.WORKFLOW_RESPOND_TOOL]: this.wrapRpcHandler<MainThreadToolResponseMessage, any>(
-        RPC_METHODS.WORKFLOW_RESPOND_TOOL, clientId, (data) => this.handleToolResponse(data)
-      ),
-      
       // 客户端声明接管工作流（用于页面刷新后恢复）
       [RPC_METHODS.WORKFLOW_CLAIM]: this.wrapRpcHandler<{ workflowId: string }, any>(
         RPC_METHODS.WORKFLOW_CLAIM, clientId, (data) => this.handleWorkflowClaim(clientId, data.workflowId)
@@ -600,6 +602,14 @@ export class SWChannelManager {
         const data = this.unwrapRpcData<{ url: string }>(rawData);
         return this.handleCacheDelete(data);
       },
+
+      // Executor (媒体执行器 - SW 可选降级方案)
+      [RPC_METHODS.PING]: async () => {
+        return this.handlePing();
+      },
+      [RPC_METHODS.EXECUTOR_EXECUTE]: this.wrapRpcHandler<ExecutorExecuteParams, any>(
+        RPC_METHODS.EXECUTOR_EXECUTE, clientId, (data) => this.handleExecutorExecute(clientId, data)
+      ),
     };
   }
 
@@ -1000,21 +1010,6 @@ export class SWChannelManager {
 
     // 调用 executor 的重新发送方法
     executor.resendPendingToolRequestsForWorkflow(workflowId);
-  }
-
-  /**
-   * Handle tool response from main thread via RPC
-   * @deprecated This handler is kept for backward compatibility.
-   * New code should use sendToolRequest() which receives response directly.
-   */
-  private async handleToolResponse(data: MainThreadToolResponseMessage): Promise<{ success: boolean; error?: string }> {
-    try {
-      await handleMainThreadToolResponse(data);
-      return { success: true };
-    } catch (error: any) {
-      console.error('[SWChannelManager] Tool response handling failed:', error);
-      return { success: false, error: error.message };
-    }
   }
 
   // ============================================================================
@@ -1594,6 +1589,189 @@ export class SWChannelManager {
   }
 
   // ============================================================================
+  // Executor 处理器（媒体执行器 - SW 可选降级方案）
+  // ============================================================================
+
+  /**
+   * 健康检查 - 用于检测 SW 是否可用
+   */
+  private async handlePing(): Promise<{ success: boolean }> {
+    return { success: true };
+  }
+
+  /**
+   * 执行媒体生成任务
+   *
+   * 接收执行请求后立即返回，任务在后台执行。
+   * 结果直接写入 IndexedDB 的 tasks 表。
+   */
+  private async handleExecutorExecute(
+    clientId: string,
+    data: ExecutorExecuteParams
+  ): Promise<{ success: boolean; error?: string }> {
+    if (!data || !data.taskId || !data.type) {
+      return { success: false, error: 'Missing required parameters' };
+    }
+
+    const { taskId, type, params } = data;
+
+    try {
+      // 异步执行任务（fire-and-forget）
+      // 不等待任务完成，立即返回
+      this.executeMediaTask(clientId, taskId, type, params).catch((error) => {
+        console.error(`[SWChannelManager] Executor task ${taskId} failed:`, error);
+      });
+
+      return { success: true };
+    } catch (error: any) {
+      return { success: false, error: error.message || 'Executor failed' };
+    }
+  }
+
+  /**
+   * 执行媒体生成任务（内部方法）
+   * 使用统一的媒体执行器
+   */
+  private async executeMediaTask(
+    clientId: string,
+    taskId: string,
+    type: 'image' | 'video' | 'ai_analyze',
+    params: Record<string, unknown>
+  ): Promise<void> {
+    const { executeMediaTask: executeMedia } = await import('./media-executor');
+
+    // 绑定任务到客户端
+    this.taskChannels.set(taskId, this.channels.get(clientId)!);
+
+    try {
+      const config = await this.getToolConfig(taskId);
+
+      // 更新任务状态为 processing
+      await this.updateTaskStatus(taskId, TaskStatus.PROCESSING);
+
+      // 使用统一执行器执行任务
+      const result = await executeMedia(type, params, config);
+
+      if (result.success) {
+        await this.completeTask(taskId, result.data);
+      } else {
+        await this.failTask(taskId, result.error || `${type} task failed`);
+      }
+    } catch (error: any) {
+      await this.failTask(taskId, error.message || `${type} task error`);
+    } finally {
+      // 清理任务通道映射
+      this.taskChannels.delete(taskId);
+    }
+  }
+
+  /**
+   * 获取工具执行配置
+   */
+  private async getToolConfig(taskId: string): Promise<{
+    geminiConfig: GeminiConfig;
+    videoConfig: VideoAPIConfig;
+    onProgress: (progress: number, phase?: string) => void;
+    onRemoteId?: (remoteId: string) => void;
+    signal?: AbortSignal;
+  }> {
+    const geminiConfig = await taskQueueStorage.getConfig<GeminiConfig>('gemini');
+    const videoConfig = await taskQueueStorage.getConfig<VideoAPIConfig>('video');
+
+    if (!geminiConfig || !videoConfig) {
+      throw new Error('Missing API configuration');
+    }
+
+    return {
+      geminiConfig,
+      videoConfig,
+      onProgress: (progress: number, phase?: string) => {
+        this.updateTaskProgress(taskId, progress, phase);
+      },
+      onRemoteId: (remoteId: string) => {
+        this.updateTaskRemoteId(taskId, remoteId);
+      },
+    };
+  }
+
+  /**
+   * 更新任务状态
+   */
+  private async updateTaskStatus(taskId: string, status: TaskStatus): Promise<void> {
+    const task = await taskQueueStorage.getTask(taskId);
+    if (task) {
+      task.status = status;
+      task.updatedAt = Date.now();
+      if (status === TaskStatus.PROCESSING && !task.startedAt) {
+        task.startedAt = Date.now();
+      }
+      await taskQueueStorage.saveTask(task);
+      this.sendTaskStatus(taskId, status);
+    }
+  }
+
+  /**
+   * 更新任务进度
+   */
+  private updateTaskProgress(taskId: string, progress: number, phase?: string): void {
+    // 异步更新，不阻塞
+    taskQueueStorage.getTask(taskId).then((task) => {
+      if (task) {
+        task.progress = progress;
+        task.updatedAt = Date.now();
+        if (phase) {
+          task.executionPhase = phase as TaskExecutionPhase;
+        }
+        taskQueueStorage.saveTask(task);
+        this.sendTaskProgress(taskId, progress);
+      }
+    });
+  }
+
+  /**
+   * 更新任务远程 ID
+   */
+  private updateTaskRemoteId(taskId: string, remoteId: string): void {
+    taskQueueStorage.getTask(taskId).then((task) => {
+      if (task) {
+        task.remoteId = remoteId;
+        task.updatedAt = Date.now();
+        taskQueueStorage.saveTask(task);
+      }
+    });
+  }
+
+  /**
+   * 完成任务
+   */
+  private async completeTask(taskId: string, result: unknown): Promise<void> {
+    const task = await taskQueueStorage.getTask(taskId);
+    if (task) {
+      task.status = TaskStatus.COMPLETED;
+      task.result = result as any;
+      task.completedAt = Date.now();
+      task.updatedAt = Date.now();
+      task.progress = 100;
+      await taskQueueStorage.saveTask(task);
+      this.sendTaskCompleted(taskId, task.result, task.remoteId);
+    }
+  }
+
+  /**
+   * 任务失败
+   */
+  private async failTask(taskId: string, errorMessage: string): Promise<void> {
+    const task = await taskQueueStorage.getTask(taskId);
+    if (task) {
+      task.status = TaskStatus.FAILED;
+      task.error = { code: 'EXECUTOR_ERROR', message: errorMessage };
+      task.updatedAt = Date.now();
+      await taskQueueStorage.saveTask(task);
+      this.sendTaskFailed(taskId, task.error);
+    }
+  }
+
+  // ============================================================================
   // 事件推送方法（SW 主动推送给客户端）
   // ============================================================================
 
@@ -1800,8 +1978,9 @@ export class SWChannelManager {
    * 使用 workflowChannels 映射实现点对点通讯
    */
   private sendToWorkflowClient(workflowId: string, event: string, data: Record<string, unknown>): void {
-    // 使用通用方法，工作流事件在未找到映射时不广播（静默忽略）
-    this.sendToMappedClient(this.workflowChannels, workflowId, event, data, false);
+    // 使用通用方法，工作流事件在未找到映射时广播给所有客户端
+    // 这确保即使客户端重连后映射丢失，消息仍能送达
+    this.sendToMappedClient(this.workflowChannels, workflowId, event, data, true);
   }
 
   /**

@@ -101,6 +101,8 @@ function toWorkflowMessageData(
     prompt: metadata.prompt || retryContext?.aiContext?.finalPrompt || '',
     aiAnalysis: workflow.aiAnalysis,
     count: metadata.count,
+    createdAt: workflow.createdAt,
+    status: workflow.status,
     steps: workflow.steps.map(step => ({
       id: step.id,
       description: step.description,

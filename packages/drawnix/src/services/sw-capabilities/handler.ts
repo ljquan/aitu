@@ -286,17 +286,22 @@ export class SWCapabilitiesHandler {
    * Handle mindmap insertion
    */
   private async handleMindmap(params: MindmapParams): Promise<CapabilityResult> {
+    console.log('[SWCapabilities] 🗺️ handleMindmap called:', {
+      hasBoard: !!boardRef,
+      markdownLength: params.markdown?.length ?? 0,
+    });
+
     const board = boardRef;
     if (!board) {
+      console.error('[SWCapabilities] ❌ handleMindmap: 画布未初始化');
       return { success: false, error: '画布未初始化', type: 'error' };
     }
 
     const { markdown } = params;
     if (!markdown) {
+      console.error('[SWCapabilities] ❌ handleMindmap: 缺少 markdown 参数');
       return { success: false, error: '缺少 markdown 参数', type: 'error' };
     }
-
-    // console.log('[SWCapabilities] handleMindmap called, markdown length:', markdown.length);
 
     try {
       // Dynamic import markdown-to-drawnix
@@ -331,9 +336,10 @@ export class SWCapabilitiesHandler {
 
       // Insert to canvas at viewport center
       const insertResult = this.insertElementsToCanvasAtPoint(board, [mindElement], viewportCenter);
-      // console.log('[SWCapabilities] Insert result:', insertResult);
+      console.log('[SWCapabilities] 🗺️ Mindmap insert result:', insertResult);
 
       if (insertResult.success) {
+        console.log('[SWCapabilities] ✅ Mindmap inserted successfully');
         // Center the inserted mindmap in viewport after a short delay
         requestAnimationFrame(() => {
           this.centerInsertedElementsInViewport(board, 1);
@@ -341,10 +347,10 @@ export class SWCapabilitiesHandler {
 
         if (targetWorkZone) {
           // Remove the WorkZone after successful insertion
-          // console.log('[SWCapabilities] Removing WorkZone:', targetWorkZone.id);
+          console.log('[SWCapabilities] 🗺️ Removing WorkZone:', targetWorkZone.id);
           setTimeout(() => {
             WorkZoneTransforms.removeWorkZone(board, targetWorkZone!.id);
-            // console.log('[SWCapabilities] WorkZone removed successfully');
+            console.log('[SWCapabilities] ✅ WorkZone removed successfully');
             
             // Dispatch event to notify AI input bar that generation is complete
             window.dispatchEvent(new CustomEvent('ai-generation-complete', {
@@ -352,6 +358,8 @@ export class SWCapabilitiesHandler {
             }));
           }, 100);
         }
+      } else {
+        console.error('[SWCapabilities] ❌ Mindmap insert failed:', insertResult.error);
       }
 
       return {
@@ -361,7 +369,7 @@ export class SWCapabilitiesHandler {
         error: insertResult.error,
       };
     } catch (error: any) {
-      console.error('[SWCapabilities] Mindmap conversion failed:', error);
+      console.error('[SWCapabilities] ❌ Mindmap conversion failed:', error);
       return {
         success: false,
         error: `思维导图转换失败: ${error.message}`,

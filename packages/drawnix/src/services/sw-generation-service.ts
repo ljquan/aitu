@@ -15,7 +15,7 @@ import type {
   TaskError,
   GenerationParams,
   SWTask,
-} from './sw-channel/types';
+} from './sw-channel/types/';
 import { taskStorageReader } from './task-storage-reader';
 
 // ============================================================================

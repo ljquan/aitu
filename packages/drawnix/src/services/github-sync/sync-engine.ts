@@ -1561,20 +1561,6 @@ class SyncEngine {
   }
 
   /**
-   * @deprecated 使用 pushToRemote 代替
-   */
-  async push(): Promise<SyncResult> {
-    return this.pushToRemote();
-  }
-
-  /**
-   * @deprecated 使用 pullFromRemote 代替
-   */
-  async pull(): Promise<SyncResult> {
-    return this.pullFromRemote();
-  }
-
-  /**
    * 标记有本地变更
    */
   markDirty(): void {

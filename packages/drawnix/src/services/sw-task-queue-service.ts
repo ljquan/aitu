@@ -29,6 +29,11 @@ import {
 import { swChannelClient, SWTask } from './sw-channel';
 import { geminiSettings, settingsManager } from '../utils/settings-manager';
 import { taskStorageReader } from './task-storage-reader';
+import {
+  executorFactory,
+  taskStorageWriter,
+  waitForTaskCompletion,
+} from './media-executor';
 
 /**
  * Service Worker Task Queue Service
@@ -549,12 +554,17 @@ class SWTaskQueueService {
     if (!this.initialized) {
       const success = await this.initialize();
       if (!success) {
-        this.tasks.delete(task.id);
-        this.emitEvent('taskRejected', task, 'NO_API_KEY');
+        // SW 初始化失败，尝试降级模式
+        const canFallback = await this.tryFallbackExecution(task);
+        if (!canFallback) {
+          this.tasks.delete(task.id);
+          this.emitEvent('taskRejected', task, 'NO_API_KEY');
+        }
         return;
       }
     }
 
+    // 尝试使用 SW 执行
     const result = await swChannelClient.createTask({
       taskId: task.id,
       taskType: task.type as 'image' | 'video',
@@ -566,8 +576,127 @@ class SWTaskQueueService {
         this.tasks.delete(task.id);
         this.emitEvent('taskRejected', task, 'DUPLICATE');
       } else {
-        this.tasks.delete(task.id);
-        this.emitEvent('taskRejected', task, result.reason || 'UNKNOWN');
+        // SW 执行失败，尝试降级模式
+        const canFallback = await this.tryFallbackExecution(task);
+        if (!canFallback) {
+          this.tasks.delete(task.id);
+          this.emitEvent('taskRejected', task, result.reason || 'UNKNOWN');
+        }
+      }
+    }
+  }
+
+  /**
+   * 尝试使用降级执行器执行任务
+   * 当 SW 不可用时调用
+   */
+  private async tryFallbackExecution(task: Task): Promise<boolean> {
+    try {
+      // 检查是否有 API 配置
+      const settings = geminiSettings.get();
+      if (!settings.apiKey || !settings.baseUrl) {
+        return false;
+      }
+
+      // 使用执行器工厂获取执行器（会自动选择降级执行器）
+      const executor = await executorFactory.getExecutor();
+
+      // 先创建任务记录
+      await taskStorageWriter.createTask(
+        task.id,
+        task.type as 'image' | 'video' | 'character' | 'inspiration_board' | 'chat',
+        {
+          prompt: task.params.prompt,
+          ...task.params,
+        }
+      );
+
+      // 异步执行任务（fire-and-forget）
+      this.executeWithFallback(task, executor).catch((error) => {
+        console.error('[SWTaskQueue] Fallback execution error:', error);
+      });
+
+      return true;
+    } catch (error) {
+      console.error('[SWTaskQueue] Failed to start fallback execution:', error);
+      return false;
+    }
+  }
+
+  /**
+   * 使用降级执行器执行任务并监听结果
+   */
+  private async executeWithFallback(
+    task: Task,
+    executor: Awaited<ReturnType<typeof executorFactory.getExecutor>>
+  ): Promise<void> {
+    try {
+      // 根据任务类型执行
+      switch (task.type) {
+        case TaskType.IMAGE:
+          await executor.generateImage({
+            taskId: task.id,
+            prompt: task.params.prompt,
+            model: task.params.model,
+            size: task.params.size,
+            referenceImages: task.params.referenceImages as string[] | undefined,
+            count: task.params.count as number | undefined,
+          });
+          break;
+        case TaskType.VIDEO:
+          await executor.generateVideo({
+            taskId: task.id,
+            prompt: task.params.prompt,
+            model: task.params.model,
+            duration: task.params.duration?.toString(),
+            size: task.params.size,
+          });
+          break;
+        default:
+          throw new Error(`Unsupported task type for fallback: ${task.type}`);
+      }
+
+      // 轮询等待任务完成
+      const result = await waitForTaskCompletion(task.id, {
+        timeout: 10 * 60 * 1000, // 10 分钟
+        onProgress: (updatedTask) => {
+          // 更新本地状态
+          const localTask = this.tasks.get(task.id);
+          if (localTask) {
+            localTask.status = updatedTask.status;
+            localTask.progress = updatedTask.progress;
+            localTask.updatedAt = Date.now();
+            this.emitEvent('taskStatus', localTask);
+          }
+        },
+      });
+
+      // 更新本地状态
+      const localTask = this.tasks.get(task.id);
+      if (localTask && result.task) {
+        localTask.status = result.task.status;
+        localTask.result = result.task.result;
+        localTask.error = result.task.error;
+        localTask.completedAt = result.task.completedAt;
+        localTask.updatedAt = Date.now();
+
+        if (result.success) {
+          this.emitEvent('taskCompleted', localTask);
+        } else {
+          this.emitEvent('taskFailed', localTask);
+        }
+      }
+    } catch (error: any) {
+      // 更新任务失败状态
+      const localTask = this.tasks.get(task.id);
+      if (localTask) {
+        localTask.status = TaskStatus.FAILED;
+        localTask.error = {
+          code: 'FALLBACK_ERROR',
+          message: error.message || 'Fallback execution failed',
+        };
+        localTask.updatedAt = Date.now();
+        this.emitEvent('taskFailed', localTask);
       }
     }
   }
