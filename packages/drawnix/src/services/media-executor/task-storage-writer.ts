@@ -319,6 +319,18 @@ class TaskStorageWriter {
   }
 
   /**
+   * 标记任务已插入画布
+   */
+  async markInserted(taskId: string): Promise<void> {
+    const task = await this.getTask(taskId);
+    if (task) {
+      task.insertedToCanvas = true;
+      task.updatedAt = Date.now();
+      await this.saveTask(task);
+    }
+  }
+
+  /**
    * 关闭数据库连接
    */
   close(): void {

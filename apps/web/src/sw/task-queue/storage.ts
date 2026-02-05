@@ -1004,6 +1004,32 @@ export class TaskQueueStorage {
     }
   }
 
+  /**
+   * Cleanup stale pending tool requests older than maxAgeMs
+   * @param maxAgeMs Maximum age in milliseconds (default: 1 hour)
+   * @returns Number of requests deleted
+   */
+  async cleanupStalePendingToolRequests(maxAgeMs: number = 3600000): Promise<number> {
+    try {
+      const requests = await this.getAllPendingToolRequests();
+      const now = Date.now();
+      const staleRequests = requests.filter(r => now - r.createdAt > maxAgeMs);
+      
+      if (staleRequests.length === 0) {
+        return 0;
+      }
+
+      console.log(`[SWStorage] Cleaning up ${staleRequests.length} stale pending tool requests`);
+      for (const request of staleRequests) {
+        await this.deletePendingToolRequest(request.requestId);
+      }
+      return staleRequests.length;
+    } catch (error) {
+      console.error('[SWStorage] Failed to cleanup stale pending tool requests:', error);
+      return 0;
+    }
+  }
+
   // ============================================================================
   // Pending DOM Operations Storage Methods
   // ============================================================================

@@ -251,35 +251,75 @@ export class SWChannelClient {
   // ============================================================================
 
   /**
+   * 带超时的 Promise 包装器
+   * @param promise 原始 Promise
+   * @param timeoutMs 超时时间（毫秒）
+   * @param errorMessage 超时错误消息
+   */
+  private withTimeout<T>(
+    promise: Promise<T>,
+    timeoutMs: number,
+    errorMessage: string
+  ): Promise<T> {
+    return Promise.race([
+      promise,
+      new Promise<T>((_, reject) =>
+        setTimeout(() => reject(new Error(errorMessage)), timeoutMs)
+      ),
+    ]);
+  }
+
+  /**
    * 通用 RPC 调用 helper，统一处理初始化检查、响应处理和默认值
+   * @param timeoutMs 可选超时时间，默认使用 channel 的 120s 超时
    */
   private async callRPC<T>(
     method: string,
     params: unknown,
-    defaultOnError: T
+    defaultOnError: T,
+    timeoutMs?: number
   ): Promise<T> {
     this.ensureInitialized();
-    const response = await this.channel!.call(method, params);
-    if (response.ret !== ReturnCode.Success) {
+    try {
+      const callPromise = this.channel!.call(method, params);
+      const response = timeoutMs
+        ? await this.withTimeout(callPromise, timeoutMs, `RPC ${method} timeout`)
+        : await callPromise;
+      if (response.ret !== ReturnCode.Success) {
+        return defaultOnError;
+      }
+      return (response.data ?? defaultOnError) as T;
+    } catch (error) {
+      console.warn(`[SWChannelClient] ${method} failed:`, error);
       return defaultOnError;
     }
-    return (response.data ?? defaultOnError) as T;
   }
 
   /**
    * 通用操作型 RPC 调用 helper，返回 { success, error? } 格式
+   * @param timeoutMs 可选超时时间
    */
   private async callOperationRPC(
     method: string,
     params: unknown,
-    errorMessage: string
+    errorMessage: string,
+    timeoutMs?: number
   ): Promise<TaskOperationResult> {
     this.ensureInitialized();
-    const response = await this.channel!.call(method, params);
-    if (response.ret !== ReturnCode.Success) {
-      return { success: false, error: response.msg || errorMessage };
+    try {
+      const callPromise = this.channel!.call(method, params);
+      const response = timeoutMs
+        ? await this.withTimeout(callPromise, timeoutMs, `RPC ${method} timeout`)
+        : await callPromise;
+      if (response.ret !== ReturnCode.Success) {
+        return { success: false, error: response.msg || errorMessage };
+      }
+      return response.data || { success: true };
+    } catch (error) {
+      const errMsg = error instanceof Error ? error.message : errorMessage;
+      console.warn(`[SWChannelClient] ${method} failed:`, error);
+      return { success: false, error: errMsg };
     }
-    return response.data || { success: true };
   }
 
   // ============================================================================
@@ -330,6 +370,15 @@ export class SWChannelClient {
   // 任务操作 RPC
   // ============================================================================
 
+  /** RPC 超时配置 */
+  private static readonly RPC_TIMEOUTS = {
+    createTask: 15000,     // 15s - 任务创建
+    submitWorkflow: 15000, // 15s - 工作流提交
+    retryTask: 10000,      // 10s - 重试任务
+    cancelTask: 10000,     // 10s - 取消任务
+    getTask: 5000,         // 5s  - 获取任务状态
+  };
+
   /**
    * 创建任务（原子性操作）
    * SW 会检查重复，返回创建结果
@@ -338,7 +387,12 @@ export class SWChannelClient {
     this.ensureInitialized();
     
     try {
-      const response = await this.channel!.call('task:create', params);
+      const callPromise = this.channel!.call('task:create', params);
+      const response = await this.withTimeout(
+        callPromise,
+        SWChannelClient.RPC_TIMEOUTS.createTask,
+        'Create task timeout'
+      );
       
       if (response.ret !== ReturnCode.Success) {
         return { 
@@ -349,8 +403,9 @@ export class SWChannelClient {
       
       return response.data || { success: false, reason: 'No response data' };
     } catch (error) {
+      const errMsg = error instanceof Error ? error.message : 'Create task failed';
       console.error('[SWChannelClient] task:create error:', error);
-      throw error;
+      return { success: false, reason: errMsg };
     }
   }
 
@@ -365,7 +420,12 @@ export class SWChannelClient {
    * 重试任务
    */
   retryTask(taskId: string): Promise<TaskOperationResult> {
-    return this.callOperationRPC('task:retry', { taskId }, 'Retry task failed');
+    return this.callOperationRPC(
+      'task:retry',
+      { taskId },
+      'Retry task failed',
+      SWChannelClient.RPC_TIMEOUTS.retryTask
+    );
   }
 
   /**
@@ -454,7 +514,12 @@ export class SWChannelClient {
     this.ensureInitialized();
     
     try {
-      const response = await this.channel!.call('workflow:submit', { workflow, config });
+      const callPromise = this.channel!.call('workflow:submit', { workflow, config });
+      const response = await this.withTimeout(
+        callPromise,
+        SWChannelClient.RPC_TIMEOUTS.submitWorkflow,
+        'Submit workflow timeout'
+      );
       
       if (response.ret !== ReturnCode.Success) {
         return { 
@@ -465,8 +530,9 @@ export class SWChannelClient {
       
       return response.data || { success: false, error: 'No response data' };
     } catch (error) {
+      const errMsg = error instanceof Error ? error.message : 'Submit workflow failed';
       console.error('[SWChannelClient] workflow:submit error:', error);
-      throw error;
+      return { success: false, error: errMsg };
     }
   }
 

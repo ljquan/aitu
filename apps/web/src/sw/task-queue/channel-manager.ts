@@ -158,10 +158,25 @@ export class SWChannelManager {
       }
     });
     
-    // 定期清理断开的客户端（每 60 秒）
+    // 定期清理断开的客户端和过期的待处理请求（每 60 秒）
     setInterval(() => {
       this.cleanupDisconnectedClients().catch(() => {});
+      this.cleanupStalePendingRequests().catch(() => {});
     }, 60000);
+  }
+
+  /**
+   * 清理过期的待处理请求（超过 1 小时的请求）
+   */
+  private async cleanupStalePendingRequests(): Promise<void> {
+    try {
+      const deleted = await taskQueueStorage.cleanupStalePendingToolRequests();
+      if (deleted > 0) {
+        console.log(`[ChannelManager] Cleaned up ${deleted} stale pending tool requests`);
+      }
+    } catch (error) {
+      console.warn('[ChannelManager] Failed to cleanup stale pending requests:', error);
+    }
   }
 
   /**

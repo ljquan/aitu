@@ -457,6 +457,48 @@ const config = {
 
 **原因**: TypeScript 的 `import type` 在编译时会被完全移除，不会产生任何运行时代码。而 `enum` 在 TypeScript 中既是类型也是值（会编译为 JavaScript 对象），当代码中使用枚举成员作为对象键或进行比较时，需要运行时存在该值。如果使用 `import type` 导入枚举，运行时会抛出 `ReferenceError: xxx is not defined`。
 
+#### 禁止空 catch 块（必须有日志）
+
+**场景**: 捕获异常后需要记录或处理
+
+❌ **错误示例**:
+```typescript
+// 错误：静默吞掉错误，调试困难
+try {
+  await swChannelClient.getTask(taskId);
+} catch {
+  return;  // 什么都不做
+}
+
+// 错误：catch 块为空
+try {
+  await someOperation();
+} catch {
+  // 静默忽略错误
+}
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：至少记录 debug 级别日志
+try {
+  await swChannelClient.getTask(taskId);
+} catch (error) {
+  console.debug('[SWTaskQueue] getTask failed for', taskId, error);
+  return;
+}
+
+// 正确：预期的错误用 warn，严重错误用 error
+try {
+  await criticalOperation();
+} catch (error) {
+  console.warn('[ModuleName] Operation failed:', error);
+  return fallbackValue;
+}
+```
+
+**原因**: 空 catch 块会静默吞掉错误，导致问题难以排查。即使是预期的错误（如网络超时），也应记录 debug 级别日志，便于调试。使用 `console.debug` 可在生产环境中隐藏，但开发时能看到。
+
 #### Service Worker 与主线程模块不共享
 
 **场景**: 需要在 Service Worker 和主线程中使用相同逻辑时
