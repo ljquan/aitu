@@ -3442,6 +3442,68 @@ catch (error) {
 - 如果需要在上层检查特殊错误类型，必须重新抛出原始错误
 - 或者在检查时同时检查 `error.message` 内容作为备选
 
+### LLM API 日志必须记录异步任务的 remoteId
+
+**场景**: 异步任务（视频生成、异步图片生成如 `nb24k-async`）需要记录远程任务 ID 便于调试和任务恢复追踪
+
+❌ **错误示例**:
+```typescript
+// failLLMApiLog 参数类型不支持 remoteId
+export function failLLMApiLog(
+  logId: string,
+  params: {
+    httpStatus?: number;
+    duration: number;
+    errorMessage: string;
+    responseBody?: string;
+    // 缺少 remoteId 字段
+  }
+): void { ... }
+
+// 调用时 remoteId 被忽略或导致类型错误
+failLLMApiLog(logId, {
+  duration,
+  errorMessage: msg,
+  remoteId: taskRemoteId,  // ❌ 类型错误
+});
+```
+
+✅ **正确示例**:
+```typescript
+// 参数类型支持 remoteId
+export function failLLMApiLog(
+  logId: string,
+  params: {
+    httpStatus?: number;
+    duration: number;
+    errorMessage: string;
+    responseBody?: string;
+    remoteId?: string;  // ✅ 支持异步任务 ID
+  }
+): void {
+  const log = memoryLogs.find(l => l.id === logId);
+  if (log) {
+    // ... 其他字段
+    if (params.remoteId) log.remoteId = params.remoteId;  // ✅ 记录 remoteId
+    updateLogInDB(log);
+  }
+}
+
+// completeLLMApiLog 同样需要支持
+export function completeLLMApiLog(
+  logId: string,
+  params: {
+    // ... 其他字段
+    remoteId?: string;  // ✅ 成功时也记录 remoteId
+  }
+): void { ... }
+```
+
+**原因**:
+- 异步任务通过 `remoteId` 标识后端任务，是恢复轮询的关键信息
+- 调试时需要通过 `remoteId` 追踪任务在后端的状态
+- `LLMApiLog` 接口已定义 `remoteId` 字段，日志函数参数也需要支持
+
 ### Service Worker 静态资源回退应尝试所有版本缓存
 
 **场景**: 用户使用旧版本 HTML，但服务器已部署新版本删除了旧静态资源
