@@ -11,7 +11,6 @@
 export const RPC_METHODS = {
   // 初始化
   INIT: 'init',
-  UPDATE_CONFIG: 'updateConfig',
 
   // 任务操作
   TASK_CREATE: 'task:create',

@@ -36,7 +36,7 @@ export const handleApiKeyError = async (errorMessage: string, language: 'zh' | '
   try {
     const newApiKey = await promptForApiKey();
     if (newApiKey) {
-      geminiSettings.update({ apiKey: newApiKey });
+      // promptForApiKey 内部已经更新了 geminiSettings 并同步到 SW
       return null; // Success, no error
     } else {
       return language === 'zh' 

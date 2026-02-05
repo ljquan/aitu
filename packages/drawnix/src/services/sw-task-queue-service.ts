@@ -111,11 +111,12 @@ class SWTaskQueueService {
 
   /**
    * Internal initialization logic
+   * 只初始化 SW channel，不同步配置（配置随任务传递）
    */
   private async doInitialize(): Promise<boolean> {
     try {
-      // 使用统一的 SW 初始化入口
-      const success = await swChannelClient.ensureReady();
+      // 只初始化 SW channel，不检查配置（配置随任务传递）
+      const success = await swChannelClient.initializeChannel();
       
       this.initialized = success;
       if (this.initialized) {
@@ -526,6 +527,26 @@ class SWTaskQueueService {
   }
 
   private async submitToSW(task: Task): Promise<void> {
+    // 获取当前配置
+    const settings = geminiSettings.get();
+    if (!settings.apiKey || !settings.baseUrl) {
+      // 没有配置，尝试降级模式（降级模式也会检查配置）
+      const canFallback = await this.tryFallbackExecution(task);
+      if (!canFallback) {
+        this.tasks.delete(task.id);
+        this.emitEvent('taskRejected', task, 'NO_API_KEY');
+      }
+      return;
+    }
+
+    // 构建任务配置
+    const taskConfig = {
+      apiKey: settings.apiKey,
+      baseUrl: settings.baseUrl,
+      modelName: settings.imageModelName,
+      textModelName: settings.textModelName,
+    };
+
     if (!this.initialized) {
       const success = await this.initialize();
       if (!success) {
@@ -533,17 +554,18 @@ class SWTaskQueueService {
         const canFallback = await this.tryFallbackExecution(task);
         if (!canFallback) {
           this.tasks.delete(task.id);
-          this.emitEvent('taskRejected', task, 'NO_API_KEY');
+          this.emitEvent('taskRejected', task, 'SW_INIT_FAILED');
         }
         return;
       }
     }
 
-    // 尝试使用 SW 执行
+    // 尝试使用 SW 执行，带上配置
     const result = await swChannelClient.createTask({
       taskId: task.id,
       taskType: task.type as 'image' | 'video',
       params: task.params,
+      config: taskConfig,
     });
 
     if (!result.success) {

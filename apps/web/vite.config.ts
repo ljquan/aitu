@@ -116,6 +116,9 @@ function precacheManifestPlugin(): Plugin {
   };
 }
 
+// 检测是否在 watch 模式下运行（命令行包含 --watch）
+const isWatchMode = process.argv.includes('--watch');
+
 export default defineConfig({
   root: __dirname,
   cacheDir: '../../node_modules/.vite/apps/web',
@@ -166,7 +169,8 @@ export default defineConfig({
 
   build: {
     outDir: '../../dist/apps/web',
-    emptyOutDir: true,
+    // watch 模式下不清空输出目录，避免 index.html 丢失导致 serve 失败
+    emptyOutDir: !isWatchMode,
     reportCompressedSize: true,
     commonjsOptions: {
       transformMixedEsModules: true,

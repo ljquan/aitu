@@ -42,6 +42,7 @@ import type {
   MainThreadToolRequestEvent,
   WorkflowRecoveredEvent,
   DebugStatusResult,
+  TaskConfig,
 } from './types';
 import { callWithDefault, callOperation } from './rpc-helpers';
 import { geminiSettings, settingsManager } from '../../utils/settings-manager';
@@ -214,53 +215,26 @@ export class SWChannelClient {
   }
 
   /**
-   * 确保 SW 客户端已就绪
-   * 统一的 SW 初始化入口，替代分散在各处的 ensureSWInitialized 函数
-   * 
-   * 检查顺序：
-   * 1. URL 参数检查（?sw=0 禁用 SW）
-   * 2. 已初始化检查
-   * 3. 设置验证
-   * 4. 初始化并配置
+   * 仅初始化 SW 通道，不同步配置
+   * 配置随每个任务传递，不需要预先同步
    */
-  async ensureReady(): Promise<boolean> {
-    // 1. URL 参数检查
+  async initializeChannel(): Promise<boolean> {
+    // URL 参数检查（?sw=0 禁用 SW）
     if (!shouldUseSWTaskQueue()) {
       return false;
     }
 
-    // 2. 已初始化检查
+    // 已初始化则直接返回
     if (this.isInitialized()) {
       return true;
     }
 
-    // 3. 设置验证
-    const settings = geminiSettings.get();
-    if (!settings.apiKey || !settings.baseUrl) {
-      return false;
-    }
-
-    // 4. 初始化并配置
+    // 只初始化通道，不同步配置
     try {
-      await settingsManager.waitForInitialization();
       const initSuccess = await this.initialize();
-      if (!initSuccess) {
-        return false;
-      }
-
-      const result = await this.init({
-        geminiConfig: {
-          apiKey: settings.apiKey,
-          baseUrl: settings.baseUrl,
-          modelName: settings.imageModelName,
-        },
-        videoConfig: {
-          baseUrl: settings.baseUrl,
-        },
-      });
-      return result.success;
+      return initSuccess;
     } catch (error) {
-      console.error('[SWChannelClient] ensureReady failed:', error);
+      console.error('[SWChannelClient] initializeChannel failed:', error);
       return false;
     }
   }
@@ -350,20 +324,6 @@ export class SWChannelClient {
     
     console.error('[SWChannelClient] init failed after retries');
     return { success: false, error: 'Init failed after retries' };
-  }
-
-  /**
-   * 更新配置
-   */
-  async updateConfig(params: Partial<InitParams>): Promise<InitResult> {
-    this.ensureInitialized();
-    const response = await this.channel!.call('updateConfig', params);
-    
-    if (response.ret !== ReturnCode.Success) {
-      return { success: false, error: response.msg || 'Update config failed' };
-    }
-    
-    return response.data || { success: true };
   }
 
   // ============================================================================
@@ -490,11 +450,11 @@ export class SWChannelClient {
   /**
    * 提交工作流
    */
-  async submitWorkflow(workflow: WorkflowDefinition): Promise<WorkflowSubmitResult> {
+  async submitWorkflow(workflow: WorkflowDefinition, config: TaskConfig): Promise<WorkflowSubmitResult> {
     this.ensureInitialized();
     
     try {
-      const response = await this.channel!.call('workflow:submit', { workflow });
+      const response = await this.channel!.call('workflow:submit', { workflow, config });
       
       if (response.ret !== ReturnCode.Success) {
         return { 

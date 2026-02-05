@@ -12,11 +12,12 @@
 import { ServiceWorkerChannel } from 'postmessage-duplex';
 import type { SWTaskQueue } from './queue';
 import { TaskStatus, TaskType, TaskExecutionPhase } from './types';
-import type { SWTask, GeminiConfig, VideoAPIConfig } from './types';
+import type { SWTask, GeminiConfig, VideoAPIConfig, TaskConfig } from './types';
 import {
   getWorkflowExecutor,
   handleMainThreadToolResponse,
   initWorkflowHandler,
+  updateWorkflowConfig,
   resendPendingToolRequests,
 } from './workflow-handler';
 import type { Workflow, MainThreadToolResponseMessage } from './workflow-types';
@@ -48,6 +49,7 @@ interface TaskCreateParams {
   taskId: string;
   taskType: TaskType;
   params: SWTask['params'];
+  config: SWTask['config'];
 }
 
 // Thumbnail types
@@ -420,10 +422,6 @@ export class SWChannelManager {
         RPC_METHODS.INIT, clientId, (data) => this.handleInit(data)
       ),
       
-      [RPC_METHODS.UPDATE_CONFIG]: this.wrapRpcHandler<Partial<{ geminiConfig: Partial<GeminiConfig>; videoConfig: Partial<VideoAPIConfig> }>, any>(
-        RPC_METHODS.UPDATE_CONFIG, clientId, (data) => this.handleUpdateConfig(data)
-      ),
-      
       // 任务操作
       [RPC_METHODS.TASK_CREATE]: this.wrapRpcHandler<TaskCreateParams, any>(
         RPC_METHODS.TASK_CREATE, clientId, (data) => this.handleTaskCreate(clientId, data)
@@ -471,7 +469,7 @@ export class SWChannelManager {
       ),
       
       // Workflow
-      [RPC_METHODS.WORKFLOW_SUBMIT]: this.wrapRpcHandler<{ workflow: Workflow }, any>(
+      [RPC_METHODS.WORKFLOW_SUBMIT]: this.wrapRpcHandler<{ workflow: Workflow; config?: TaskConfig }, any>(
         RPC_METHODS.WORKFLOW_SUBMIT, clientId, (data) => this.handleWorkflowSubmit(clientId, data)
       ),
       
@@ -610,40 +608,23 @@ export class SWChannelManager {
 
   private workflowHandlerInitialized = false;
 
-  private async handleInit(data: { geminiConfig: GeminiConfig; videoConfig: VideoAPIConfig }): Promise<{ success: boolean; error?: string }> {
-    console.log('[SWChannelManager] handleInit called with:', {
-      hasGeminiConfig: !!data?.geminiConfig,
-      hasVideoConfig: !!data?.videoConfig,
-      geminiApiKey: data?.geminiConfig?.apiKey ? `${data.geminiConfig.apiKey.slice(0, 8)}...` : 'missing',
-      geminiBaseUrl: data?.geminiConfig?.baseUrl || 'missing',
-      videoBaseUrl: data?.videoConfig?.baseUrl || 'missing',
-    });
-    
-    if (!data || !data.geminiConfig || !data.videoConfig) {
-      console.error('[SWChannelManager] handleInit: Missing config data');
-      return { success: false, error: 'Missing config data' };
-    }
-
+  private async handleInit(data?: { geminiConfig?: GeminiConfig; videoConfig?: VideoAPIConfig }): Promise<{ success: boolean; error?: string }> {
     try {
       // 先清理无效的客户端通道（避免向已关闭的页面广播）
       await this.cleanupDisconnectedClients();
       
-      // 初始化任务队列
-      console.log('[SWChannelManager] handleInit: Calling taskQueue.initialize...');
-      await this.taskQueue?.initialize(data.geminiConfig, data.videoConfig);
-      console.log('[SWChannelManager] handleInit: taskQueue.initialize completed');
+      // 初始化任务队列（不再传递配置，配置随任务传递）
+      await this.taskQueue?.initialize();
       
-      // 初始化工作流处理器
-      // 注意：不能只依赖 workflowHandlerInitialized 标志，因为 SW 空闲后模块级变量可能被重置
-      // 检查 workflowExecutor 是否存在，如果不存在则重新初始化
+      // 初始化工作流处理器（如果提供了配置，用于兼容旧客户端）
+      // 注意：新架构下工作流配置也应随工作流提交时传递
       const executor = getWorkflowExecutor();
-      if (!executor) {
+      if (!executor && data?.geminiConfig && data?.videoConfig) {
         initWorkflowHandler(this.sw, data.geminiConfig, data.videoConfig);
         this.workflowHandlerInitialized = true;
       }
       
       // 重新发送待处理的工具请求（处理页面刷新场景）
-      // 获取发起初始化请求的客户端 ID
       const clientId = this.channels.keys().next().value as string | undefined;
       if (clientId) {
         resendPendingToolRequests(clientId);
@@ -656,30 +637,21 @@ export class SWChannelManager {
     }
   }
 
-  private async handleUpdateConfig(data: Partial<{ geminiConfig: Partial<GeminiConfig>; videoConfig: Partial<VideoAPIConfig> }>): Promise<{ success: boolean; error?: string }> {
-    try {
-      await this.taskQueue?.updateConfig(data?.geminiConfig, data?.videoConfig);
-      return { success: true };
-    } catch (error: any) {
-      return { success: false, error: error.message || 'Update config failed' };
-    }
-  }
-
   private async handleTaskCreate(clientId: string, data: TaskCreateParams): Promise<{ success: boolean; task?: SWTask; existingTaskId?: string; reason?: string }> {
     if (!data) {
       return { success: false, reason: 'Missing task data' };
     }
 
-    const { taskId, taskType, params } = data;
+    const { taskId, taskType, params, config } = data;
 
-    // 检查任务队列是否存在并已初始化
+    // 检查任务队列是否存在
     if (!this.taskQueue) {
       return { success: false, reason: 'not_initialized' };
     }
 
-    // 检查任务队列是否已初始化（有 API config）
-    if (!this.taskQueue.getGeminiConfig() || !this.taskQueue.getVideoConfig()) {
-      return { success: false, reason: 'not_initialized' };
+    // 验证配置（配置随任务传递）
+    if (!config || !config.apiKey || !config.baseUrl) {
+      return { success: false, reason: 'NO_API_KEY' };
     }
 
     // 检查重复任务（相同 taskId）
@@ -702,9 +674,9 @@ export class SWChannelManager {
       }
     }
 
-    // 创建任务
+    // 创建任务（带配置）
     try {
-      await this.taskQueue.submitTask(taskId, taskType, params, clientId);
+      await this.taskQueue.submitTask(taskId, taskType, params, config, clientId);
       const task = this.taskQueue.getTask(taskId);
 
       // 记录 taskId -> channel 映射，用于后续点对点通讯
@@ -869,15 +841,43 @@ export class SWChannelManager {
   // Workflow RPC 处理器
   // ============================================================================
 
-  private async handleWorkflowSubmit(clientId: string, data: { workflow: Workflow }): Promise<{ success: boolean; workflowId?: string; error?: string }> {
+  private async handleWorkflowSubmit(clientId: string, data: { workflow: Workflow; config?: TaskConfig }): Promise<{ success: boolean; workflowId?: string; error?: string }> {
     if (!data?.workflow) {
       return { success: false, error: 'Missing workflow data' };
     }
 
+    const { config } = data;
+    
+    // 验证配置
+    if (!config || !config.apiKey || !config.baseUrl) {
+      return { success: false, error: 'NO_API_KEY' };
+    }
+
     try {
-      const executor = getWorkflowExecutor();
+      // 从任务配置构建 executor 所需的配置
+      const geminiConfig: GeminiConfig = {
+        apiKey: config.apiKey,
+        baseUrl: config.baseUrl,
+        modelName: config.modelName,
+      };
+      const videoConfig: VideoAPIConfig = {
+        apiKey: config.apiKey,
+        baseUrl: config.baseUrl,
+      };
+      
+      // 如果 executor 不存在，初始化它
+      let executor = getWorkflowExecutor();
       if (!executor) {
-        return { success: false, error: 'Workflow executor not initialized' };
+        initWorkflowHandler(this.sw, geminiConfig, videoConfig);
+        executor = getWorkflowExecutor();
+        this.workflowHandlerInitialized = true;
+      } else {
+        // 更新现有 executor 的配置
+        updateWorkflowConfig(geminiConfig, videoConfig);
+      }
+
+      if (!executor) {
+        return { success: false, error: 'Failed to initialize workflow executor' };
       }
 
       // 注册 workflow -> channel 映射，实现点对点通讯

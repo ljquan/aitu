@@ -112,6 +112,21 @@ export interface TaskError {
 }
 
 // ============================================================================
+// Task Config
+// ============================================================================
+
+/**
+ * 任务执行配置
+ * 每次任务创建时由应用层传递，SW 不维护配置状态
+ */
+export interface TaskConfig {
+  apiKey: string;
+  baseUrl: string;
+  modelName?: string;
+  textModelName?: string;
+}
+
+// ============================================================================
 // SW Task Definition
 // ============================================================================
 
@@ -127,6 +142,8 @@ export interface SWTask {
   status: TaskStatus;
   /** Parameters for content generation */
   params: GenerationParams;
+  /** Task execution config (passed from main thread) */
+  config: TaskConfig;
   /** Task creation timestamp (Unix milliseconds) */
   createdAt: number;
   /** Last update timestamp (Unix milliseconds) */

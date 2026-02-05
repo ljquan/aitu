@@ -93,11 +93,14 @@ export function promptForApiKey(): Promise<string | null> {
     };
 
     // 确认按钮点击
-    confirmBtn.addEventListener('click', () => {
+    confirmBtn.addEventListener('click', async () => {
       const apiKey = input.value.trim();
       if (apiKey) {
-        geminiSettings.update({ apiKey });
+        // 更新本地设置
+        await geminiSettings.update({ apiKey });
         cleanup();
+        
+        // 配置随任务传递，无需同步到 SW
         resolve(apiKey);
       } else {
         input.style.borderColor = '#ff4d4f';

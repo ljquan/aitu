@@ -17,8 +17,6 @@ import {
   VIDEO_MODELS,
   TEXT_MODELS,
 } from '../../constants/model-config';
-import { swChannelClient } from '../../services/sw-channel/client';
-
 // 为了向后兼容，重新导出这些常量
 export { IMAGE_MODEL_GROUPED_SELECT_OPTIONS as IMAGE_MODEL_GROUPED_OPTIONS } from '../../constants/model-config';
 export { VIDEO_MODEL_SELECT_OPTIONS as VIDEO_MODEL_OPTIONS } from '../../constants/model-config';
@@ -64,39 +62,7 @@ export const SettingsDialog = ({
       textModelName: trimmedTextModel,
     });
 
-    // 同步配置到 Service Worker（异步执行，不阻塞 UI）
-    (async () => {
-      try {
-        console.log('[SettingsDialog] Syncing config to SW...', {
-          apiKey: trimmedApiKey ? `${trimmedApiKey.slice(0, 8)}...` : 'empty',
-          baseUrl: trimmedBaseUrl,
-          imageModel: trimmedImageModel,
-        });
-        
-        // 确保 SW channel 已初始化
-        if (!swChannelClient.isInitialized()) {
-          console.log('[SettingsDialog] SW channel not initialized, initializing...');
-          await swChannelClient.initialize();
-        }
-        
-        // 发送最新配置到 SW
-        console.log('[SettingsDialog] Calling swChannelClient.init...');
-        const result = await swChannelClient.init({
-          geminiConfig: {
-            apiKey: trimmedApiKey,
-            baseUrl: trimmedBaseUrl,
-            modelName: trimmedImageModel,
-          },
-          videoConfig: {
-            apiKey: trimmedApiKey,
-            baseUrl: trimmedBaseUrl,
-          },
-        });
-        console.log('[SettingsDialog] SW init result:', result);
-      } catch (error) {
-        console.warn('[SettingsDialog] Failed to sync config to SW:', error);
-      }
-    })();
+    // 配置随任务传递，无需同步到 SW
 
     // 关闭弹窗
     setAppState({ ...appState, openSettings: false });

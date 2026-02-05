@@ -208,7 +208,6 @@ export interface MCPToolResultEvent {
 export interface SWMethods extends Methods {
   // 初始化
   'init': (params: InitParams) => InitResult;
-  'updateConfig': (params: Partial<InitParams>) => InitResult;
 
   // 任务操作
   'task:create': (params: TaskCreateParams) => TaskCreateResult;
