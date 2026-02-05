@@ -74,7 +74,8 @@ export function useFilteredTaskQueue(
 
     try {
       // 直接从 IndexedDB 读取（SW 模式和降级模式都使用同一个数据库）
-      if (await taskStorageReader.isAvailable()) {
+      const isAvailable = await taskStorageReader.isAvailable();
+      if (isAvailable) {
         const result = await taskStorageReader.getTasksByType(taskType, offset, pageSize);
         
         if (append) {
@@ -94,7 +95,6 @@ export function useFilteredTaskQueue(
       // taskStorageReader 不可用，返回失败
       return false;
     } catch {
-      // 静默忽略错误
       return false;
     }
   }, [taskType, pageSize]);

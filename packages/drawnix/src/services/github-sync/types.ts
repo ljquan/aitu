@@ -568,14 +568,13 @@ export interface PagedSyncResult {
   error?: string;
 }
 
-/** 任务同步格式类型 */
-export type TaskSyncFormat = 'legacy' | 'paged';
+/** 任务同步格式类型（只支持分页格式） */
+export type TaskSyncFormat = 'paged' | 'none';
 
 /** 检测任务同步格式 */
 export function detectTaskSyncFormat(files: Record<string, string>): TaskSyncFormat {
   if (files[SYNC_FILES_PAGED.TASK_INDEX]) return 'paged';
-  if (files[SYNC_FILES.TASKS]) return 'legacy';
-  return 'legacy';
+  return 'none';
 }
 
 /** 同步的媒体文件 - media_{base64url}.json（基于 URL） */
@@ -864,7 +863,7 @@ export const SYNC_FILES = {
   MANIFEST: 'manifest.json',
   WORKSPACE: 'workspace.json',
   PROMPTS: 'prompts.json',
-  TASKS: 'tasks.json',
+  // 注意：tasks.json 已废弃，改用分页格式 (task-index.json + tasks_p{n}.json)
   SETTINGS: 'settings.json',
   boardFile: (id: string) => `board_${id}.json`,
   /** 基于 URL 的媒体文件名（使用 hash 编码，固定长度） */

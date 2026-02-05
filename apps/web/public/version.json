@@ -1,6 +1,6 @@
 {
   "version": "0.5.73",
-  "buildTime": "2026-02-05T02:57:23.828Z",
+  "buildTime": "2026-02-05T02:57:24.444Z",
   "gitCommit": "unknown",
   "changelog": [
     "implement image fitting utility and enhance video processing"

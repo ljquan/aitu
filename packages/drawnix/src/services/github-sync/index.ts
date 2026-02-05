@@ -15,10 +15,8 @@ export { mediaCollector } from './media-collector';
 export { localExportService } from './local-export-service';
 
 // 分页同步服务导出
-export { taskSyncService, convertTasksToPagedFormat, migrateFromLegacyFormat, compareTaskIndexes } from './task-sync-service';
+export { taskSyncService, convertTasksToPagedFormat, compareTaskIndexes } from './task-sync-service';
 export { workflowSyncService, convertWorkflowsToPagedFormat, compareWorkflowIndexes } from './workflow-sync-service';
-export { taskMigrationService } from './task-migration-service';
-export type { MigrationResult } from './task-migration-service';
 export type { ExportProgressCallback, LocalExportResult, LocalImportResult } from './local-export-service';
 export { cryptoService, isEncryptedData, usesCustomPassword, CRYPTO_VERSION, DecryptionError } from './crypto-service';
 export type { EncryptedData } from './crypto-service';
