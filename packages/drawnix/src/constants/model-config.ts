@@ -184,6 +184,16 @@ export const IMAGE_MODEL_VIP_OPTIONS: ModelConfig[] = [
  */
 export const IMAGE_MODEL_MORE_OPTIONS: ModelConfig[] = [
   {
+    id: 'mj-imagine',
+    label: 'midjourney imagine',
+    shortLabel: 'midjourney',
+    shortCode: 'mj',
+    description: 'Midjourney 异步图片生成模型（# 参数）',
+    type: 'image',
+    supportsTools: true,
+    imageDefaults: IMAGE_DEFAULT_PARAMS,
+  },
+  {
     id: 'gpt-image-1.5',
     label: 'gpt-image-1.5',
     shortCode: 'gpt15',
@@ -279,6 +289,7 @@ export const ASYNC_IMAGE_MODEL_IDS = [
   'gemini-3-pro-image-preview-async',
   'gemini-3-pro-image-preview-2k-async',
   'gemini-3-pro-image-preview-4k-async',
+  'mj-imagine',
 ];
 
 export function isAsyncImageModel(modelId?: string): boolean {
@@ -702,6 +713,7 @@ const GPT_IMAGE_MODEL_IDS = ['gpt-image-1.5'];
 const GEMINI_IMAGE_MODEL_IDS = IMAGE_MODELS.filter(
   (m) => !GPT_IMAGE_MODEL_IDS.includes(m.id)
 ).map((m) => m.id);
+const MJ_IMAGE_MODEL_IDS = ['mj-imagine'];
 
 /** 所有图片模型 ID */
 const ALL_IMAGE_MODEL_IDS = IMAGE_MODELS.map((m) => m.id);
@@ -848,6 +860,111 @@ export const IMAGE_PARAMS: ParamConfig[] = [
     ],
     defaultValue: 'auto',
     compatibleModels: GEMINI_IMAGE_MODEL_IDS,
+    modelType: 'image',
+  },
+  {
+    id: 'mj_ar',
+    label: 'MJ 画幅',
+    shortLabel: '画幅',
+    description: 'Midjourney 长宽比参数 (--ar)',
+    valueType: 'enum',
+    options: [
+      { value: 'default', label: '默认' },
+      { value: '1:1', label: '1:1 方形' },
+      { value: '16:9', label: '16:9 横版' },
+      { value: '9:16', label: '9:16 竖版' },
+      { value: '3:2', label: '3:2 横版' },
+      { value: '2:3', label: '2:3 竖版' },
+      { value: '4:3', label: '4:3 横版' },
+      { value: '3:4', label: '3:4 竖版' },
+      { value: '5:4', label: '5:4 横版' },
+      { value: '4:5', label: '4:5 竖版' },
+      { value: '21:9', label: '21:9 超宽' },
+    ],
+    defaultValue: 'default',
+    compatibleModels: MJ_IMAGE_MODEL_IDS,
+    modelType: 'image',
+  },
+  {
+    id: 'mj_v',
+    label: 'MJ 版本',
+    shortLabel: '版本',
+    description: 'Midjourney 版本参数 (--v)',
+    valueType: 'enum',
+    options: [
+      { value: 'default', label: '默认 (V7)' },
+      { value: '7', label: 'V7' },
+      { value: '6', label: 'V6' },
+    ],
+    defaultValue: 'default',
+    compatibleModels: MJ_IMAGE_MODEL_IDS,
+    modelType: 'image',
+  },
+  {
+    id: 'mj_style',
+    label: 'MJ 风格',
+    shortLabel: '风格',
+    description: 'Midjourney 风格参数 (--style)',
+    valueType: 'enum',
+    options: [
+      { value: 'default', label: '默认' },
+      { value: 'raw', label: 'raw (Legacy)' },
+    ],
+    defaultValue: 'default',
+    compatibleModels: MJ_IMAGE_MODEL_IDS,
+    modelType: 'image',
+  },
+  {
+    id: 'mj_s',
+    label: 'MJ 风格化',
+    shortLabel: '风格化',
+    description: 'Midjourney 风格化强度 (--s)',
+    valueType: 'enum',
+    options: [
+      { value: 'default', label: '默认 (100)' },
+      { value: '50', label: '50' },
+      { value: '100', label: '100' },
+      { value: '200', label: '200' },
+      { value: '400', label: '400' },
+      { value: '800', label: '800' },
+      { value: '1000', label: '1000' },
+    ],
+    defaultValue: 'default',
+    compatibleModels: MJ_IMAGE_MODEL_IDS,
+    modelType: 'image',
+  },
+  {
+    id: 'mj_q',
+    label: 'MJ 质量',
+    shortLabel: '质量',
+    description: 'Midjourney 质量档位 (--q)',
+    valueType: 'enum',
+    options: [
+      { value: 'default', label: '默认 (1)' },
+      { value: '1', label: '1x' },
+      { value: '2', label: '2x' },
+      { value: '4', label: '4x' },
+    ],
+    defaultValue: 'default',
+    compatibleModels: MJ_IMAGE_MODEL_IDS,
+    modelType: 'image',
+  },
+  {
+    id: 'mj_seed',
+    label: 'MJ 种子',
+    shortLabel: '种子',
+    description: 'Midjourney 随机种子 (--seed)',
+    valueType: 'enum',
+    options: [
+      { value: 'default', label: '默认 (随机)' },
+      { value: '0', label: '0' },
+      { value: '42', label: '42' },
+      { value: '2024', label: '2024' },
+      { value: '7777', label: '7777' },
+      { value: '9999', label: '9999' },
+    ],
+    defaultValue: 'default',
+    compatibleModels: MJ_IMAGE_MODEL_IDS,
     modelType: 'image',
   },
 ];

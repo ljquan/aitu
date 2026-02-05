@@ -16,6 +16,7 @@ import {
   getDefaultImageModel as getSystemDefaultImageModel,
   DEFAULT_VIDEO_MODEL,
 } from '../constants/model-config';
+import { buildMJPromptSuffix } from './mj-params';
 import type { ImageDimensions } from '../mcp/types';
 
 // 重新导出 ImageDimensions 以便其他模块使用
@@ -54,9 +55,9 @@ function parseInput(text: string): ParseResult {
 /**
  * 发送场景类型
  */
-export type SendScenario = 
-  | 'direct_generation'  // 场景1-3: 直接生成（无额外内容）
-  | 'agent_flow';        // 场景4: Agent 流程（有额外内容）
+export type SendScenario =
+  | 'direct_generation' // 场景1-3: 直接生成（无额外内容）
+  | 'agent_flow'; // 场景4: Agent 流程（有额外内容）
 
 /**
  * 生成类型
@@ -145,7 +146,7 @@ function getDefaultTextModel(): string {
 
 /**
  * 生成默认提示词
- * 
+ *
  * @param hasSelectedElements 是否有选中元素
  * @param selectedTexts 选中的文字内容数组
  * @param imageCount 选中的图片数量
@@ -159,7 +160,7 @@ export function generateDefaultPrompt(
   if (selectedTexts.length > 0) {
     return selectedTexts.join('\n');
   }
-  
+
   // 如果没有文字，根据图片数量生成默认 prompt
   if (hasSelectedElements) {
     if (imageCount === 1) {
@@ -168,7 +169,7 @@ export function generateDefaultPrompt(
       return '请分析这些图片的主题、风格和视觉元素，找出它们之间的共同点或关联性，然后创造性地将它们融合成一张全新的、和谐统一的图片。融合时请保持各图片的精华元素，确保最终作品在构图、色调和风格上协调一致。';
     }
   }
-  
+
   return '';
 }
 
@@ -207,7 +208,8 @@ export function parseAIInput(
   selection: SelectionInfo,
   options?: ParseAIInputOptions
 ): ParsedGenerationParams {
-  const hasSelectedElements = selection.texts.length > 0 ||
+  const hasSelectedElements =
+    selection.texts.length > 0 ||
     selection.images.length > 0 ||
     selection.videos.length > 0 ||
     selection.graphics.length > 0;
@@ -249,7 +251,11 @@ export function parseAIInput(
     generationType = 'image';
     modelId = parseResult.selectedImageModel;
     isModelExplicit = true;
-  } else if (!hasSelectedElements && hasExtraContent && !options?.generationType) {
+  } else if (
+    !hasSelectedElements &&
+    hasExtraContent &&
+    !options?.generationType
+  ) {
     // 没有选中元素、只有文字输入时，默认使用文本模型（Agent 流程）
     generationType = 'text';
     modelId = getDefaultTextModel();
@@ -267,12 +273,15 @@ export function parseAIInput(
   // 确定发送场景
   // 如果显式指定了图片或视频生成类型，强制走 direct_generation
   let scenario: SendScenario;
-  if (options?.generationType === 'image' || options?.generationType === 'video') {
+  if (
+    options?.generationType === 'image' ||
+    options?.generationType === 'video'
+  ) {
     scenario = 'direct_generation';
   } else {
     scenario = hasExtraContent ? 'agent_flow' : 'direct_generation';
   }
-  
+
   // 生成提示词：整合选中的文本元素内容和用户输入
   const userInput = parseResult.cleanText.trim();
   const selectedTextContent = selectedTexts.join('\n').trim();
@@ -293,17 +302,27 @@ export function parseAIInput(
   } else {
     prompt = '';
   }
-  
+
+  // Midjourney: append prompt parameters from dropdown
+  if (modelId.startsWith('mj') && options?.params) {
+    const suffix = buildMJPromptSuffix(options.params);
+    if (suffix) {
+      prompt = [prompt, suffix].filter(Boolean).join(' ');
+    }
+  }
+
   // 获取数量（优先级：options.count > parseResult.selectedCount > 1）
   const count = options?.count || parseResult.selectedCount || 1;
-  
+
   // 解析参数
   let size: string | undefined;
   let duration: string | undefined;
 
   // 1. 优先从 options.params 中读取（新逻辑，支持多参数对象）
   if (options?.params) {
-    if (options.params.size) size = normalizeSize(options.params.size);
+    if (!modelId.startsWith('mj') && options.params.size) {
+      size = normalizeSize(options.params.size);
+    }
     if (options.params.duration) duration = options.params.duration;
   }
 
@@ -321,7 +340,7 @@ export function parseAIInput(
       }
     }
   }
-  
+
   if (!duration) {
     for (const param of parseResult.selectedParams) {
       if (param.id === 'duration') {
@@ -361,7 +380,7 @@ export function parseAIInput(
     const defaults = getVideoModelDefaults(modelId);
     duration = defaults.duration;
   }
-  
+
   // 用户指令（去除模型/参数/数量后的纯文本）
   const userInstruction = parseResult.cleanText.trim();
 
@@ -384,7 +403,7 @@ export function parseAIInput(
 
 /**
  * 检查是否应该走 Agent 流程
- * 
+ *
  * 场景4的判断条件：输入内容除了选择模型、参数、数量外，还包含了其他内容
  */
 export function shouldUseAgentFlow(inputText: string): boolean {

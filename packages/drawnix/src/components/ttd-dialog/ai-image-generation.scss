@@ -63,23 +63,23 @@
   overflow-x: hidden;
   // 右侧内边距，避免滚动条遮挡内容
   padding-right: 8px;
-  
+
   /* 隐藏滚动条但保持滚动功能 */
   scrollbar-width: thin;
   scrollbar-color: rgba(0, 0, 0, 0.15) transparent;
-  
+
   &::-webkit-scrollbar {
     width: 4px;
   }
-  
+
   &::-webkit-scrollbar-track {
     background: transparent;
   }
-  
+
   &::-webkit-scrollbar-thumb {
     background: rgba(0, 0, 0, 0.15);
     border-radius: 2px;
-    
+
     &:hover {
       background: rgba(0, 0, 0, 0.25);
     }
@@ -126,23 +126,23 @@
   border-radius: 10px;
   padding: 12px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-  
+
   /* 优化滚动条样式 */
   scrollbar-width: thin;
   scrollbar-color: rgba(0, 0, 0, 0.15) transparent;
-  
+
   &::-webkit-scrollbar {
     width: 4px;
   }
-  
+
   &::-webkit-scrollbar-track {
     background: transparent;
   }
-  
+
   &::-webkit-scrollbar-thumb {
     background: rgba(0, 0, 0, 0.15);
     border-radius: 2px;
-    
+
     &:hover {
       background: rgba(0, 0, 0, 0.25);
     }
@@ -162,6 +162,10 @@
     width: 100%;
     max-width: none;
   }
+
+  .model-params-wrapper {
+    flex-shrink: 0;
+  }
 }
 
 // 批量出图切换按钮 - 文字链接样式
@@ -178,7 +182,7 @@
   flex-shrink: 0;
 
   &:hover:not(:disabled) {
-    color: #F39C12;
+    color: #f39c12;
   }
 
   &:disabled {
@@ -402,7 +406,7 @@
   cursor: pointer;
   transition: all 0.2s ease;
   box-shadow: 0 2px 4px rgba(243, 156, 18, 0.2);
- white-space: nowrap;
+  white-space: nowrap;
   &:hover:not(:disabled) {
     background: linear-gradient(135deg, #e67e22 0%, #d35400 100%);
     transform: translateY(-1px);
@@ -450,7 +454,7 @@
 
     &:hover {
       background: var(--color-bg-secondary, #f5f5f5) !important;
-      color: #F39C12 !important;
+      color: #f39c12 !important;
     }
 
     .t-icon {
@@ -475,18 +479,18 @@
   justify-content: center;
 
   &.primary {
-    background: #F39C12; // Brand Orange
+    background: #f39c12; // Brand Orange
     color: #fff;
-    border-color: #F39C12;
+    border-color: #f39c12;
 
     &:hover:not(:disabled) {
-      background: #E67E22;
-      border-color: #E67E22;
+      background: #e67e22;
+      border-color: #e67e22;
     }
 
     &:active:not(:disabled) {
-      background: #D35400;
-      border-color: #D35400;
+      background: #d35400;
+      border-color: #d35400;
     }
 
     &.loading {
@@ -631,44 +635,44 @@
     }
 
     .preset-tooltip-container {
-       position: relative;
-       display: inline-block;
-       flex-shrink: 0;
-     }
+      position: relative;
+      display: inline-block;
+      flex-shrink: 0;
+    }
 
-     .preset-icon-button {
-       background: none;
-       border: 1px solid var(--color-border, #d9d9d9);
-       border-radius: 6px;
-       padding: 0;
-       cursor: pointer;
-       display: flex;
-       align-items: center;
-       justify-content: center;
-       transition: all 0.2s ease;
-       color: var(--color-text-placeholder, #999);
-       height: 32px;
-       width: 32px;
-       
-       &:hover {
-         background: var(--color-bg-secondary, #f5f5f5);
-         border-color: var(--color-primary, #0052d9);
-         color: #F39C12;
-       }
+    .preset-icon-button {
+      background: none;
+      border: 1px solid var(--color-border, #d9d9d9);
+      border-radius: 6px;
+      padding: 0;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s ease;
+      color: var(--color-text-placeholder, #999);
+      height: 32px;
+      width: 32px;
 
-       .t-icon {
-         font-size: 18px;
-       }
-       
-       &:active {
-         background: var(--color-bg-tertiary, #e8e8e8);
-       }
-       
-       &:disabled {
-         opacity: 0.6;
-         cursor: not-allowed;
-       }
-     }
+      &:hover {
+        background: var(--color-bg-secondary, #f5f5f5);
+        border-color: var(--color-primary, #0052d9);
+        color: #f39c12;
+      }
+
+      .t-icon {
+        font-size: 18px;
+      }
+
+      &:active {
+        background: var(--color-bg-tertiary, #e8e8e8);
+      }
+
+      &:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+    }
 
     .form-textarea {
       flex: 1;
@@ -702,32 +706,32 @@
     }
 
     .preset-tooltip {
-       border: 1px solid var(--color-border, #d9d9d9);
-       border-radius: 6px;
-       background: var(--color-bg-container, #fff);
-       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-       max-height: 280px;
-       overflow-y: auto;
-       min-width: 280px;
-       max-width: 320px;
-       
-       /* 优化滚动条 */
-       scrollbar-width: thin;
-       scrollbar-color: rgba(0, 0, 0, 0.15) transparent;
-       
-       &::-webkit-scrollbar {
-         width: 4px;
-       }
-       
-       &::-webkit-scrollbar-track {
-         background: transparent;
-       }
-       
-       &::-webkit-scrollbar-thumb {
-         background: rgba(0, 0, 0, 0.15);
-         border-radius: 2px;
-       }
-     }
+      border: 1px solid var(--color-border, #d9d9d9);
+      border-radius: 6px;
+      background: var(--color-bg-container, #fff);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      max-height: 280px;
+      overflow-y: auto;
+      min-width: 280px;
+      max-width: 320px;
+
+      /* 优化滚动条 */
+      scrollbar-width: thin;
+      scrollbar-color: rgba(0, 0, 0, 0.15) transparent;
+
+      &::-webkit-scrollbar {
+        width: 4px;
+      }
+
+      &::-webkit-scrollbar-track {
+        background: transparent;
+      }
+
+      &::-webkit-scrollbar-thumb {
+        background: rgba(0, 0, 0, 0.15);
+        border-radius: 2px;
+      }
+    }
 
     .preset-header {
       padding: 8px 12px;
@@ -753,15 +757,15 @@
       cursor: pointer;
       border-bottom: 1px solid var(--color-border-light, #f0f0f0);
       transition: background-color 0.2s ease;
-      
+
       &:hover {
         background: var(--color-bg-secondary, #f5f5f5);
       }
-      
+
       &:last-child {
         border-bottom: none;
       }
-      
+
       &:disabled {
         opacity: 0.6;
         cursor: not-allowed;
@@ -799,13 +803,13 @@
       background: var(--color-bg-container, #fff);
       color: var(--color-text-primary, #333);
       flex: 1;
-      
+
       &:focus {
         outline: none;
         border-color: var(--color-primary, #0052d9);
         box-shadow: 0 0 0 2px rgba(0, 82, 217, 0.1);
       }
-      
+
       &:disabled {
         background-color: var(--color-bg-disabled, #f5f5f5);
         color: var(--color-text-disabled, #999);
@@ -829,7 +833,7 @@
       cursor: pointer;
       font-size: 14px;
       transition: all 0.2s ease;
-      
+
       &:hover {
         background: var(--color-primary-light, #e6f7ff);
         color: var(--color-primary, #0052d9);
@@ -885,13 +889,13 @@
       cursor: pointer;
       transition: all 0.2s ease;
       text-align: center;
-      
+
       &:hover:not(:disabled) {
         background: var(--color-primary-light, #e6f7ff);
         border-color: var(--color-primary, #0052d9);
         color: var(--color-primary, #0052d9);
       }
-      
+
       &:disabled {
         opacity: 0.6;
         cursor: not-allowed;
@@ -943,7 +947,7 @@
         border-color: var(--color-primary, #0052d9);
       }
 
-      input[type="radio"] {
+      input[type='radio'] {
         margin: 0;
         accent-color: var(--color-primary, #0052d9);
       }
@@ -1242,7 +1246,7 @@
         border-radius: 6px;
         overflow: hidden;
         height: 80px; // 固定容器高度
-        
+
         .uploaded-image-preview {
           width: 100%;
           max-height: 80px; // 使用max-height而不是height
@@ -1379,7 +1383,7 @@
   .form-link {
     color: var(--color-primary, #0052d9);
     text-decoration: none;
-    
+
     &:hover {
       text-decoration: underline;
     }
@@ -1479,7 +1483,7 @@
 .ai-image-generation-container {
   // Force light colors regardless of system theme
   color-scheme: light;
-  
+
   * {
     color-scheme: light;
   }
@@ -1641,7 +1645,7 @@
   .tooltip-trigger {
     background: #f5f5f5 !important;
     color: #333 !important;
-    
+
     &:hover {
       background: #e6f7ff !important;
       color: #0052d9 !important;
@@ -1663,7 +1667,7 @@
     background: #fff !important;
     color: #333 !important;
     border-color: #d9d9d9 !important;
-    
+
     &:hover:not(:disabled) {
       background: #e6f7ff !important;
       border-color: #0052d9 !important;
@@ -1699,7 +1703,7 @@
   .dialog-close-button {
     background: #fff !important;
     color: #666 !important;
-    
+
     &:hover {
       background: #fff2f0 !important;
       color: #ff4d4f !important;
@@ -1857,7 +1861,7 @@
     display: flex !important;
     flex-direction: column !important;
   }
-  
+
   // 主内容区域 - 使用后代选择器确保匹配
   .ai-image-generation-container .main-content {
     display: flex !important;
@@ -1868,7 +1872,7 @@
     flex: none !important;
     overflow: visible !important;
   }
-  
+
   // 表单区域 - 确保显示
   .ai-image-generation-container .ai-image-generation-section {
     display: flex !important;
@@ -1882,7 +1886,7 @@
     padding-right: 0 !important;
     order: 1 !important;
   }
-  
+
   // 任务侧栏 - 全宽显示
   .ai-image-generation-container .task-sidebar {
     display: block !important;

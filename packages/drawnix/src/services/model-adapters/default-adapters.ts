@@ -18,11 +18,11 @@ import type {
 } from './types';
 import { registerModelAdapter } from './registry';
 import { registerKlingAdapter } from './kling-adapter';
+import { registerMJImageAdapter } from './mj-image-adapter';
 
-const imageModelIds = [
-  ...IMAGE_MODEL_VIP_OPTIONS,
-  ...IMAGE_MODEL_MORE_OPTIONS,
-].map((model) => model.id);
+const imageModelIds = [...IMAGE_MODEL_VIP_OPTIONS, ...IMAGE_MODEL_MORE_OPTIONS]
+  .map((model) => model.id)
+  .filter((modelId) => !modelId.startsWith('mj-'));
 
 const videoModelIds = VIDEO_MODELS.map((model) => model.id).filter(
   (modelId) => !modelId.startsWith('kling')
@@ -155,4 +155,5 @@ export function registerDefaultModelAdapters(): void {
   registerModelAdapter(geminiImageAdapter);
   registerModelAdapter(geminiVideoAdapter);
   registerKlingAdapter();
+  registerMJImageAdapter();
 }

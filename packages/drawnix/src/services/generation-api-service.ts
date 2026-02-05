@@ -276,6 +276,51 @@ class GenerationAPIService {
     signal: AbortSignal
   ): Promise<TaskResult> {
     try {
+      const requestedModel = (params as any).model as string | undefined;
+      if (requestedModel && requestedModel.startsWith('mj')) {
+        const adapter = resolveAdapterForModel(requestedModel, 'image');
+        if (!adapter || adapter.kind !== 'image') {
+          throw new Error(`No adapter registered for model: ${requestedModel}`);
+        }
+
+        const uploadedImages = (params as any).uploadedImages as
+          | Array<{ url?: string }>
+          | undefined;
+        const referenceImages: string[] = [];
+        if (Array.isArray(uploadedImages)) {
+          uploadedImages.forEach((img) => {
+            if (img?.url) {
+              referenceImages.push(img.url);
+            }
+          });
+        }
+        if ((params as any).uploadedImage?.url) {
+          referenceImages.push((params as any).uploadedImage.url);
+        }
+        if (Array.isArray((params as any).referenceImages)) {
+          referenceImages.push(
+            ...((params as any).referenceImages as string[])
+          );
+        }
+
+        const result = await adapter.generateImage(
+          getAdapterContextFromSettings(),
+          {
+            prompt: params.prompt,
+            model: requestedModel,
+            referenceImages:
+              referenceImages.length > 0 ? referenceImages : undefined,
+            params: (params as any).params,
+          }
+        );
+
+        return {
+          url: result.url,
+          format: result.format || 'jpg',
+          size: 0,
+        };
+      }
+
       // 直接使用传入的 size 参数，或兼容旧的 aspectRatio 参数
       let size: string | undefined = params.size;
       if (!size) {

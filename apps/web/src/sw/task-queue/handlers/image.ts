@@ -27,6 +27,11 @@ const isAsyncImageModel = (model?: string): boolean => {
   return ASYNC_IMAGE_MODELS.some((m) => lower.includes(m));
 };
 
+const isMJImageModel = (model?: string): boolean => {
+  if (!model) return false;
+  return model.toLowerCase().startsWith('mj');
+};
+
 const getExtensionFromUrl = (url: string): string => {
   try {
     const clean = url.split('?')[0];
@@ -150,6 +155,10 @@ export class ImageHandler implements TaskHandler {
     const resolvedSize =
       params.size ||
       convertAspectRatioToSize(params.aspectRatio as string | undefined);
+
+    if (isMJImageModel(params.model as string | undefined)) {
+      return this.generateMJImage(task, config, signal, processedRefImages);
+    }
 
     // 异步模型：走提交 + 轮询
     if (isAsyncImageModel(params.model)) {
@@ -392,6 +401,164 @@ export class ImageHandler implements TaskHandler {
     }
 
     throw new Error('图片生成超时');
+  }
+
+  private async generateMJImage(
+    task: SWTask,
+    config: HandlerConfig,
+    signal: AbortSignal,
+    processedRefImages?: string[]
+  ): Promise<TaskResult> {
+    const { geminiConfig } = config;
+    const { params } = task;
+    const { debugFetch } = await import('../debug-fetch');
+    const { startLLMApiLog, completeLLMApiLog, failLLMApiLog } = await import(
+      '../llm-api-logger'
+    );
+
+    const baseUrl = normalizeApiBase(geminiConfig.baseUrl);
+    const base64Array = (processedRefImages || []).map((img) =>
+      img.startsWith('data:') ? img.replace(/^data:[^;]+;base64,/, '') : img
+    );
+
+    const submitBody = {
+      botType: 'MID_JOURNEY',
+      prompt: params.prompt,
+      base64Array,
+    };
+
+    const startTime = Date.now();
+    const logId = startLLMApiLog({
+      endpoint: '/mj/submit/imagine',
+      model: params.model as string,
+      taskType: 'image',
+      prompt: params.prompt as string,
+      requestBody: JSON.stringify(
+        {
+          ...submitBody,
+          base64Array:
+            base64Array.length > 0 ? `[${base64Array.length} images]` : [],
+        },
+        null,
+        2
+      ),
+      hasReferenceImages: base64Array.length > 0,
+      referenceImageCount: base64Array.length,
+      taskId: task.id,
+    });
+
+    const submitResponse = await debugFetch(
+      `${baseUrl}/mj/submit/imagine`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${geminiConfig.apiKey}`,
+        },
+        body: JSON.stringify(submitBody),
+        signal,
+      },
+      {
+        label: `🎨 提交 MJ Imagine (${params.model})`,
+        logRequestBody: true,
+        logResponseBody: true,
+      }
+    );
+
+    if (!submitResponse.ok) {
+      const errorText = await submitResponse.text();
+      failLLMApiLog(logId, {
+        httpStatus: submitResponse.status,
+        duration: Date.now() - startTime,
+        errorMessage: errorText,
+        responseBody: errorText,
+      });
+      throw new Error(
+        `MJ submission failed: ${submitResponse.status} - ${errorText}`
+      );
+    }
+
+    const submitData = await submitResponse.json();
+    const taskId = submitData?.result?.toString();
+    if (!taskId) {
+      throw new Error('MJ submission missing task id');
+    }
+
+    for (let attempt = 0; attempt < 1080; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 5000));
+
+      const queryResponse = await debugFetch(
+        `${baseUrl}/mj/task/${taskId}/fetch`,
+        {
+          method: 'GET',
+          headers: {
+            Authorization: `Bearer ${geminiConfig.apiKey}`,
+          },
+          signal,
+        },
+        {
+          label: `🎨 查询 MJ 任务 (${taskId})`,
+          logResponseBody: true,
+        }
+      );
+
+      if (!queryResponse.ok) {
+        const errorText = await queryResponse.text();
+        failLLMApiLog(logId, {
+          httpStatus: queryResponse.status,
+          duration: Date.now() - startTime,
+          errorMessage: errorText,
+          responseBody: errorText,
+        });
+        throw new Error(
+          `MJ query failed: ${queryResponse.status} - ${errorText}`
+        );
+      }
+
+      const data = await queryResponse.json();
+      const status = String(data?.status || '').toLowerCase();
+      if (['success', 'succeed', 'completed', 'done'].includes(status)) {
+        const imageUrl = data?.imageUrl;
+        if (!imageUrl) {
+          throw new Error('MJ response missing imageUrl');
+        }
+        completeLLMApiLog(logId, {
+          httpStatus: 200,
+          duration: Date.now() - startTime,
+          resultType: 'image',
+          resultCount: 1,
+          resultUrl: imageUrl,
+          responseBody: JSON.stringify(data),
+        });
+        return {
+          url: imageUrl,
+          format: 'jpg',
+          size: 0,
+        };
+      }
+
+      if (['fail', 'failed', 'failure', 'error'].includes(status)) {
+        const message = data?.failReason || 'MJ generation failed';
+        failLLMApiLog(logId, {
+          duration: Date.now() - startTime,
+          errorMessage: message,
+          responseBody: JSON.stringify(data),
+        });
+        throw new Error(message);
+      }
+
+      config.onProgress(
+        task.id,
+        Math.min(95, 5 + attempt * 0.1),
+        TaskExecutionPhase.POLLING
+      );
+    }
+
+    failLLMApiLog(logId, {
+      duration: Date.now() - startTime,
+      errorMessage: 'MJ generation timeout',
+    });
+    throw new Error('MJ generation timeout');
   }
 
   private getAspectRatio(
