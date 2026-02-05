@@ -1,9 +1,9 @@
 {
-  "version": "0.5.71",
-  "buildTime": "2026-02-05T01:21:19.185Z",
+  "version": "0.5.72",
+  "buildTime": "2026-02-05T02:29:45.691Z",
   "gitCommit": "unknown",
   "changelog": [
-    "implement unified media execution and workflow enhancements",
+    "implement failed URL caching for external image requests",
     "add master badge and enhance Gist handling"
   ]
 }

@@ -1,3 +1,26 @@
+## 0.5.72 (2026-02-05)
+
+### 🚀 Features
+
+- enhance analytics and reporting functionality ([30a9bbf](https://github.com/ljquan/aitu/commit/30a9bbf))
+- enhance video handling and task queue management ([4757a0d](https://github.com/ljquan/aitu/commit/4757a0d))
+- add master badge and enhance Gist handling ([1dc71a9](https://github.com/ljquan/aitu/commit/1dc71a9))
+- implement failed URL caching for external image requests ([4376be0](https://github.com/ljquan/aitu/commit/4376be0))
+
+### 🔧 Chores
+
+- update app version to 0.5.71 and adjust build time ([504fee1](https://github.com/ljquan/aitu/commit/504fee1))
+- bump version to 0.5.71 ([65d6716](https://github.com/ljquan/aitu/commit/65d6716))
+- docs: 添加 LLM API 日志记录异步任务 remoteId 规则 ([708131f](https://github.com/ljquan/aitu/commit/708131f))
+- docs: 添加编码规则 - SW 初始化统一入口 ([f13f809](https://github.com/ljquan/aitu/commit/f13f809))
+- docs: 添加编码规则 - 模块循环依赖处理 ([e6a39db](https://github.com/ljquan/aitu/commit/e6a39db))
+- docs: 添加降级模式任务执行规则 ([e0f459a](https://github.com/ljquan/aitu/commit/e0f459a))
+
+### ❤️  Thank You
+
+- liquidliang <ljquan@qq.com>
+- liquid <ljquan@qq.com>
+
 ## 0.5.71 (2026-02-05)
 
 ### 🚀 Features
