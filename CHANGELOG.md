@@ -1,3 +1,14 @@
+## 0.5.74 (2026-02-05)
+
+### 🔧 Chores
+
+- update version to 0.5.73 and improve task loading logic ([99b268e](https://github.com/ljquan/aitu/commit/99b268e))
+- perf: 优化同步上传性能，避免 UI 阻塞 ([cbe11e0](https://github.com/ljquan/aitu/commit/cbe11e0))
+
+### ❤️  Thank You
+
+- liquidliang <ljquan@qq.com>
+
 ## 0.5.73 (2026-02-05)
 
 ### 🚀 Features

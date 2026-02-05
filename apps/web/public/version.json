@@ -1,8 +1,8 @@
 {
-  "version": "0.5.73",
-  "buildTime": "2026-02-05T02:57:24.444Z",
+  "version": "0.5.74",
+  "buildTime": "2026-02-05T06:11:57.768Z",
   "gitCommit": "unknown",
   "changelog": [
-    "implement image fitting utility and enhance video processing"
+    "perf: 优化同步上传性能，避免 UI 阻塞"
   ]
 }
