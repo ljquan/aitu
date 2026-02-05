@@ -82,13 +82,17 @@ export interface UseTaskQueueReturn {
 export function useTaskQueue(): UseTaskQueueReturn {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [updateCounter, setUpdateCounter] = useState(0);
-  const [isLoading, setIsLoading] = useState(() => shouldUseSWTaskQueue());
+  const [isLoading, setIsLoading] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [totalCount, setTotalCount] = useState(0);
   const [loadedCount, setLoadedCount] = useState(0);
-  const syncAttempted = useRef(false);
+  const loadSucceeded = useRef(false);
   const loadMoreLock = useRef(false);
+  // 重试计数器
+  const [retryCount, setRetryCount] = useState(0);
+  const maxRetries = 3;
+  const retryDelay = 500;
 
   // 更新分页状态
   const updatePaginationState = useCallback(() => {
@@ -118,32 +122,75 @@ export function useTaskQueue(): UseTaskQueueReturn {
     };
   }, [updatePaginationState]);
 
-  // 渲染时从 IndexedDB 加载任务数据
+  // 渲染时从 IndexedDB 加载任务数据（带重试逻辑）
   useEffect(() => {
-    if (syncAttempted.current) return;
-    syncAttempted.current = true;
+    // 如果已成功加载，跳过
+    if (loadSucceeded.current) return;
 
-    const loadTasks = async () => {
+    let cancelled = false;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const loadTasks = async (): Promise<boolean> => {
       try {
+        // 检查 IndexedDB 是否可用
+        const isAvailable = await taskStorageReader.isAvailable();
+        if (!isAvailable) {
+          return false;
+        }
         // 直接从 IndexedDB 读取任务（SW 和降级模式统一逻辑）
         const storedTasks = await taskStorageReader.getAllTasks();
+        
+        // 直接使用从 IndexedDB 读取的任务，不再依赖 taskQueueService 的内存状态
+        // 这样可以避免 restoreTasks 的异步问题，同时也避免了循环依赖
+        setTasks(storedTasks);
+        
+        // 直接设置分页状态，不依赖 swTaskQueueService（此时它还没有加载数据）
+        setTotalCount(storedTasks.length);
+        setLoadedCount(storedTasks.length);
+        setHasMore(false); // 直接从 IndexedDB 加载的是全部数据
+        
+        // 同时恢复到 taskQueueService 内存中（用于后续的实时更新和其他组件）
+        // 这是 fire-and-forget，不阻塞 UI
         if (storedTasks.length > 0) {
-          // 恢复任务到 taskQueueService 内存中（用于后续的实时更新）
-          taskQueueService.restoreTasks(storedTasks);
+          Promise.resolve(taskQueueService.restoreTasks(storedTasks)).catch(() => {
+            // 静默处理失败
+          });
         }
-        // 加载完成后，刷新任务列表
-        setTasks(taskQueueService.getAllTasks());
-        // 更新分页状态
-        updatePaginationState();
+        return true;
       } catch {
-        // 静默忽略错误
-      } finally {
-        setIsLoading(false);
+        return false;
       }
     };
 
-    loadTasks();
-  }, [updatePaginationState]);
+    const init = async () => {
+      setIsLoading(true);
+      const success = await loadTasks();
+
+      if (cancelled) return;
+
+      setIsLoading(false);
+
+      if (success) {
+        loadSucceeded.current = true;
+      } else if (retryCount < maxRetries) {
+        // 加载失败，安排重试（指数退避）
+        retryTimer = setTimeout(() => {
+          if (!cancelled) {
+            setRetryCount(prev => prev + 1);
+          }
+        }, retryDelay * (retryCount + 1));
+      }
+    };
+
+    init();
+
+    return () => {
+      cancelled = true;
+      if (retryTimer) {
+        clearTimeout(retryTimer);
+      }
+    };
+  }, [updatePaginationState, retryCount]);
 
   // 加载更多任务
   const loadMore = useCallback(async () => {
@@ -201,8 +248,7 @@ export function useTaskQueue(): UseTaskQueueReturn {
     try {
       const task = taskQueueService.createTask(params, type);
       return task;
-    } catch (error) {
-      console.error('[useTaskQueue] Failed to create task:', error);
+    } catch {
       return null;
     }
   }, []);

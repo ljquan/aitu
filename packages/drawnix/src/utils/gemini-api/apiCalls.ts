@@ -163,7 +163,7 @@ export async function callApiStreamRaw(
   signal?: AbortSignal
 ): Promise<GeminiResponse> {
   // 尝试使用 SW 模式
-  const useSW = await swChannelClient.ensureReady();
+  const useSW = await swChannelClient.initializeChannel();
   
   if (useSW) {
     // console.log('[ApiCalls] Using SW mode for streaming API call');

@@ -22,11 +22,12 @@ export class PostHogTrackingAdapter {
   /**
    * Track event using existing analytics utility
    * @param event - Tracking event to upload
-   * @throws Error if PostHog SDK is not loaded
+   * Note: Silently returns if PostHog SDK is not loaded (consistent with posthog-analytics.ts)
    */
   async track(event: TrackEvent): Promise<void> {
     if (!this.isAvailable()) {
-      throw new Error('PostHog SDK not loaded');
+      // PostHog SDK not loaded, silently skip (e.g., local development)
+      return;
     }
 
     // Enrich event data with metadata

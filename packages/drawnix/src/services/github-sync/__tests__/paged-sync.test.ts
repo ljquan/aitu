@@ -13,7 +13,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   convertTasksToPagedFormat,
   compareTaskIndexes,
-  migrateFromLegacyFormat,
 } from '../task-sync-service';
 import {
   convertWorkflowsToPagedFormat,
@@ -26,7 +25,6 @@ import {
   WorkflowIndexItem,
   PAGED_SYNC_CONFIG,
   detectTaskSyncFormat,
-  SYNC_FILES,
   SYNC_FILES_PAGED,
 } from '../types';
 import type { Task } from '../../../types/task.types';
@@ -294,27 +292,6 @@ describe('Task Paged Sync', () => {
     });
   });
 
-  describe('migrateFromLegacyFormat', () => {
-    it('should migrate legacy tasks to paged format', () => {
-      const legacyData = {
-        completedTasks: [createMockTask({ id: 'task-1' }), createMockTask({ id: 'task-2' })],
-      };
-
-      const { index, pages } = migrateFromLegacyFormat(legacyData);
-
-      expect(index.items).toHaveLength(2);
-      expect(pages[0].tasks).toHaveLength(2);
-    });
-
-    it('should handle empty legacy data', () => {
-      const legacyData = { completedTasks: [] };
-
-      const { index, pages } = migrateFromLegacyFormat(legacyData);
-
-      expect(index.items).toHaveLength(0);
-      expect(pages).toHaveLength(0);
-    });
-  });
 });
 
 describe('Workflow Paged Sync', () => {
@@ -428,27 +405,10 @@ describe('Format Detection', () => {
       expect(detectTaskSyncFormat(files)).toBe('paged');
     });
 
-    it('should detect legacy format', () => {
-      const files = {
-        [SYNC_FILES.TASKS]: '{}',
-      };
-
-      expect(detectTaskSyncFormat(files)).toBe('legacy');
-    });
-
-    it('should default to legacy for empty files', () => {
+    it('should return none for empty files', () => {
       const files = {};
 
-      expect(detectTaskSyncFormat(files)).toBe('legacy');
-    });
-
-    it('should prefer paged format when both exist', () => {
-      const files = {
-        [SYNC_FILES_PAGED.TASK_INDEX]: '{}',
-        [SYNC_FILES.TASKS]: '{}',
-      };
-
-      expect(detectTaskSyncFormat(files)).toBe('paged');
+      expect(detectTaskSyncFormat(files)).toBe('none');
     });
   });
 });

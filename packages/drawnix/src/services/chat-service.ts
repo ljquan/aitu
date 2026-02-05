@@ -193,8 +193,8 @@ export async function sendChatMessage(
   temporaryModel?: string, // 临时模型（仅在当前会话中使用，不影响全局设置）
   systemPrompt?: string // 系统提示词（包含 MCP 工具定义等）
 ): Promise<string> {
-  // 尝试使用 SW 模式（ensureReady 统一处理 SW 检查和初始化）
-  const useSW = await swChannelClient.ensureReady();
+  // 尝试使用 SW 模式
+  const useSW = await swChannelClient.initializeChannel();
   
   if (useSW) {
     return sendChatMessageViaSW(messages, newContent, attachments, onStream, temporaryModel, systemPrompt);

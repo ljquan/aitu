@@ -1246,6 +1246,8 @@ export class WorkflowExecutor {
    * Request main thread to execute a tool
    * 使用 channelManager 的双工通讯模式，直接等待响应
    * 这样可以减少一次交互，不需要再通过 workflow:respondTool 发送结果
+   * 
+   * 增强：支持重试机制和处理器就绪检测
    */
   private async requestMainThreadTool(
     workflowId: string,
@@ -1272,63 +1274,112 @@ export class WorkflowExecutor {
       createdAt: Date.now(),
     });
 
-    try {
-      // Use channelManager's duplex communication to send request and await response directly
-      const { getChannelManager } = await import('./channel-manager');
-      const cm = getChannelManager();
-      
-      if (!cm) {
-        // channelManager 不可用，保留 pending request 等待后续重试
-        const awaitError = new Error(`AWAITING_CLIENT:${toolName}`);
-        (awaitError as any).isAwaitingClient = true;
-        throw awaitError;
+    // 重试配置
+    const MAX_RETRIES = 3;
+    const INITIAL_DELAY_MS = 1000;
+    let lastError: Error | null = null;
+
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+      try {
+        // Use channelManager's duplex communication to send request and await response directly
+        const { getChannelManager } = await import('./channel-manager');
+        const cm = getChannelManager();
+        
+        if (!cm) {
+          // channelManager 不可用，等待后重试
+          if (attempt < MAX_RETRIES - 1) {
+            const delayMs = INITIAL_DELAY_MS * Math.pow(2, attempt);
+            console.log(`[WorkflowExecutor] ChannelManager not ready, retry in ${delayMs}ms (attempt ${attempt + 1}/${MAX_RETRIES})`);
+            await this.delay(delayMs);
+            continue;
+          }
+          // 最后一次尝试仍失败，保留 pending request 等待后续重试
+          const awaitError = new Error(`AWAITING_CLIENT:${toolName}`);
+          (awaitError as any).isAwaitingClient = true;
+          throw awaitError;
+        }
+
+        // 检查是否有客户端连接（处理器就绪检测）
+        const hasClient = cm.hasWorkflowClientChannel(workflowId) || cm.hasAnyClientChannel();
+        if (!hasClient && attempt < MAX_RETRIES - 1) {
+          const delayMs = INITIAL_DELAY_MS * Math.pow(2, attempt);
+          console.log(`[WorkflowExecutor] No client for workflow ${workflowId}, retry in ${delayMs}ms (attempt ${attempt + 1}/${MAX_RETRIES})`);
+          await this.delay(delayMs);
+          continue;
+        }
+
+        // Send request and wait for response directly (5 minutes timeout)
+        const response = await cm.sendToolRequest(
+          workflowId,
+          requestId,
+          stepId,
+          toolName,
+          args,
+          300000
+        );
+
+        if (!response) {
+          // 超时或无客户端连接
+          if (attempt < MAX_RETRIES - 1) {
+            const delayMs = INITIAL_DELAY_MS * Math.pow(2, attempt);
+            console.log(`[WorkflowExecutor] Tool request timeout, retry in ${delayMs}ms (attempt ${attempt + 1}/${MAX_RETRIES})`);
+            await this.delay(delayMs);
+            continue;
+          }
+          // 最后一次尝试仍超时，保留 pending request 等待后续重试
+          const awaitError = new Error(`AWAITING_CLIENT:${toolName}`);
+          (awaitError as any).isAwaitingClient = true;
+          throw awaitError;
+        }
+
+        // 收到响应后才清理 IndexedDB
+        await taskQueueStorage.deletePendingToolRequest(requestId);
+
+        // Convert response to MainThreadToolResponseMessage format
+        return {
+          type: 'MAIN_THREAD_TOOL_RESPONSE',
+          requestId,
+          success: response.success,
+          result: response.result,
+          error: response.error,
+          taskId: response.taskId,
+          taskIds: response.taskIds,
+          addSteps: response.addSteps as MainThreadToolResponseMessage['addSteps'],
+        };
+      } catch (error: any) {
+        lastError = error instanceof Error ? error : new Error(String(error));
+        
+        // 如果是等待客户端的错误，不删除 pending request，直接抛出
+        if (error?.isAwaitingClient) {
+          throw error;
+        }
+        
+        // 如果还有重试机会，继续重试
+        if (attempt < MAX_RETRIES - 1) {
+          const delayMs = INITIAL_DELAY_MS * Math.pow(2, attempt);
+          console.log(`[WorkflowExecutor] Tool request error, retry in ${delayMs}ms (attempt ${attempt + 1}/${MAX_RETRIES}):`, error?.message);
+          await this.delay(delayMs);
+          continue;
+        }
       }
-
-      // Send request and wait for response directly (5 minutes timeout)
-      const response = await cm.sendToolRequest(
-        workflowId,
-        requestId,
-        stepId,
-        toolName,
-        args,
-        300000
-      );
-
-      if (!response) {
-        // 超时或无客户端连接，保留 pending request 等待后续重试
-        const awaitError = new Error(`AWAITING_CLIENT:${toolName}`);
-        (awaitError as any).isAwaitingClient = true;
-        throw awaitError;
-      }
-
-      // 收到响应后才清理 IndexedDB
-      await taskQueueStorage.deletePendingToolRequest(requestId);
-
-      // Convert response to MainThreadToolResponseMessage format
-      return {
-        type: 'MAIN_THREAD_TOOL_RESPONSE',
-        requestId,
-        success: response.success,
-        result: response.result,
-        error: response.error,
-        taskId: response.taskId,
-        taskIds: response.taskIds,
-        addSteps: response.addSteps as MainThreadToolResponseMessage['addSteps'],
-      };
-    } catch (error: any) {
-      // 如果是等待客户端的错误，不删除 pending request
-      if (error?.isAwaitingClient) {
-        throw error;
-      }
-      // 其他错误才清理 IndexedDB
-      await taskQueueStorage.deletePendingToolRequest(requestId);
-      throw error;
     }
+
+    // 所有重试都失败，清理 IndexedDB 并抛出错误
+    await taskQueueStorage.deletePendingToolRequest(requestId);
+    throw lastError || new Error(`Tool request failed after ${MAX_RETRIES} attempts`);
+  }
+
+  /**
+   * 延迟函数
+   */
+  private delay(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
   }
 
   /**
    * Request canvas operation from main thread
    * 使用 channelManager 的双工通讯模式，直接等待响应
+   * 增强：支持重试和失败时持久化
    * @param workflowId 工作流 ID，用于找到正确的 channel
    */
   private async requestCanvasOperation(
@@ -1336,16 +1387,143 @@ export class WorkflowExecutor {
     operation: string,
     params: Record<string, unknown>
   ): Promise<{ success: boolean; error?: string }> {
-    // 使用 channelManager 的双工通讯模式
-    const { getChannelManager } = await import('./channel-manager');
-    const cm = getChannelManager();
-    if (cm) {
-      return cm.requestCanvasOperation(workflowId, operation, params);
+    const operationId = `canvas_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
+    const MAX_RETRIES = 3;
+    const INITIAL_DELAY_MS = 500;
+
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+      try {
+        // 使用 channelManager 的双工通讯模式
+        const { getChannelManager } = await import('./channel-manager');
+        const cm = getChannelManager();
+        
+        if (!cm) {
+          if (attempt < MAX_RETRIES - 1) {
+            const delayMs = INITIAL_DELAY_MS * Math.pow(2, attempt);
+            console.log(`[WorkflowExecutor] ChannelManager not ready for canvas op, retry in ${delayMs}ms`);
+            await this.delay(delayMs);
+            continue;
+          }
+          // 最后一次尝试仍失败，持久化操作以便后续恢复
+          await this.persistCanvasOperation(operationId, workflowId, operation, params, 'channelManager not available');
+          return { success: false, error: 'channelManager not available' };
+        }
+
+        // 检查是否有客户端连接
+        const hasClient = cm.hasWorkflowClientChannel(workflowId) || cm.hasAnyClientChannel();
+        if (!hasClient && attempt < MAX_RETRIES - 1) {
+          const delayMs = INITIAL_DELAY_MS * Math.pow(2, attempt);
+          console.log(`[WorkflowExecutor] No client for canvas op, retry in ${delayMs}ms`);
+          await this.delay(delayMs);
+          continue;
+        }
+
+        const result = await cm.requestCanvasOperation(workflowId, operation, params);
+        
+        if (result.success) {
+          // 成功时删除可能存在的持久化记录
+          await taskQueueStorage.deletePendingCanvasOperation(operationId).catch(() => {});
+          return result;
+        }
+        
+        // 操作失败，可能需要重试
+        if (attempt < MAX_RETRIES - 1 && result.error?.includes('timeout')) {
+          const delayMs = INITIAL_DELAY_MS * Math.pow(2, attempt);
+          console.log(`[WorkflowExecutor] Canvas op timeout, retry in ${delayMs}ms`);
+          await this.delay(delayMs);
+          continue;
+        }
+        
+        // 最终失败，持久化操作
+        await this.persistCanvasOperation(operationId, workflowId, operation, params, result.error || 'Unknown error');
+        return result;
+      } catch (error: any) {
+        if (attempt < MAX_RETRIES - 1) {
+          const delayMs = INITIAL_DELAY_MS * Math.pow(2, attempt);
+          console.log(`[WorkflowExecutor] Canvas op error, retry in ${delayMs}ms:`, error?.message);
+          await this.delay(delayMs);
+          continue;
+        }
+        // 最终失败，持久化操作
+        await this.persistCanvasOperation(operationId, workflowId, operation, params, error?.message || 'Unknown error');
+        return { success: false, error: error?.message || 'Canvas operation failed' };
+      }
     }
 
-    // channelManager 不可用时返回失败
-    console.warn('[WorkflowExecutor] channelManager not available for canvas operation');
-    return { success: false, error: 'channelManager not available' };
+    return { success: false, error: 'Canvas operation failed after retries' };
+  }
+
+  /**
+   * 持久化失败的 Canvas 操作以便后续恢复
+   */
+  private async persistCanvasOperation(
+    operationId: string,
+    workflowId: string,
+    operation: string,
+    params: Record<string, unknown>,
+    error: string
+  ): Promise<void> {
+    try {
+      await taskQueueStorage.savePendingCanvasOperation({
+        id: operationId,
+        workflowId,
+        operation,
+        params,
+        retryCount: 0,
+        lastError: error,
+        createdAt: Date.now(),
+      });
+      console.log(`[WorkflowExecutor] Persisted failed canvas operation: ${operationId}`);
+    } catch (err) {
+      console.warn('[WorkflowExecutor] Failed to persist canvas operation:', err);
+    }
+  }
+
+  /**
+   * 重试待处理的 Canvas 操作（用于客户端重连后调用）
+   */
+  async retryPendingCanvasOperations(workflowId: string): Promise<void> {
+    try {
+      const pendingOps = await taskQueueStorage.getPendingCanvasOperationsByWorkflow(workflowId);
+      
+      for (const op of pendingOps) {
+        console.log(`[WorkflowExecutor] Retrying pending canvas operation: ${op.id}`);
+        
+        const { getChannelManager } = await import('./channel-manager');
+        const cm = getChannelManager();
+        
+        if (!cm) {
+          console.warn('[WorkflowExecutor] Cannot retry canvas op: channelManager not available');
+          continue;
+        }
+        
+        try {
+          const result = await cm.requestCanvasOperation(op.workflowId, op.operation, op.params);
+          
+          if (result.success) {
+            // 成功，删除持久化记录
+            await taskQueueStorage.deletePendingCanvasOperation(op.id);
+            console.log(`[WorkflowExecutor] Successfully retried canvas operation: ${op.id}`);
+          } else {
+            // 仍然失败，更新重试计数
+            op.retryCount++;
+            op.lastError = result.error;
+            op.lastRetryAt = Date.now();
+            await taskQueueStorage.savePendingCanvasOperation(op);
+            console.warn(`[WorkflowExecutor] Canvas operation retry failed: ${op.id}`, result.error);
+          }
+        } catch (error: any) {
+          // 更新重试计数
+          op.retryCount++;
+          op.lastError = error?.message || 'Unknown error';
+          op.lastRetryAt = Date.now();
+          await taskQueueStorage.savePendingCanvasOperation(op);
+          console.warn(`[WorkflowExecutor] Canvas operation retry error: ${op.id}`, error);
+        }
+      }
+    } catch (error) {
+      console.warn('[WorkflowExecutor] Failed to retry pending canvas operations:', error);
+    }
   }
 
   /**

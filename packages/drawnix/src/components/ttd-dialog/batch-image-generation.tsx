@@ -1329,8 +1329,7 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
         );
         return;
       }
-      // promptForApiKey 内部已经更新了 settings，重新获取
-      geminiSettings.update({ apiKey: newApiKey });
+      // promptForApiKey 内部已经更新了 settings 并同步到 SW
     }
     const globalBatchTimestamp = Date.now();
     let subTaskCounter = 0;

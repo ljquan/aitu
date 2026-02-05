@@ -40,7 +40,7 @@ export async function generateImageWithGemini(
   const modelName = options.model || globalSettings.imageModelName || DEFAULT_CONFIG.modelName || 'gemini-3-pro-image-preview-vip';
 
   // 尝试使用 SW 模式
-  const useSW = await swChannelClient.ensureReady();
+  const useSW = await swChannelClient.initializeChannel();
   
   if (useSW) {
     return generateImageViaSW(prompt, options, modelName);
