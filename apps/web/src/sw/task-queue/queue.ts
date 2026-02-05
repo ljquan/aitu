@@ -143,13 +143,24 @@ export class SWTaskQueue {
   private async restoreFromStorage(): Promise<void> {
     try {
       // Load saved config
+      console.log('[SWTaskQueue] restoreFromStorage: Loading config from IndexedDB...');
       const { geminiConfig, videoConfig } = await taskQueueStorage.loadConfig();
+      
+      console.log('[SWTaskQueue] restoreFromStorage: Loaded config:', {
+        hasGeminiConfig: !!geminiConfig,
+        hasVideoConfig: !!videoConfig,
+        apiKey: geminiConfig?.apiKey ? `${geminiConfig.apiKey.slice(0, 8)}...` : 'missing',
+        baseUrl: geminiConfig?.baseUrl || 'missing',
+      });
       
       if (geminiConfig && videoConfig) {
         this.geminiConfig = geminiConfig;
         this.videoConfig = videoConfig;
         this.initialized = true;
         this.hadSavedConfig = true; // Mark that we had valid config
+        console.log('[SWTaskQueue] restoreFromStorage: Config restored successfully');
+      } else {
+        console.log('[SWTaskQueue] restoreFromStorage: No valid config found in IndexedDB');
       }
 
       // Load all tasks
@@ -491,10 +502,19 @@ export class SWTaskQueue {
    * - 后台操作完成后广播状态并恢复任务
    */
   async initialize(geminiConfig: GeminiConfig, videoConfig: VideoAPIConfig): Promise<void> {
+    console.log('[SWTaskQueue] initialize called with:', {
+      apiKey: geminiConfig?.apiKey ? `${geminiConfig.apiKey.slice(0, 8)}...` : 'missing',
+      baseUrl: geminiConfig?.baseUrl || 'missing',
+      modelName: geminiConfig?.modelName || 'missing',
+      videoBaseUrl: videoConfig?.baseUrl || 'missing',
+    });
+    
     // 立即保存配置到内存，不等待 IndexedDB
     this.geminiConfig = geminiConfig;
     this.videoConfig = videoConfig;
     this.initialized = true;
+    
+    console.log('[SWTaskQueue] Config saved to memory, initialized:', this.initialized);
     
     // 记录是否是首次初始化（在后台任务中使用）
     const isFirstTimeInit = !this.hadSavedConfig;

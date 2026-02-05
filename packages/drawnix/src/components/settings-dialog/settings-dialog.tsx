@@ -17,6 +17,7 @@ import {
   VIDEO_MODELS,
   TEXT_MODELS,
 } from '../../constants/model-config';
+import { swChannelClient } from '../../services/sw-channel/client';
 
 // 为了向后兼容，重新导出这些常量
 export { IMAGE_MODEL_GROUPED_SELECT_OPTIONS as IMAGE_MODEL_GROUPED_OPTIONS } from '../../constants/model-config';
@@ -47,15 +48,55 @@ export const SettingsDialog = ({
     }
   }, [appState.openSettings]);
 
-  const handleSave = () => {
-    // 使用全局设置管理器更新配置
-    geminiSettings.update({
-      apiKey: apiKey.trim(),
-      baseUrl: baseUrl.trim() || 'https://api.tu-zi.com/v1',
-      imageModelName: imageModelName.trim() || getDefaultImageModel(),
-      videoModelName: videoModelName.trim() || getDefaultVideoModel(),
-      textModelName: textModelName.trim() || getDefaultTextModel(),
+  const handleSave = async () => {
+    const trimmedApiKey = apiKey.trim();
+    const trimmedBaseUrl = baseUrl.trim() || 'https://api.tu-zi.com/v1';
+    const trimmedImageModel = imageModelName.trim() || getDefaultImageModel();
+    const trimmedVideoModel = videoModelName.trim() || getDefaultVideoModel();
+    const trimmedTextModel = textModelName.trim() || getDefaultTextModel();
+    
+    // 使用全局设置管理器更新配置（必须等待完成）
+    await geminiSettings.update({
+      apiKey: trimmedApiKey,
+      baseUrl: trimmedBaseUrl,
+      imageModelName: trimmedImageModel,
+      videoModelName: trimmedVideoModel,
+      textModelName: trimmedTextModel,
     });
+
+    // 同步配置到 Service Worker（异步执行，不阻塞 UI）
+    (async () => {
+      try {
+        console.log('[SettingsDialog] Syncing config to SW...', {
+          apiKey: trimmedApiKey ? `${trimmedApiKey.slice(0, 8)}...` : 'empty',
+          baseUrl: trimmedBaseUrl,
+          imageModel: trimmedImageModel,
+        });
+        
+        // 确保 SW channel 已初始化
+        if (!swChannelClient.isInitialized()) {
+          console.log('[SettingsDialog] SW channel not initialized, initializing...');
+          await swChannelClient.initialize();
+        }
+        
+        // 发送最新配置到 SW
+        console.log('[SettingsDialog] Calling swChannelClient.init...');
+        const result = await swChannelClient.init({
+          geminiConfig: {
+            apiKey: trimmedApiKey,
+            baseUrl: trimmedBaseUrl,
+            modelName: trimmedImageModel,
+          },
+          videoConfig: {
+            apiKey: trimmedApiKey,
+            baseUrl: trimmedBaseUrl,
+          },
+        });
+        console.log('[SettingsDialog] SW init result:', result);
+      } catch (error) {
+        console.warn('[SettingsDialog] Failed to sync config to SW:', error);
+      }
+    })();
 
     // 关闭弹窗
     setAppState({ ...appState, openSettings: false });

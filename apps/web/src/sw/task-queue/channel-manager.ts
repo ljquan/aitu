@@ -611,6 +611,14 @@ export class SWChannelManager {
   private workflowHandlerInitialized = false;
 
   private async handleInit(data: { geminiConfig: GeminiConfig; videoConfig: VideoAPIConfig }): Promise<{ success: boolean; error?: string }> {
+    console.log('[SWChannelManager] handleInit called with:', {
+      hasGeminiConfig: !!data?.geminiConfig,
+      hasVideoConfig: !!data?.videoConfig,
+      geminiApiKey: data?.geminiConfig?.apiKey ? `${data.geminiConfig.apiKey.slice(0, 8)}...` : 'missing',
+      geminiBaseUrl: data?.geminiConfig?.baseUrl || 'missing',
+      videoBaseUrl: data?.videoConfig?.baseUrl || 'missing',
+    });
+    
     if (!data || !data.geminiConfig || !data.videoConfig) {
       console.error('[SWChannelManager] handleInit: Missing config data');
       return { success: false, error: 'Missing config data' };
@@ -621,7 +629,9 @@ export class SWChannelManager {
       await this.cleanupDisconnectedClients();
       
       // 初始化任务队列
+      console.log('[SWChannelManager] handleInit: Calling taskQueue.initialize...');
       await this.taskQueue?.initialize(data.geminiConfig, data.videoConfig);
+      console.log('[SWChannelManager] handleInit: taskQueue.initialize completed');
       
       // 初始化工作流处理器
       // 注意：不能只依赖 workflowHandlerInitialized 标志，因为 SW 空闲后模块级变量可能被重置

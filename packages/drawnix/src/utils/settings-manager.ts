@@ -239,6 +239,7 @@ class SettingsManager {
         const decoded = decodeURIComponent(settingsParam);
         const urlSettings = JSON.parse(decoded);
         
+        // updateSetting 已有占位符检查，会自动忽略无效值
         if (urlSettings.key) {
           this.updateSetting('gemini.apiKey', urlSettings.key);
         }
@@ -248,6 +249,7 @@ class SettingsManager {
       }
 
       // 处理apiKey参数
+      // updateSetting 已有占位符检查，会自动忽略无效值
       const apiKey = urlParams.get('apiKey');
       if (apiKey) {
         this.updateSetting('gemini.apiKey', apiKey);
@@ -340,9 +342,27 @@ class SettingsManager {
   }
 
   /**
+   * 检查字符串是否是占位符格式
+   * 如 {key}、${key}、{{key}}、{apiKey} 等
+   */
+  private isPlaceholderValue(value: unknown): boolean {
+    if (!value || typeof value !== 'string') return false;
+    // 匹配 {xxx}、${xxx}、{{xxx}} 等占位符格式
+    return /^[{$]*\{?\w+\}?\}*$/.test(value) || 
+           value.includes('{key}') || 
+           value.includes('${');
+  }
+
+  /**
    * 更新特定设置值（支持点记号法）
    */
   public async updateSetting<T = any>(path: string, newValue: T): Promise<void> {
+    // 对 apiKey 相关字段进行占位符检查
+    if ((path.endsWith('.apiKey') || path === 'apiKey') && this.isPlaceholderValue(newValue)) {
+      console.warn(`[SettingsManager] Detected placeholder value for ${path}, ignoring:`, newValue);
+      return;
+    }
+    
     const keys = path.split('.');
     const lastKey = keys.pop()!;
     

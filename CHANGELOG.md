@@ -1,3 +1,17 @@
+## 0.5.76 (2026-02-05)
+
+### 🚀 Features
+
+- add base64 image preview functionality ([fba4fe7](https://github.com/ljquan/aitu/commit/fba4fe7))
+
+### 🔧 Chores
+
+- docs: 添加配置对象深拷贝规则 ([0002654](https://github.com/ljquan/aitu/commit/0002654))
+
+### ❤️  Thank You
+
+- liquidliang <ljquan@qq.com>
+
 ## 0.5.75 (2026-02-05)
 
 ### 🚀 Features
