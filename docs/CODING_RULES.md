@@ -1458,6 +1458,52 @@ const submitToSW = async (workflow) => {
 
 **原因**: Service Worker 的 `workflowHandler` 需要收到 `TASK_QUEUE_INIT` 消息后才会初始化。如果在 SW 初始化前提交工作流，消息会被暂存到 `pendingWorkflowMessages`，等待配置到达。若配置永远不到达（如 `swTaskQueueService.initialize()` 未被调用），工作流就永远不会开始执行，步骤状态保持 `pending`。
 
+### Service Worker 初始化统一入口
+
+**场景**: 需要确保 SW 客户端已初始化并配置好后再进行 API 调用
+
+❌ **错误示例**:
+```typescript
+// 错误：在各处重复 SW 初始化逻辑
+async function callSWApi() {
+  if (shouldUseSWTaskQueue()) {
+    if (!swChannelClient.isInitialized()) {
+      const settings = geminiSettings.get();
+      if (settings.apiKey && settings.baseUrl) {
+        await settingsManager.waitForInitialization();
+        await swChannelClient.initialize();
+        await swChannelClient.init({
+          geminiConfig: { apiKey: settings.apiKey, baseUrl: settings.baseUrl },
+          videoConfig: { baseUrl: settings.baseUrl },
+        });
+      }
+    }
+    // 使用 SW...
+  }
+}
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：使用统一入口
+async function callSWApi() {
+  const useSW = await swChannelClient.ensureReady();
+  
+  if (useSW) {
+    // 使用 SW...
+  } else {
+    // 降级到主线程...
+  }
+}
+```
+
+**统一入口说明**:
+- `swChannelClient.ensureReady()`: 统一的异步初始化入口，内部处理 URL 参数检查、设置验证、初始化和配置
+- `swTaskQueueService.initialize()`: 任务队列服务初始化，内部调用 `ensureReady()` + 设置 visibility 监听器
+- `shouldUseSWTaskQueue()`: 同步检查函数，仅用于判断模式，不进行初始化
+
+**原因**: 分散的 SW 初始化逻辑会导致代码重复、维护困难，且容易遗漏某些检查步骤。使用统一入口可以确保所有初始化逻辑集中管理，便于维护和调试。
+
 ### Service Worker 更新提示在开发模式下被跳过
 
 **场景**: 在 localhost 本地测试 Service Worker 更新提示功能
@@ -7070,4 +7116,111 @@ async deleteBoard(id: string) {
 - React useEffect 中的订阅可能在组件渲染后才建立
 - 热更新（HMR）可能导致旧的订阅被替换
 - 关键业务逻辑不应依赖于"某处可能存在的订阅者"
+
+### 自定义菜单/按钮组件的焦点样式和键盘导航
+
+**场景**: 实现自定义菜单、下拉列表等交互组件时
+
+❌ **错误示例**:
+```scss
+// 错误：没有处理焦点样式，浏览器会显示默认的蓝色边框
+.menu-item {
+  background-color: transparent;
+  border: 1px solid transparent;
+  // 缺少 outline 处理
+}
+```
+
+```tsx
+// 错误：菜单没有键盘导航支持
+const Menu = ({ children }) => {
+  return (
+    <div className="menu">
+      {children}
+    </div>
+  );
+};
+```
+
+✅ **正确示例**:
+```scss
+// 正确：移除默认焦点边框，用 focus-visible 提供键盘导航反馈
+.menu-item {
+  background-color: transparent;
+  border: 1px solid transparent;
+  outline: none;  // 移除浏览器默认蓝色焦点边框
+
+  &:hover {
+    background-color: var(--color-surface-primary-container);
+  }
+
+  &:focus-visible {
+    // 仅键盘导航时显示视觉反馈（鼠标点击不会触发）
+    background-color: var(--color-surface-primary-container);
+  }
+}
+```
+
+```tsx
+// 正确：完整的键盘导航和无障碍支持
+const Menu = ({ children, onClose }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const getFocusableItems = useCallback(() => {
+    return Array.from(
+      containerRef.current?.querySelectorAll<HTMLButtonElement>(
+        'button.menu-item:not([disabled])'
+      ) || []
+    );
+  }, []);
+
+  const handleKeyDown = useCallback((event: React.KeyboardEvent) => {
+    const items = getFocusableItems();
+    const currentIndex = items.findIndex(item => item === document.activeElement);
+
+    switch (event.key) {
+      case 'ArrowDown':
+        event.preventDefault();
+        items[(currentIndex + 1) % items.length]?.focus();
+        break;
+      case 'ArrowUp':
+        event.preventDefault();
+        items[(currentIndex - 1 + items.length) % items.length]?.focus();
+        break;
+      case 'Escape':
+        event.preventDefault();
+        onClose?.();
+        break;
+    }
+  }, [getFocusableItems, onClose]);
+
+  // 菜单打开时自动聚焦第一项
+  useEffect(() => {
+    requestAnimationFrame(() => {
+      getFocusableItems()[0]?.focus();
+    });
+  }, []);
+
+  return (
+    <div ref={containerRef} role="menu" onKeyDown={handleKeyDown}>
+      {children}
+    </div>
+  );
+};
+
+// MenuItem 添加 role="menuitem"
+const MenuItem = ({ onClick, children }) => (
+  <button className="menu-item" onClick={onClick} role="menuitem">
+    {children}
+  </button>
+);
+```
+
+**关键点**:
+- `outline: none` 移除浏览器默认蓝色焦点边框
+- `focus-visible` 仅在键盘导航时提供视觉反馈，鼠标点击不会触发
+- 支持 ↑↓ 箭头键循环切换焦点
+- 支持 Escape 关闭菜单
+- 菜单打开时自动聚焦第一项
+- 添加 `role="menu"` 和 `role="menuitem"` 支持无障碍
 
