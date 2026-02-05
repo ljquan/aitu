@@ -135,7 +135,8 @@ export async function sendChatWorkflow(
           modelName: settings.chatModel,
         },
         videoConfig: {
-          baseUrl: 'https://api.tu-zi.com',
+          baseUrl: settings.baseUrl,
+          apiKey: settings.apiKey,
         },
       });
     }

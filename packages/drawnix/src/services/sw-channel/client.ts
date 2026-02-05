@@ -256,6 +256,7 @@ export class SWChannelClient {
         },
         videoConfig: {
           baseUrl: settings.baseUrl,
+          apiKey: settings.apiKey,
         },
       });
       return result.success;
