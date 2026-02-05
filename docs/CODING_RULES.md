@@ -1893,6 +1893,66 @@ class SWTaskQueue {
 
 **现象**: 页面刷新后，任务列表显示不完整（如 67 条任务只显示 2 条），因为 RPC 响应在数据恢复完成前就返回了。
 
+### 配置同步到 IndexedDB 供 SW 读取
+
+**场景**: Service Worker 需要读取用户配置（如 API Key、baseUrl），但 SW 无法访问 localStorage
+
+**问题**: 之前的架构依赖 postMessage 传递配置给 SW，当通信不畅时 SW 可能拿不到配置导致任务失败。
+
+❌ **错误示例**:
+```typescript
+// 错误：SW 依赖 postMessage 获取配置
+// 主线程
+await swChannelClient.init({
+  geminiConfig: { apiKey, baseUrl },
+  videoConfig: { baseUrl },
+});
+
+// SW 中
+private async handleInit(data: { geminiConfig; videoConfig }) {
+  this.geminiConfig = data.geminiConfig;
+  // 如果 postMessage 失败，SW 就没有配置
+}
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：配置同步到 IndexedDB，SW 直接读取
+
+// 1. 主线程 SettingsManager 自动同步配置到 IndexedDB
+private async saveToStorage(): Promise<void> {
+  localStorage.setItem(DRAWNIX_SETTINGS_KEY, settingsJson);
+  
+  // 同步到 IndexedDB，供 SW 读取
+  this.syncToIndexedDB().catch(console.warn);
+}
+
+private async syncToIndexedDB(): Promise<void> {
+  const geminiConfig = {
+    apiKey: this.settings.gemini.apiKey,
+    baseUrl: this.settings.gemini.baseUrl,
+    // ...
+  };
+  await configIndexedDBWriter.saveConfig(geminiConfig, videoConfig);
+}
+
+// 2. SW 从 IndexedDB 读取配置
+const geminiConfig = await taskQueueStorage.getConfig<GeminiConfig>('gemini');
+const videoConfig = await taskQueueStorage.getConfig<VideoAPIConfig>('video');
+```
+
+**数据流**:
+```
+用户修改设置 → localStorage + IndexedDB（同时写入）
+SW 需要配置 → 直接读取 IndexedDB → 始终可用
+```
+
+**关键点**:
+- `configIndexedDBWriter` 使用与 SW 相同的数据库名 (`sw-task-queue`) 和存储名 (`config`)
+- 初始化时自动同步，老用户的 localStorage 配置会自动迁移到 IndexedDB
+- RPC `init()` 不再需要传递配置参数（可选，用于兼容旧版本）
+- 任务/工作流仍保留配置快照，用于恢复场景
+
 **原因**: Service Worker 启动后会异步从 IndexedDB 恢复数据（`restoreFromStorage()`），这个过程可能需要一定时间。如果 RPC handler 在恢复完成前被调用，访问的数据是不完整的。需要通过 Promise 机制确保数据恢复完成后再返回响应。
 
 ### 主线程任务数据必须通过 RPC 持久化到 SW
