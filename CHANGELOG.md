@@ -1,3 +1,17 @@
+## 0.5.73 (2026-02-05)
+
+### 🚀 Features
+
+- implement image fitting utility and enhance video processing ([25746d6](https://github.com/ljquan/aitu/commit/25746d6))
+
+### 🔧 Chores
+
+- update version to 0.5.72 and enhance LLM API logging ([3cdc13e](https://github.com/ljquan/aitu/commit/3cdc13e))
+
+### ❤️  Thank You
+
+- liquidliang <ljquan@qq.com>
+
 ## 0.5.72 (2026-02-05)
 
 ### 🚀 Features
