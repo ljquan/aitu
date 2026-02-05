@@ -27,7 +27,7 @@ import {
   sanitizeGenerationParams,
 } from '../utils/validation-utils';
 import { swChannelClient, SWTask } from './sw-channel';
-import { geminiSettings, settingsManager } from '../utils/settings-manager';
+import { geminiSettings } from '../utils/settings-manager';
 import { taskStorageReader } from './task-storage-reader';
 import {
   executorFactory,
@@ -53,8 +53,11 @@ class SWTaskQueueService {
     this.tasks = new Map();
     this.taskUpdates$ = new Subject();
 
-    // Setup SW client handlers
-    this.setupSWClientHandlers();
+    // Defer SW client handler setup to avoid circular dependency issues
+    // swChannelClient may not be initialized at this point due to module load order
+    queueMicrotask(() => {
+      this.setupSWClientHandlers();
+    });
   }
 
   static getInstance(): SWTaskQueueService {
@@ -110,35 +113,10 @@ class SWTaskQueueService {
    */
   private async doInitialize(): Promise<boolean> {
     try {
-      // Wait for settings manager to finish decrypting sensitive data
-      await settingsManager.waitForInitialization();
+      // 使用统一的 SW 初始化入口
+      const success = await swChannelClient.ensureReady();
       
-      const settings = geminiSettings.get();
-      if (!settings.apiKey || !settings.baseUrl) {
-        return false;
-      }
-
-      // Initialize SW channel
-      const success = await swChannelClient.initialize();
-      if (!success) {
-        return false;
-      }
-
-      // Initialize SW with config
-      const initResult = await swChannelClient.init({
-        geminiConfig: {
-          apiKey: settings.apiKey,
-          baseUrl: settings.baseUrl,
-          modelName: settings.imageModelName,
-          textModelName: settings.textModelName,
-        },
-        videoConfig: {
-          baseUrl: settings.baseUrl || 'https://api.tu-zi.com',
-          apiKey: settings.apiKey,
-        },
-      });
-
-      this.initialized = initResult.success;
+      this.initialized = success;
       if (this.initialized) {
         // 设置 visibility 监听器，页面可见时同步状态
         this.setupVisibilityListener();

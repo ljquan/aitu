@@ -44,6 +44,10 @@ import type {
   DebugStatusResult,
 } from './types';
 import { callWithDefault, callOperation } from './rpc-helpers';
+import { geminiSettings, settingsManager } from '../../utils/settings-manager';
+// Import from isolated module to avoid circular dependencies
+// IMPORTANT: sw-detection.ts does NOT import task queue services
+import { shouldUseSWTaskQueue } from '../task-queue/sw-detection';
 
 // ============================================================================
 // 事件处理器类型
@@ -207,6 +211,58 @@ export class SWChannelClient {
    */
   isInitialized(): boolean {
     return this.initialized && !!this.channel?.isReady;
+  }
+
+  /**
+   * 确保 SW 客户端已就绪
+   * 统一的 SW 初始化入口，替代分散在各处的 ensureSWInitialized 函数
+   * 
+   * 检查顺序：
+   * 1. URL 参数检查（?sw=0 禁用 SW）
+   * 2. 已初始化检查
+   * 3. 设置验证
+   * 4. 初始化并配置
+   */
+  async ensureReady(): Promise<boolean> {
+    // 1. URL 参数检查
+    if (!shouldUseSWTaskQueue()) {
+      return false;
+    }
+
+    // 2. 已初始化检查
+    if (this.isInitialized()) {
+      return true;
+    }
+
+    // 3. 设置验证
+    const settings = geminiSettings.get();
+    if (!settings.apiKey || !settings.baseUrl) {
+      return false;
+    }
+
+    // 4. 初始化并配置
+    try {
+      await settingsManager.waitForInitialization();
+      const initSuccess = await this.initialize();
+      if (!initSuccess) {
+        return false;
+      }
+
+      const result = await this.init({
+        geminiConfig: {
+          apiKey: settings.apiKey,
+          baseUrl: settings.baseUrl,
+          modelName: settings.imageModelName,
+        },
+        videoConfig: {
+          baseUrl: settings.baseUrl,
+        },
+      });
+      return result.success;
+    } catch (error) {
+      console.error('[SWChannelClient] ensureReady failed:', error);
+      return false;
+    }
   }
 
   /**

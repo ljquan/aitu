@@ -296,16 +296,11 @@ export const Drawnix: React.FC<DrawnixProps> = ({
     if (board && value && value.length > 0) {
       const restoreWorkZones = async () => {
         const { WorkZoneTransforms } = await import('./plugins/with-workzone');
-        const { shouldUseSWTaskQueue } = await import('./services/task-queue');
         const { TaskStatus } = await import('./types/task.types');
 
-        // In SW mode, initialize SW service (tasks are read directly from IndexedDB)
-        let swInitialized = false;
-        if (shouldUseSWTaskQueue()) {
-          const { swTaskQueueService } = await import('./services/sw-task-queue-service');
-          // Wait for SW to be initialized
-          swInitialized = await swTaskQueueService.initialize();
-        }
+        // Initialize SW service (内部会检查 shouldUseSWTaskQueue 并使用 swChannelClient.ensureReady)
+        const { swTaskQueueService } = await import('./services/sw-task-queue-service');
+        const swInitialized = await swTaskQueueService.initialize();
 
         // Query all chat workflows from SW (only if SW is initialized)
         // Now returns ALL workflows including completed ones for proper state sync

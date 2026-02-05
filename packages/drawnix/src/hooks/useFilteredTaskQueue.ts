@@ -8,7 +8,7 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Task, TaskType } from '../types/task.types';
-import { taskQueueService, swTaskQueueService, shouldUseSWTaskQueue } from '../services/task-queue';
+import { taskQueueService } from '../services/task-queue';
 import { taskStorageReader } from '../services/task-storage-reader';
 
 export interface UseFilteredTaskQueueOptions {
@@ -91,25 +91,7 @@ export function useFilteredTaskQueue(
         return true;
       }
       
-      // Fallback: 通过 swTaskQueueService 获取（仅 SW 模式可用）
-      if (shouldUseSWTaskQueue()) {
-        const result = await swTaskQueueService.loadTasksByType(taskType, offset, pageSize);
-        
-        if (result.success) {
-          if (append) {
-            setTasks(prev => {
-              const existingIds = new Set(prev.map(t => t.id));
-              const newTasks = result.tasks.filter(t => !existingIds.has(t.id));
-              return [...prev, ...newTasks];
-            });
-          } else {
-            setTasks(result.tasks);
-          }
-          setTotalCount(result.total);
-          setHasMore(result.hasMore);
-          return true;
-        }
-      }
+      // taskStorageReader 不可用，返回失败
       return false;
     } catch {
       // 静默忽略错误

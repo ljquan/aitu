@@ -214,6 +214,19 @@ class TaskStorageWriter {
   }
 
   /**
+   * 更新任务的 remoteId（用于异步任务恢复）
+   */
+  async updateRemoteId(taskId: string, remoteId: string): Promise<void> {
+    const task = await this.getTask(taskId);
+    if (task) {
+      task.remoteId = remoteId;
+      task.updatedAt = Date.now();
+      task.executionPhase = 'polling';
+      await this.saveTask(task);
+    }
+  }
+
+  /**
    * 删除任务
    */
   async deleteTask(taskId: string): Promise<void> {

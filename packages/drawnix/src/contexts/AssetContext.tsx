@@ -19,7 +19,7 @@ import {
 } from 'react';
 import { MessagePlugin } from 'tdesign-react';
 import { assetStorageService } from '../services/asset-storage-service';
-import { taskQueueService, swTaskQueueService, shouldUseSWTaskQueue } from '../services/task-queue';
+import { taskQueueService } from '../services/task-queue';
 import { taskStorageReader } from '../services/task-storage-reader';
 import { unifiedCacheService } from '../services/unified-cache-service';
 import { getStorageStatus } from '../utils/storage-quota';
@@ -188,14 +188,8 @@ export function AssetProvider({ children }: AssetProviderProps) {
       const localAssets = await assetStorageService.getAllAssets();
 
       // 2. 从任务队列获取已完成的 AI 生成任务
-      // 直接从 IndexedDB 读取，SW 模式和降级模式都使用同一个数据库
-      let completedTasks;
-      if (shouldUseSWTaskQueue()) {
-        completedTasks = await swTaskQueueService.getAllTasksFromSW({ status: TaskStatus.COMPLETED });
-      } else {
-        // 降级模式：直接从 IndexedDB 读取
-        completedTasks = await taskStorageReader.getAllTasks({ status: TaskStatus.COMPLETED });
-      }
+      // 统一从 IndexedDB 直接读取，SW 模式和降级模式使用同一个数据库
+      const completedTasks = await taskStorageReader.getAllTasks({ status: TaskStatus.COMPLETED });
       const aiAssets = completedTasks
         .filter((task): task is typeof task & { result: NonNullable<typeof task.result> } =>
           (task.type === TaskType.IMAGE || task.type === TaskType.VIDEO) &&

@@ -1,0 +1,320 @@
+/**
+ * 图片生成 API
+ *
+ * 统一的图片生成接口，SW 和主线程共用
+ */
+
+import type {
+  ImageApiConfig,
+  ImageGenerationParams,
+  ImageGenerationResult,
+  AsyncImageOptions,
+  AsyncTaskSubmitResponse,
+} from './types';
+import {
+  isAsyncImageModel,
+  normalizeApiBase,
+  getExtensionFromUrl,
+  sizeToAspectRatio,
+  aspectRatioToSize,
+  parseErrorMessage,
+  sleep,
+} from './utils';
+
+// 重新导出工具函数，方便外部使用
+export { isAsyncImageModel, aspectRatioToSize };
+
+/**
+ * 构建图片生成请求体
+ */
+export function buildImageRequestBody(params: ImageGenerationParams): Record<string, unknown> {
+  const body: Record<string, unknown> = {
+    prompt: params.prompt,
+    model: params.model,
+    response_format: 'url',
+  };
+
+  if (params.n && params.n > 1) {
+    body.n = params.n;
+  }
+
+  if (params.size) {
+    body.size = params.size;
+  } else if (params.aspectRatio) {
+    body.size = aspectRatioToSize(params.aspectRatio);
+  }
+
+  if (params.quality) {
+    body.quality = params.quality;
+  }
+
+  // 添加参考图片（已经转换为 base64 或 URL）
+  if (params.referenceImages && params.referenceImages.length > 0) {
+    body.image = params.referenceImages;
+  }
+
+  return body;
+}
+
+/**
+ * 解析同步图片生成响应
+ */
+export function parseImageResponse(data: Record<string, unknown>): ImageGenerationResult {
+  // 支持多种响应格式
+  if (data.data && Array.isArray(data.data)) {
+    const urls = data.data
+      .map((item: Record<string, unknown>) => item.url || item.b64_json)
+      .filter(Boolean) as string[];
+
+    if (urls.length === 0) {
+      // 检查是否包含违禁内容错误
+      const firstItem = data.data[0] as Record<string, unknown> | undefined;
+      if (firstItem?.revised_prompt) {
+        const revisedPrompt = String(firstItem.revised_prompt);
+        if (revisedPrompt.includes('PROHIBITED_CONTENT')) {
+          throw new Error('内容被拒绝：包含违禁内容');
+        }
+        if (revisedPrompt.includes('NO_IMAGE')) {
+          throw new Error('该模型为多模态模型，未生成图片，可更换提示词明确生成图片试试');
+        }
+      }
+      throw new Error('No image URL in response');
+    }
+
+    return {
+      url: urls[0],
+      urls: urls.length > 1 ? urls : undefined,
+      format: 'png',
+    };
+  }
+
+  if (data.url && typeof data.url === 'string') {
+    return { url: data.url, format: 'png' };
+  }
+
+  throw new Error('Invalid image generation response');
+}
+
+/**
+ * 同步图片生成
+ *
+ * @param params 图片生成参数
+ * @param config API 配置
+ * @param signal 取消信号
+ * @returns 图片生成结果
+ */
+export async function generateImageSync(
+  params: ImageGenerationParams,
+  config: ImageApiConfig,
+  signal?: AbortSignal
+): Promise<ImageGenerationResult> {
+  const fetchFn = config.fetchImpl || fetch;
+  const model = params.model || config.defaultModel || 'gemini-3-pro-image-preview-vip';
+
+  const requestBody = buildImageRequestBody({
+    ...params,
+    model,
+  });
+
+  const response = await fetchFn(`${config.baseUrl}/images/generations`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${config.apiKey}`,
+    },
+    body: JSON.stringify(requestBody),
+    signal,
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Image generation failed: ${response.status} - ${errorText}`);
+  }
+
+  const data = await response.json();
+  return parseImageResponse(data);
+}
+
+/**
+ * 异步图片生成：提交任务并轮询结果
+ * 用于需要长时间处理的异步图片模型
+ *
+ * @param params 图片生成参数
+ * @param config API 配置
+ * @param options 异步选项（进度回调、取消信号等）
+ * @returns 图片生成结果
+ */
+export async function generateImageAsync(
+  params: ImageGenerationParams,
+  config: ImageApiConfig,
+  options: AsyncImageOptions = {}
+): Promise<ImageGenerationResult> {
+  const { onProgress, onSubmitted, signal, interval = 5000, maxAttempts = 1080 } = options;
+  const fetchFn = config.fetchImpl || fetch;
+  const baseUrl = normalizeApiBase(config.baseUrl);
+  const model = params.model || config.defaultModel || 'gemini-3-pro-image-preview-async';
+
+  // 计算宽高比
+  const aspectRatio = params.aspectRatio || sizeToAspectRatio(params.size) || '1:1';
+
+  // 构建 FormData
+  const formData = new FormData();
+  formData.append('model', model);
+  formData.append('prompt', params.prompt);
+  formData.append('size', aspectRatio);
+
+  // 处理参考图片：需要转换为 Blob
+  if (params.referenceImages && params.referenceImages.length > 0) {
+    for (let i = 0; i < params.referenceImages.length; i++) {
+      const refImage = params.referenceImages[i];
+      try {
+        // 尝试 fetch 图片（支持 base64 和 URL）
+        const response = await fetchFn(refImage, { signal });
+        if (response.ok) {
+          const blob = await response.blob();
+          formData.append('input_reference', blob, `reference-${i}.png`);
+        }
+      } catch (e) {
+        console.warn(`[ImageAPI] Failed to fetch reference image ${i}:`, e);
+      }
+    }
+  }
+
+  onProgress?.(5);
+
+  // 提交异步任务
+  const submitResponse = await fetchFn(`${baseUrl}/v1/videos`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${config.apiKey}`,
+    },
+    body: formData,
+    signal,
+  });
+
+  if (!submitResponse.ok) {
+    const errorText = await submitResponse.text();
+    throw new Error(`Async image submit failed: ${submitResponse.status} - ${errorText}`);
+  }
+
+  const submitData: AsyncTaskSubmitResponse = await submitResponse.json();
+
+  if (submitData.status === 'failed') {
+    throw new Error(parseErrorMessage(submitData.error) || '图片生成失败');
+  }
+
+  const taskRemoteId = submitData.id;
+  if (!taskRemoteId) {
+    throw new Error('No task ID returned from API');
+  }
+
+  // 通知调用方保存 remoteId（用于页面刷新后恢复轮询）
+  onSubmitted?.(taskRemoteId);
+  onProgress?.(10);
+
+  // 轮询等待结果
+  let progress = submitData.progress ?? 0;
+
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    if (signal?.aborted) {
+      throw new Error('Async image generation cancelled');
+    }
+
+    await sleep(interval, signal);
+
+    const queryResponse = await fetchFn(`${baseUrl}/v1/videos/${taskRemoteId}`, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${config.apiKey}`,
+      },
+      signal,
+    });
+
+    if (!queryResponse.ok) {
+      const errorText = await queryResponse.text();
+      throw new Error(`Async image query failed: ${queryResponse.status} - ${errorText}`);
+    }
+
+    const statusData = await queryResponse.json();
+    progress = statusData.progress ?? progress;
+    onProgress?.(10 + progress * 0.9); // 10% 提交 + 90% 轮询
+
+    if (statusData.status === 'completed') {
+      const url = statusData.video_url || statusData.url;
+      if (!url) {
+        throw new Error('API 未返回有效的图片 URL');
+      }
+      return {
+        url,
+        format: getExtensionFromUrl(url),
+      };
+    }
+
+    if (statusData.status === 'failed') {
+      throw new Error(parseErrorMessage(statusData.error) || '图片生成失败');
+    }
+  }
+
+  throw new Error('异步图片生成超时');
+}
+
+/**
+ * 恢复异步图片轮询
+ * 用于页面刷新后继续轮询已提交的任务
+ *
+ * @param remoteId 远程任务 ID
+ * @param config API 配置
+ * @param options 轮询选项
+ * @returns 图片生成结果
+ */
+export async function resumeAsyncImagePolling(
+  remoteId: string,
+  config: ImageApiConfig,
+  options: AsyncImageOptions = {}
+): Promise<ImageGenerationResult> {
+  const { onProgress, signal, interval = 5000, maxAttempts = 1080 } = options;
+  const fetchFn = config.fetchImpl || fetch;
+  const baseUrl = normalizeApiBase(config.baseUrl);
+
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    if (signal?.aborted) {
+      throw new Error('Async image generation cancelled');
+    }
+
+    const queryResponse = await fetchFn(`${baseUrl}/v1/videos/${remoteId}`, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${config.apiKey}`,
+      },
+      signal,
+    });
+
+    if (!queryResponse.ok) {
+      const errorText = await queryResponse.text();
+      throw new Error(`Async image query failed: ${queryResponse.status} - ${errorText}`);
+    }
+
+    const statusData = await queryResponse.json();
+    const progress = statusData.progress ?? 0;
+    onProgress?.(10 + progress * 0.9);
+
+    if (statusData.status === 'completed') {
+      const url = statusData.video_url || statusData.url;
+      if (!url) {
+        throw new Error('API 未返回有效的图片 URL');
+      }
+      return {
+        url,
+        format: getExtensionFromUrl(url),
+      };
+    }
+
+    if (statusData.status === 'failed') {
+      throw new Error(parseErrorMessage(statusData.error) || '图片生成失败');
+    }
+
+    await sleep(interval, signal);
+  }
+
+  throw new Error('异步图片生成超时');
+}

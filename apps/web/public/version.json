@@ -1,6 +1,6 @@
 {
   "version": "0.5.70",
-  "buildTime": "2026-02-04T06:27:37.328Z",
+  "buildTime": "2026-02-05T01:04:43.145Z",
   "gitCommit": "unknown",
   "changelog": [
     "integrate fake-indexeddb and refactor media executor"

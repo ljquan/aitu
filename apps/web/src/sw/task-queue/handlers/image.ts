@@ -2,7 +2,7 @@
  * Image Generation Handler for Service Worker
  *
  * Handles image generation tasks including standard images and inspiration boards.
- * 使用通用的媒体生成工具函数来减少重复代码
+ * 使用 media-api 共享模块减少重复代码
  */
 
 import type { SWTask, TaskResult, HandlerConfig, TaskHandler } from '../types';
@@ -15,39 +15,13 @@ import {
   convertAspectRatioToSize,
 } from '../utils/media-generation-utils';
 import type { LLMReferenceImage } from '../llm-api-logger';
-const ASYNC_IMAGE_MODELS = [
-  'gemini-3-pro-image-preview-async',
-  'gemini-3-pro-image-preview-2k-async',
-  'gemini-3-pro-image-preview-4k-async',
-];
 
-const isAsyncImageModel = (model?: string): boolean => {
-  if (!model) return false;
-  const lower = model.toLowerCase();
-  return ASYNC_IMAGE_MODELS.some((m) => lower.includes(m));
-};
-
-const getExtensionFromUrl = (url: string): string => {
-  try {
-    const clean = url.split('?')[0];
-    const last = clean.split('.').pop();
-    if (last && last.length <= 5) {
-      return last.toLowerCase();
-    }
-  } catch (e) {
-    // ignore
-  }
-  return 'jpg';
-};
-
-// 规范化 baseUrl，移除尾部 / 或 /v1，便于拼接 /v1/videos
-const normalizeApiBase = (url: string): string => {
-  let base = url.replace(/\/+$/, '');
-  if (base.endsWith('/v1')) {
-    base = base.slice(0, -3);
-  }
-  return base;
-};
+// 使用共享模块的工具函数（通过相对路径导入以支持 SW 独立构建）
+import {
+  isAsyncImageModel,
+  normalizeApiBase,
+  getExtensionFromUrl,
+} from '../../../../../../packages/drawnix/src/services/media-api';
 
 /**
  * Image generation handler

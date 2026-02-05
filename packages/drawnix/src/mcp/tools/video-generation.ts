@@ -404,19 +404,11 @@ export const videoGenerationTool: MCPTool = {
     const mode = options?.mode || 'async';
 
     if (mode === 'queue') {
-      // 检查 SW 是否可用
-      const { shouldUseSWTaskQueue, swTaskQueueService } = await import('../../services/task-queue');
-      const swEnabled = shouldUseSWTaskQueue();
-      console.log('[VideoGenerationTool] SW enabled:', swEnabled);
-      if (swEnabled) {
-        // SW 可用：使用队列模式
-        await swTaskQueueService.initialize();
-        return executeQueue(typedParams, options || {});
-      } else {
-        // SW 不可用（降级模式）：改用 async 模式直接执行
-        console.log('[VideoGenerationTool] SW unavailable, using async mode instead of queue');
-        return executeAsync(typedParams);
-      }
+      // 队列模式：直接使用 taskQueueService
+      // taskQueueService 会根据 SW 可用性自动选择正确的服务
+      // - SW 模式：任务提交到 SW 后台执行
+      // - 降级模式：任务在主线程立即执行
+      return executeQueue(typedParams, options || {});
     }
 
     return executeAsync(typedParams);

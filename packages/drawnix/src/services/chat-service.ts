@@ -11,10 +11,8 @@ import type { GeminiMessage } from '../utils/gemini-api/types';
 import type { ChatMessage, StreamEvent } from '../types/chat.types';
 import { MessageRole } from '../types/chat.types';
 import { analytics } from '../utils/posthog-analytics';
-import { shouldUseSWTaskQueue } from './task-queue';
 import { swChannelClient } from './sw-channel';
 import type { ChatStartParams, ChatMessage as SWChatMessage, ChatAttachment } from './sw-channel';
-import { geminiSettings, settingsManager } from '../utils/settings-manager';
 
 // Current abort controller for cancellation
 let currentAbortController: AbortController | null = null;
@@ -195,35 +193,11 @@ export async function sendChatMessage(
   temporaryModel?: string, // 临时模型（仅在当前会话中使用，不影响全局设置）
   systemPrompt?: string // 系统提示词（包含 MCP 工具定义等）
 ): Promise<string> {
-  // Check if we should use SW mode
-  if (shouldUseSWTaskQueue()) {
-    // Ensure SW client is initialized before using
-    if (!swChannelClient.isInitialized()) {
-      const settings = geminiSettings.get();
-      if (settings.apiKey && settings.baseUrl) {
-        try {
-          await settingsManager.waitForInitialization();
-          await swChannelClient.initialize();
-          await swChannelClient.init({
-            geminiConfig: {
-              apiKey: settings.apiKey,
-              baseUrl: settings.baseUrl,
-              modelName: settings.chatModel,
-            },
-            videoConfig: {
-              baseUrl: settings.baseUrl,
-            },
-          });
-        } catch (error) {
-          console.error('[ChatService] SW client initialization failed:', error);
-        }
-      }
-    }
-    
-    // Use SW mode if initialized successfully
-    if (swChannelClient.isInitialized()) {
-      return sendChatMessageViaSW(messages, newContent, attachments, onStream, temporaryModel, systemPrompt);
-    }
+  // 尝试使用 SW 模式（ensureReady 统一处理 SW 检查和初始化）
+  const useSW = await swChannelClient.ensureReady();
+  
+  if (useSW) {
+    return sendChatMessageViaSW(messages, newContent, attachments, onStream, temporaryModel, systemPrompt);
   }
   
   // Fallback to direct mode

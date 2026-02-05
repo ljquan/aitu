@@ -8,50 +8,12 @@ import { prepareImageData, processMixedContent } from './utils';
 import { callApiWithRetry, callApiStreamRaw, callVideoApiStreamRaw } from './apiCalls';
 import { geminiSettings, settingsManager } from '../settings-manager';
 import { validateAndEnsureConfig } from './auth';
-import { shouldUseSWTaskQueue } from '../../services/task-queue';
 import { swChannelClient } from '../../services/sw-channel';
 import {
   startLLMApiLog,
   completeLLMApiLog,
   failLLMApiLog,
 } from '../../services/media-executor/llm-api-logger';
-
-/**
- * 确保 SW 客户端已初始化
- */
-async function ensureSWInitialized(): Promise<boolean> {
-  if (!shouldUseSWTaskQueue()) {
-    return false;
-  }
-  
-  if (swChannelClient.isInitialized()) {
-    return true;
-  }
-  
-  const settings = geminiSettings.get();
-  if (!settings.apiKey || !settings.baseUrl) {
-    return false;
-  }
-  
-  try {
-    await settingsManager.waitForInitialization();
-    await swChannelClient.initialize();
-    const result = await swChannelClient.init({
-      geminiConfig: {
-        apiKey: settings.apiKey,
-        baseUrl: settings.baseUrl,
-        modelName: settings.imageModelName,
-      },
-      videoConfig: {
-        baseUrl: settings.baseUrl,
-      },
-    });
-    return result.success;
-  } catch (error) {
-    console.error('[ImageAPI] SW client initialization failed:', error);
-    return false;
-  }
-}
 
 /**
  * 调用 Gemini API 进行图像生成
@@ -78,7 +40,7 @@ export async function generateImageWithGemini(
   const modelName = options.model || globalSettings.imageModelName || DEFAULT_CONFIG.modelName || 'gemini-3-pro-image-preview-vip';
 
   // 尝试使用 SW 模式
-  const useSW = await ensureSWInitialized();
+  const useSW = await swChannelClient.ensureReady();
   
   if (useSW) {
     return generateImageViaSW(prompt, options, modelName);

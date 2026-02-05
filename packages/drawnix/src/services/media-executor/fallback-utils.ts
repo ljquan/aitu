@@ -2,93 +2,31 @@
  * Fallback Executor 辅助函数
  *
  * 提供降级执行器的通用工具函数
+ * 大部分逻辑已迁移到 media-api 共享模块
  */
 
-import type { VideoAPIConfig } from './types';
+import type { VideoAPIConfig, GeminiConfig } from './types';
 
-/**
- * 从消息数组中提取 prompt 用于日志记录
- */
-export function extractPromptFromMessages(
-  messages: Array<{ role: string; content: unknown }>
-): string {
-  for (const msg of messages) {
-    if (msg.role === 'user') {
-      if (typeof msg.content === 'string') {
-        return msg.content.substring(0, 500);
-      }
-      if (Array.isArray(msg.content)) {
-        for (const part of msg.content) {
-          if (part.type === 'text' && part.text) {
-            return part.text.substring(0, 500);
-          }
-        }
-      }
-    }
-  }
-  return '';
-}
+// 从共享模块重新导出
+export {
+  isAsyncImageModel,
+  extractPromptFromMessages,
+  buildImageRequestBody,
+  parseImageResponse,
+} from '../media-api';
 
-/**
- * 构建图片生成请求体
- */
-export function buildImageRequestBody(params: {
-  prompt: string;
-  model: string;
-  size?: string;
-  referenceImages?: string[];
-  quality?: string;
-  n: number;
-}): Record<string, unknown> {
-  const body: Record<string, unknown> = {
-    prompt: params.prompt,
-    model: params.model,
-    n: params.n,
-  };
-
-  if (params.size) {
-    body.size = params.size;
-  }
-
-  if (params.quality) {
-    body.quality = params.quality;
-  }
-
-  // 添加参考图片（已经转换为 base64 或 URL）
-  if (params.referenceImages && params.referenceImages.length > 0) {
-    body.image = params.referenceImages;
-  }
-
-  return body;
-}
-
-/**
- * 解析图片生成响应
- */
-export function parseImageResponse(data: Record<string, unknown>): {
-  url: string;
-  urls?: string[];
-} {
-  // 支持多种响应格式
-  if (data.data && Array.isArray(data.data)) {
-    const urls = data.data
-      .map((item: Record<string, unknown>) => item.url || item.b64_json)
-      .filter(Boolean) as string[];
-    return {
-      url: urls[0] || '',
-      urls: urls.length > 1 ? urls : undefined,
-    };
-  }
-
-  if (data.url && typeof data.url === 'string') {
-    return { url: data.url };
-  }
-
-  throw new Error('Invalid image generation response');
-}
+// 导入共享模块的工具函数
+import {
+  normalizeApiBase,
+  getExtensionFromUrl,
+  sizeToAspectRatio,
+  sleep,
+  parseErrorMessage,
+} from '../media-api';
 
 /**
  * 轮询视频状态
+ * 注意：此函数保留以保持向后兼容，新代码应使用 media-api/video-api.ts 中的 pollVideoUntilComplete
  */
 export async function pollVideoStatus(
   videoId: string,
@@ -138,4 +76,55 @@ export async function pollVideoStatus(
   }
 
   throw new Error('Video generation timeout');
+}
+
+// 从共享模块导入异步图片生成
+import { generateImageAsync as sharedGenerateImageAsync } from '../media-api';
+
+/**
+ * 异步图片生成选项
+ */
+interface AsyncImageOptions {
+  onProgress: (progress: number) => void;
+  onSubmitted?: (remoteId: string) => void;
+  signal?: AbortSignal;
+}
+
+/**
+ * 异步图片生成：提交任务并轮询结果
+ * 此函数现在委托给共享模块的 generateImageAsync
+ */
+export async function generateAsyncImage(
+  params: {
+    prompt: string;
+    model: string;
+    size?: string;
+    referenceImages?: string[];
+  },
+  config: GeminiConfig,
+  options: AsyncImageOptions
+): Promise<{ url: string; format: string }> {
+  const result = await sharedGenerateImageAsync(
+    {
+      prompt: params.prompt,
+      model: params.model,
+      size: params.size,
+      referenceImages: params.referenceImages,
+    },
+    {
+      apiKey: config.apiKey,
+      baseUrl: config.baseUrl,
+      defaultModel: params.model,
+    },
+    {
+      onProgress: options.onProgress,
+      onSubmitted: options.onSubmitted,
+      signal: options.signal,
+    }
+  );
+
+  return {
+    url: result.url,
+    format: result.format || 'png',
+  };
 }

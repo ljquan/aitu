@@ -36,10 +36,20 @@ initCrashLogger();
 
 // ===== 初始化 Sentry 错误监控 =====
 // 必须在其他代码之前初始化，以捕获所有错误
+
+// 判断是否应该启用上报：
+// - 本地开发环境（localhost/127.0.0.1）默认不上报，除非 URL 带 report=1 参数
+// - 生产环境始终上报
+const isLocalDev = typeof window !== 'undefined' && 
+  (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+const forceReport = typeof window !== 'undefined' && 
+  new URLSearchParams(window.location.search).get('report') === '1';
+const shouldEnableReporting = forceReport || (!isLocalDev && import.meta.env.PROD);
+
 Sentry.init({
   dsn: "https://a18e755345995baaa0e1972c4cf24497@o4510700882296832.ingest.us.sentry.io/4510700883869696",
-  // 仅在生产环境启用
-  enabled: import.meta.env.PROD,
+  // 本地开发环境默认不启用，除非 URL 带 report=1 参数
+  enabled: shouldEnableReporting,
   // 禁用自动 PII 收集，保护用户隐私
   sendDefaultPii: false,
   // 性能监控采样率（降低以减少数据量）

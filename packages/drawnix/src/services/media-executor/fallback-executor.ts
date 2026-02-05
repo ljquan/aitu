@@ -30,6 +30,8 @@ import {
   buildImageRequestBody,
   parseImageResponse,
   pollVideoStatus,
+  isAsyncImageModel,
+  generateAsyncImage,
 } from './fallback-utils';
 
 /**
@@ -64,6 +66,16 @@ export class FallbackMediaExecutor implements IMediaExecutor {
 
     const startTime = Date.now();
     const modelName = model || config.geminiConfig.modelName;
+
+    // 异步图片模型：使用 /v1/videos 接口（与 SW 模式一致）
+    if (isAsyncImageModel(modelName)) {
+      return this.generateAsyncImageTask(taskId, {
+        prompt,
+        model: modelName,
+        size,
+        referenceImages,
+      }, config, options, startTime);
+    }
 
     // 开始记录 LLM API 调用
     const logId = startLLMApiLog({
@@ -154,6 +166,100 @@ export class FallbackMediaExecutor implements IMediaExecutor {
       await taskStorageWriter.failTask(taskId, {
         code: 'IMAGE_GENERATION_ERROR',
         message: error.message || 'Image generation failed',
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * 生成异步图片（使用 /v1/videos 接口）
+   * 与 SW 模式保持一致的实现
+   */
+  private async generateAsyncImageTask(
+    taskId: string,
+    params: {
+      prompt: string;
+      model: string;
+      size?: string;
+      referenceImages?: string[];
+    },
+    config: { geminiConfig: GeminiConfig; videoConfig: VideoAPIConfig },
+    options?: ExecutionOptions,
+    startTime?: number
+  ): Promise<void> {
+    const logStartTime = startTime || Date.now();
+
+    // 开始记录 LLM API 调用
+    const logId = startLLMApiLog({
+      endpoint: '/v1/videos (async image)',
+      model: params.model,
+      taskType: 'image',
+      prompt: params.prompt,
+      hasReferenceImages: params.referenceImages && params.referenceImages.length > 0,
+      referenceImageCount: params.referenceImages?.length,
+      taskId,
+    });
+
+    try {
+      // 处理参考图片：将虚拟路径和远程 URL 转换为 base64
+      let processedImages: string[] | undefined;
+      if (params.referenceImages && params.referenceImages.length > 0) {
+        processedImages = [];
+        for (const imgUrl of params.referenceImages) {
+          const imageData = await unifiedCacheService.getImageForAI(imgUrl);
+          processedImages.push(imageData.value);
+        }
+      }
+
+      // 调用异步图片生成
+      const result = await generateAsyncImage(
+        {
+          prompt: params.prompt,
+          model: params.model,
+          size: params.size,
+          referenceImages: processedImages,
+        },
+        config.geminiConfig,
+        {
+          onProgress: (progress) => {
+            options?.onProgress?.({ progress, phase: progress < 10 ? 'submitting' : 'polling' });
+          },
+          onSubmitted: async (remoteId) => {
+            // 保存 remoteId，用于页面刷新后恢复轮询
+            await taskStorageWriter.updateRemoteId(taskId, remoteId);
+          },
+          signal: options?.signal,
+        }
+      );
+
+      const duration = Date.now() - logStartTime;
+
+      // 记录成功
+      completeLLMApiLog(logId, {
+        httpStatus: 200,
+        duration,
+        resultType: 'image',
+        resultCount: 1,
+        resultUrl: result.url,
+      });
+
+      options?.onProgress?.({ progress: 100 });
+
+      // 完成任务
+      await taskStorageWriter.completeTask(taskId, {
+        url: result.url,
+        format: result.format,
+        size: 0,
+      });
+    } catch (error: any) {
+      const duration = Date.now() - logStartTime;
+      failLLMApiLog(logId, {
+        duration,
+        errorMessage: error.message || 'Async image generation failed',
+      });
+      await taskStorageWriter.failTask(taskId, {
+        code: 'ASYNC_IMAGE_GENERATION_ERROR',
+        message: error.message || 'Async image generation failed',
       });
       throw error;
     }

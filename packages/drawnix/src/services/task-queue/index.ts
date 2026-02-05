@@ -4,103 +4,50 @@
  * Provides a unified interface for task queue services.
  * Automatically selects between SW-based and legacy implementations
  * based on browser support and configuration.
- */
-
-import { swTaskQueueService } from '../sw-task-queue-service';
-import { taskQueueService as legacyTaskQueueService } from '../task-queue-service';
-
-// Feature flag for SW task queue (can be configured via environment or settings)
-const USE_SW_TASK_QUEUE = true;
-
-// Cache URL parameter check result (evaluated once on module load)
-let urlParamSwEnabled: boolean | null = null;
-
-/**
- * Check URL parameter for SW mode control
- * URL params:
- *   - ?sw=0 or ?sw=false: Force disable SW, use fallback mode
- *   - ?sw=1 or ?sw=true: Force enable SW (default behavior)
- */
-function checkUrlSwParam(): boolean | null {
-  if (urlParamSwEnabled !== null) {
-    return urlParamSwEnabled;
-  }
-
-  if (typeof window === 'undefined' || !window.location) {
-    return null;
-  }
-
-  try {
-    const urlParams = new URLSearchParams(window.location.search);
-    const swParam = urlParams.get('sw');
-
-    if (swParam === null) {
-      // No parameter specified, use default behavior
-      urlParamSwEnabled = null;
-      return null;
-    }
-
-    // Parse the parameter value
-    const lowered = swParam.toLowerCase();
-    if (lowered === '0' || lowered === 'false' || lowered === 'off') {
-      urlParamSwEnabled = false;
-      console.log('[TaskQueue] SW disabled via URL parameter (?sw=0), using fallback mode');
-      return false;
-    }
-
-    if (lowered === '1' || lowered === 'true' || lowered === 'on') {
-      urlParamSwEnabled = true;
-      return true;
-    }
-
-    // Invalid value, use default
-    return null;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Check if Service Worker task queue should be used
  *
- * Priority:
- * 1. URL parameter ?sw=0/false/off forces fallback mode
- * 2. URL parameter ?sw=1/true/on forces SW mode (if supported)
- * 3. Default: use SW if supported
+ * CIRCULAR DEPENDENCY RESOLUTION:
+ * The original circular dependency was:
+ *   task-queue/index.ts → sw-task-queue-service.ts → sw-channel/client.ts → task-queue/index.ts
+ *
+ * This was broken by:
+ * 1. Moving shouldUseSWTaskQueue to isolated sw-detection.ts (no service imports)
+ * 2. sw-channel/client.ts imports from sw-detection.ts instead of task-queue/index.ts
+ * 3. sw-task-queue-service.ts defers setupSWClientHandlers via queueMicrotask
+ *
+ * Now static imports work correctly without circular dependency issues.
  */
-export function shouldUseSWTaskQueue(): boolean {
-  // Check URL parameter first
-  const urlOverride = checkUrlSwParam();
-  if (urlOverride === false) {
-    return false;
-  }
 
-  // Check feature flag and browser support
-  if (!USE_SW_TASK_QUEUE) return false;
-  if (typeof navigator === 'undefined') return false;
-  if (!('serviceWorker' in navigator)) return false;
+// Import shouldUseSWTaskQueue from isolated module to avoid circular dependencies
+// IMPORTANT: sw-detection.ts must NOT import any task queue services
+import { shouldUseSWTaskQueue } from './sw-detection';
 
-  return true;
-}
+// Re-export for external consumers
+export { shouldUseSWTaskQueue } from './sw-detection';
+
+// Re-export types
+export type { Task, TaskStatus, TaskType, TaskEvent, GenerationParams } from '../../types/task.types';
+
+// ============================================================================
+// Static imports - safe now that circular dependency is broken
+// ============================================================================
+
+// Import services directly - the circular dependency has been resolved
+import { swTaskQueueService as _swService } from '../sw-task-queue-service';
+import { taskQueueService as _legacyService } from '../task-queue-service';
+
+// Re-export both services for explicit usage
+export { swTaskQueueService } from '../sw-task-queue-service';
+export { taskQueueService as legacyTaskQueueService } from '../task-queue-service';
 
 /**
  * Get the appropriate task queue service instance
  */
 export function getTaskQueueService() {
   if (shouldUseSWTaskQueue()) {
-    return swTaskQueueService;
+    return _swService;
   }
-  return legacyTaskQueueService;
+  return _legacyService;
 }
 
-// Export both services for explicit usage
-export { swTaskQueueService } from '../sw-task-queue-service';
-export { taskQueueService as legacyTaskQueueService } from '../task-queue-service';
-
 // Export the default service (SW-based when available)
-export const taskQueueService = shouldUseSWTaskQueue()
-  ? swTaskQueueService
-  : legacyTaskQueueService;
-
-// Re-export types
-export type { Task, TaskStatus, TaskType, TaskEvent, GenerationParams } from '../../types/task.types';
+export const taskQueueService = shouldUseSWTaskQueue() ? _swService : _legacyService;
