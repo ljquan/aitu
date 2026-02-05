@@ -13,6 +13,10 @@ import type {
 } from './types';
 import { normalizeApiBase, parseErrorMessage, sleep } from './utils';
 
+const DURATION_IN_MODEL_PREFIX = 'sora-2-';
+const durationEncodedInModel = (model?: string | null) =>
+  Boolean(model && model.startsWith(DURATION_IN_MODEL_PREFIX));
+
 /**
  * 视频生成业务失败错误
  * 区分业务失败（不应重试）和网络错误（可重试）
@@ -40,14 +44,16 @@ export async function submitVideoGeneration(
   const fetchFn = config.fetchImpl || fetch;
   const baseUrl = normalizeApiBase(config.baseUrl);
   const model = params.model || config.defaultModel || 'veo3';
+  // seconds can come from duration (number/string) or explicit seconds
+  const secondsParam = params.duration ?? params.seconds;
 
   // 构建 FormData
   const formData = new FormData();
   formData.append('model', model);
   formData.append('prompt', params.prompt);
 
-  if (params.duration) {
-    formData.append('seconds', String(params.duration));
+  if (secondsParam && !durationEncodedInModel(model)) {
+    formData.append('seconds', String(secondsParam));
   }
 
   if (params.size) {
