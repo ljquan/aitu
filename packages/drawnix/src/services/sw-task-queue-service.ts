@@ -34,6 +34,7 @@ import {
   taskStorageWriter,
   waitForTaskCompletion,
 } from './media-executor';
+import type { SWTask as StorageSWTask } from './media-executor/task-storage-writer';
 import { isAuthError, dispatchApiAuthError } from '../utils/api-auth-error-event';
 
 /**
@@ -49,6 +50,18 @@ class SWTaskQueueService {
   private initializingPromise: Promise<boolean> | null = null;
   /** Flag to prevent duplicate visibility listener registration */
   private visibilityListenerRegistered = false;
+  /** Polling interval ID for fallback mode */
+  private pollingIntervalId: ReturnType<typeof setInterval> | null = null;
+  /** Polling interval in ms (only active when SW unavailable) */
+  private readonly POLLING_INTERVAL_MS = 2000;
+  /** Flag indicating if polling is active */
+  private isPollingActive = false;
+  /** SW availability state (maintained internally) */
+  private swAvailable = false;
+  /** Count of consecutive SW failures (for auto-fallback) */
+  private swFailureCount = 0;
+  /** Max failures before switching to fallback mode */
+  private readonly SW_FAILURE_THRESHOLD = 3;
 
   private constructor() {
     this.tasks = new Map();
@@ -70,8 +83,8 @@ class SWTaskQueueService {
 
   /**
    * 设置 visibility 变化监听器
-   * 当页面变为可见时，清除任务缓存，下次读取时会重新从 IndexedDB 获取最新数据
-   * 这样即使事件丢失（如 SW 更新），也能获取到最新状态
+   * 当页面变为可见时，主动从 IndexedDB 同步最新状态
+   * 这样即使 SW 事件丢失（如 SW 更新、连接断开），也能获取到最新状态
    */
   private setupVisibilityListener(): void {
     if (typeof document === 'undefined') return;
@@ -79,11 +92,47 @@ class SWTaskQueueService {
     
     this.visibilityListenerRegistered = true;
     document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible' && this.initialized) {
-        // 页面变为可见时，清除缓存，下次读取时会重新从 IndexedDB 获取
-        taskStorageReader.invalidateCache();
+      if (document.visibilityState === 'visible') {
+        // 页面变为可见时，主动从 IndexedDB 同步最新状态
+        // 这是关键的解耦点：不依赖 SW 广播，主动拉取数据
+        this.syncFromIndexedDB().catch((error) => {
+          console.warn('[SWTaskQueue] Visibility sync failed:', error);
+        });
+        
+        // 如果有正在处理的任务且 SW 不可用，启动轮询
+        const hasProcessingTasks = this.getTasksByStatus(TaskStatus.PROCESSING).length > 0;
+        if (hasProcessingTasks && !swChannelClient.isInitialized()) {
+          this.startPolling();
+        }
+        
+        // 尝试恢复 SW 连接（如果之前不可用）
+        if (!this.swAvailable) {
+          this.tryRestoreSWConnection();
+        }
+      } else {
+        // 页面隐藏时停止轮询（节省资源）
+        this.stopPolling();
       }
     });
+  }
+
+  /**
+   * 尝试恢复 SW 连接
+   * 在页面可见时调用，如果 SW 之前不可用
+   */
+  private async tryRestoreSWConnection(): Promise<void> {
+    try {
+      const success = await swChannelClient.initializeChannel();
+      if (success) {
+        this.markSWAvailable();
+        console.log('[SWTaskQueue] SW connection restored');
+        
+        // 停止轮询（SW 已恢复）
+        this.stopPolling();
+      }
+    } catch {
+      // 恢复失败，保持降级模式
+    }
   }
 
   /**
@@ -115,16 +164,25 @@ class SWTaskQueueService {
    */
   private async doInitialize(): Promise<boolean> {
     try {
+      // 无论 SW 是否可用，都设置 visibility 监听器
+      // 这样即使 SW 不可用，也能通过轮询机制获取状态更新
+      this.setupVisibilityListener();
+      
       // 只初始化 SW channel，不检查配置（配置随任务传递）
       const success = await swChannelClient.initializeChannel();
       
       this.initialized = success;
-      if (this.initialized) {
-        // 设置 visibility 监听器，页面可见时同步状态
-        this.setupVisibilityListener();
+      this.swAvailable = success;
+      
+      // 成功初始化时重置失败计数
+      if (success) {
+        this.swFailureCount = 0;
       }
+      
       return this.initialized;
     } catch {
+      // SW 初始化失败，但 visibility 监听器已设置，可以使用轮询作为后备
+      this.swAvailable = false;
       return false;
     }
   }
@@ -137,12 +195,45 @@ class SWTaskQueueService {
   }
 
   /**
+   * Check if SW is currently available for task execution
+   * This is used internally to decide between SW and fallback execution
+   */
+  isSWAvailable(): boolean {
+    return this.swAvailable && this.initialized && swChannelClient.isInitialized();
+  }
+
+  /**
+   * Mark SW as unavailable (called when SW communication fails)
+   */
+  private markSWUnavailable(): void {
+    this.swFailureCount++;
+    if (this.swFailureCount >= this.SW_FAILURE_THRESHOLD) {
+      this.swAvailable = false;
+      console.warn(
+        `[SWTaskQueue] SW marked unavailable after ${this.swFailureCount} consecutive failures`
+      );
+    }
+  }
+
+  /**
+   * Mark SW as available (called when SW communication succeeds)
+   */
+  private markSWAvailable(): void {
+    if (!this.swAvailable) {
+      console.log('[SWTaskQueue] SW restored to available state');
+    }
+    this.swAvailable = true;
+    this.swFailureCount = 0;
+  }
+
+  /**
    * Re-initialize SW (for cases where init RPC timed out but channel is ready)
    * This is a public wrapper around doInitialize that resets the initialized flag
    */
   async initializeSW(): Promise<boolean> {
     // Reset initialized flag to allow re-initialization
     this.initialized = false;
+    this.swAvailable = false;
     return this.initialize();
   }
 
@@ -229,7 +320,34 @@ class SWTaskQueueService {
 
   async cancelTask(taskId: string): Promise<void> {
     if (!this.tasks.has(taskId)) return;
-    await swChannelClient.cancelTask(taskId);
+    
+    // 优先尝试通过 SW 取消
+    if (this.isSWAvailable()) {
+      try {
+        await swChannelClient.cancelTask(taskId);
+        this.markSWAvailable();
+        return;
+      } catch (error) {
+        console.warn('[SWTaskQueue] SW cancel failed, using fallback:', error);
+        this.markSWUnavailable();
+      }
+    }
+    
+    // SW 不可用，直接更新本地状态和 IndexedDB
+    const task = this.tasks.get(taskId);
+    if (task && task.status === TaskStatus.PROCESSING) {
+      task.status = TaskStatus.CANCELLED;
+      task.updatedAt = Date.now();
+      this.tasks.set(taskId, task);
+      this.emitEvent('taskUpdated', task);
+      
+      // 直接更新 IndexedDB
+      try {
+        await taskStorageWriter.updateStatus(taskId, 'cancelled');
+      } catch (error) {
+        console.warn('[SWTaskQueue] Failed to update IndexedDB for cancel:', error);
+      }
+    }
   }
 
   async retryTask(taskId: string): Promise<void> {
@@ -240,10 +358,16 @@ class SWTaskQueueService {
     }
     
     // 优先尝试 SW 执行
-    if (swChannelClient.isInitialized()) {
-      console.log('[SWTaskQueueService] Retrying task via SW:', taskId);
-      await swChannelClient.retryTask(taskId);
-      return;
+    if (this.isSWAvailable()) {
+      try {
+        console.log('[SWTaskQueueService] Retrying task via SW:', taskId);
+        await swChannelClient.retryTask(taskId);
+        this.markSWAvailable();
+        return;
+      } catch (error) {
+        console.warn('[SWTaskQueue] SW retry failed:', error);
+        this.markSWUnavailable();
+      }
     }
     
     // SW 不可用时，使用降级执行器
@@ -273,7 +397,31 @@ class SWTaskQueueService {
   }
 
   async deleteTask(taskId: string): Promise<void> {
-    await swChannelClient.deleteTask(taskId);
+    // 优先尝试通过 SW 删除
+    if (this.isSWAvailable()) {
+      try {
+        await swChannelClient.deleteTask(taskId);
+        this.markSWAvailable();
+      } catch (error) {
+        console.warn('[SWTaskQueue] SW delete failed, using fallback:', error);
+        this.markSWUnavailable();
+        // 降级：直接从 IndexedDB 删除
+        try {
+          await taskStorageWriter.deleteTask(taskId);
+        } catch (dbError) {
+          console.warn('[SWTaskQueue] Failed to delete from IndexedDB:', dbError);
+        }
+      }
+    } else {
+      // SW 不可用，直接从 IndexedDB 删除
+      try {
+        await taskStorageWriter.deleteTask(taskId);
+      } catch (error) {
+        console.warn('[SWTaskQueue] Failed to delete from IndexedDB:', error);
+      }
+    }
+    
+    // 更新本地状态
     if (this.tasks.has(taskId)) {
       const task = this.tasks.get(taskId)!;
       this.tasks.delete(taskId);
@@ -291,7 +439,11 @@ class SWTaskQueueService {
 
   /**
    * Restore tasks from storage (for cloud sync or migration)
-   * 恢复任务到本地状态、持久化到 SW 并通知 UI 更新
+   * 恢复任务到本地状态、持久化到 IndexedDB 并通知 UI 更新
+   * 
+   * 设计原则：优先直接写入 IndexedDB，不依赖 SW 连接
+   * - 先写入 IndexedDB 确保数据持久化
+   * - 然后异步通知 SW（如果可用）以保持同步
    */
   async restoreTasks(tasks: Task[]): Promise<void> {
     // 过滤出本地不存在的任务
@@ -301,13 +453,14 @@ class SWTaskQueueService {
       return;
     }
 
-    // 转换为 SWTask 格式并导入到 SW
-    const swTasks: SWTask[] = tasksToRestore.map(task => this.convertTaskToSWTask(task));
+    // 转换为存储格式（用于 IndexedDB）
+    const storageTasks: StorageSWTask[] = tasksToRestore.map(task => this.convertTaskToStorageFormat(task));
 
-    // 调用 SW 的 importTasks 方法持久化任务
-    const result = await swChannelClient.importTasks(swTasks);
-    
-    if (result.success) {
+    // 直接写入 IndexedDB，不依赖 SW
+    try {
+      const result = await taskStorageWriter.importTasks(storageTasks);
+      console.log(`[SWTaskQueue] Imported ${result.imported} tasks, skipped ${result.skipped}`);
+      
       // 添加到本地内存
       for (const task of tasksToRestore) {
         this.tasks.set(task.id, task);
@@ -317,25 +470,65 @@ class SWTaskQueueService {
       // 更新分页状态
       this.paginationState.total = this.tasks.size;
       this.paginationState.loadedCount = this.tasks.size;
-    } else {
-      console.error('[SWTaskQueue] Failed to import tasks:', result.error);
+      
+      // 清除读取缓存，确保下次读取时获取最新数据
+      taskStorageReader.invalidateCache();
+      
+      // 异步通知 SW（如果可用），fire-and-forget
+      // 这样 SW 可以更新其内部状态（如任务计数等）
+      if (swChannelClient.isInitialized()) {
+        const swTasks: SWTask[] = tasksToRestore.map(task => this.convertTaskToSWTask(task));
+        swChannelClient.importTasks(swTasks).catch((error) => {
+          // SW 同步失败不影响主流程，数据已持久化到 IndexedDB
+          console.warn('[SWTaskQueue] SW sync failed (data already persisted):', error);
+        });
+      }
+    } catch (error) {
+      console.error('[SWTaskQueue] Failed to import tasks to IndexedDB:', error);
+      throw error;
     }
   }
   
   /**
-   * 将 Task 转换为 SWTask 格式
+   * 将 Task 转换为存储格式（用于 IndexedDB）
+   */
+  private convertTaskToStorageFormat(task: Task): StorageSWTask {
+    return {
+      id: task.id,
+      type: task.type as 'image' | 'video' | 'character' | 'inspiration_board' | 'chat',
+      params: task.params as StorageSWTask['params'],
+      status: task.status as StorageSWTask['status'],
+      createdAt: task.createdAt,
+      updatedAt: task.updatedAt || task.createdAt,
+      startedAt: task.startedAt,
+      completedAt: task.completedAt,
+      result: task.result as StorageSWTask['result'],
+      error: task.error as StorageSWTask['error'],
+      progress: task.progress,
+      remoteId: task.remoteId,
+      executionPhase: task.executionPhase,
+      insertedToCanvas: task.insertedToCanvas,
+    };
+  }
+  
+  /**
+   * 将 Task 转换为 SWTask 格式（用于 SW RPC）
    */
   private convertTaskToSWTask(task: Task): SWTask {
     return {
       id: task.id,
       type: task.type as 'image' | 'video',
       params: task.params as SWTask['params'],
+      config: { apiKey: '', baseUrl: '' }, // SW import 不需要 config
       status: task.status as SWTask['status'],
       createdAt: task.createdAt,
+      updatedAt: task.updatedAt || task.createdAt,
+      startedAt: task.startedAt,
       completedAt: task.completedAt,
-      result: task.result,
-      error: task.error,
+      result: task.result as SWTask['result'],
+      error: task.error as SWTask['error'],
       progress: task.progress,
+      remoteId: task.remoteId,
       executionPhase: task.executionPhase as SWTask['executionPhase'],
       insertedToCanvas: task.insertedToCanvas,
     };
@@ -479,6 +672,150 @@ class SWTaskQueueService {
   }
 
   // ============================================================================
+  // Polling Methods (Fallback when SW unavailable)
+  // ============================================================================
+
+  /**
+   * Start polling IndexedDB for task status updates
+   * Used as fallback when SW broadcast is unavailable
+   */
+  startPolling(): void {
+    if (this.isPollingActive) return;
+    
+    this.isPollingActive = true;
+    this.pollingIntervalId = setInterval(() => {
+      this.pollTaskStatus();
+    }, this.POLLING_INTERVAL_MS);
+    
+    // 立即执行一次
+    this.pollTaskStatus();
+  }
+
+  /**
+   * Stop polling
+   */
+  stopPolling(): void {
+    if (this.pollingIntervalId) {
+      clearInterval(this.pollingIntervalId);
+      this.pollingIntervalId = null;
+    }
+    this.isPollingActive = false;
+  }
+
+  /**
+   * Check if polling is currently active
+   */
+  isPolling(): boolean {
+    return this.isPollingActive;
+  }
+
+  /**
+   * Poll IndexedDB for task status updates
+   * Compares with local state and emits events for changes
+   */
+  private async pollTaskStatus(): Promise<void> {
+    try {
+      // 获取本地正在处理的任务
+      const processingTasks = this.getTasksByStatus(TaskStatus.PROCESSING);
+      if (processingTasks.length === 0) {
+        // 没有正在处理的任务，可以停止轮询
+        this.stopPolling();
+        return;
+      }
+
+      // 从 IndexedDB 读取最新状态
+      const storedTasks = await taskStorageReader.getAllTasks();
+      const storedTaskMap = new Map(storedTasks.map(t => [t.id, t]));
+
+      // 检查每个正在处理的任务
+      for (const localTask of processingTasks) {
+        const storedTask = storedTaskMap.get(localTask.id);
+        if (!storedTask) continue;
+
+        // 状态发生变化
+        if (storedTask.status !== localTask.status) {
+          this.tasks.set(localTask.id, storedTask);
+          
+          if (storedTask.status === TaskStatus.COMPLETED) {
+            this.emitEvent('taskCompleted', storedTask);
+          } else if (storedTask.status === TaskStatus.FAILED) {
+            this.emitEvent('taskFailed', storedTask);
+          } else if (storedTask.status === TaskStatus.CANCELLED) {
+            this.emitEvent('taskUpdated', storedTask);
+          } else {
+            this.emitEvent('taskStatus', storedTask);
+          }
+        } else if (storedTask.progress !== localTask.progress) {
+          // 进度变化
+          this.tasks.set(localTask.id, storedTask);
+          this.emitEvent('taskStatus', storedTask);
+        }
+      }
+
+      // 清除缓存以便下次获取最新数据
+      taskStorageReader.invalidateCache();
+    } catch (error) {
+      console.warn('[SWTaskQueue] Polling error:', error);
+    }
+  }
+
+  /**
+   * 同步本地状态与 IndexedDB
+   * 用于页面可见性变化时或手动触发同步
+   */
+  async syncFromIndexedDB(): Promise<void> {
+    try {
+      // 清除缓存
+      taskStorageReader.invalidateCache();
+      
+      // 从 IndexedDB 读取所有任务
+      const storedTasks = await taskStorageReader.getAllTasks();
+      const storedTaskMap = new Map(storedTasks.map(t => [t.id, t]));
+
+      // 更新本地状态
+      for (const storedTask of storedTasks) {
+        const localTask = this.tasks.get(storedTask.id);
+        
+        if (!localTask) {
+          // 新任务
+          this.tasks.set(storedTask.id, storedTask);
+          this.emitEvent('taskCreated', storedTask);
+        } else if (storedTask.updatedAt > (localTask.updatedAt || 0)) {
+          // 更新的任务
+          this.tasks.set(storedTask.id, storedTask);
+          
+          if (storedTask.status !== localTask.status) {
+            if (storedTask.status === TaskStatus.COMPLETED) {
+              this.emitEvent('taskCompleted', storedTask);
+            } else if (storedTask.status === TaskStatus.FAILED) {
+              this.emitEvent('taskFailed', storedTask);
+            } else {
+              this.emitEvent('taskUpdated', storedTask);
+            }
+          } else {
+            this.emitEvent('taskUpdated', storedTask);
+          }
+        }
+      }
+
+      // 检查已删除的任务
+      for (const [taskId, localTask] of this.tasks) {
+        if (!storedTaskMap.has(taskId)) {
+          this.tasks.delete(taskId);
+          this.emitEvent('taskDeleted', localTask);
+        }
+      }
+      
+      // 更新分页状态
+      this.paginationState.total = storedTasks.length;
+      this.paginationState.loadedCount = this.tasks.size;
+      this.paginationState.hasMore = false;
+    } catch (error) {
+      console.warn('[SWTaskQueue] Sync from IndexedDB error:', error);
+    }
+  }
+
+  // ============================================================================
   // Private Methods
   // ============================================================================
 
@@ -547,6 +884,17 @@ class SWTaskQueueService {
       textModelName: settings.textModelName,
     };
 
+    // 检查 SW 是否已知不可用，直接使用降级模式
+    if (!this.swAvailable && this.swFailureCount >= this.SW_FAILURE_THRESHOLD) {
+      console.log('[SWTaskQueue] SW unavailable, using fallback execution directly');
+      const canFallback = await this.tryFallbackExecution(task);
+      if (!canFallback) {
+        this.tasks.delete(task.id);
+        this.emitEvent('taskRejected', task, 'SW_UNAVAILABLE');
+      }
+      return;
+    }
+
     if (!this.initialized) {
       const success = await this.initialize();
       if (!success) {
@@ -561,24 +909,41 @@ class SWTaskQueueService {
     }
 
     // 尝试使用 SW 执行，带上配置
-    const result = await swChannelClient.createTask({
-      taskId: task.id,
-      taskType: task.type as 'image' | 'video',
-      params: task.params,
-      config: taskConfig,
-    });
+    try {
+      const result = await swChannelClient.createTask({
+        taskId: task.id,
+        taskType: task.type as 'image' | 'video',
+        params: task.params,
+        config: taskConfig,
+      });
 
-    if (!result.success) {
-      if (result.reason === 'duplicate') {
-        this.tasks.delete(task.id);
-        this.emitEvent('taskRejected', task, 'DUPLICATE');
+      if (result.success) {
+        // SW 执行成功，标记为可用
+        this.markSWAvailable();
       } else {
-        // SW 执行失败，尝试降级模式
-        const canFallback = await this.tryFallbackExecution(task);
-        if (!canFallback) {
+        if (result.reason === 'duplicate') {
           this.tasks.delete(task.id);
-          this.emitEvent('taskRejected', task, result.reason || 'UNKNOWN');
+          this.emitEvent('taskRejected', task, 'DUPLICATE');
+        } else {
+          // SW 执行失败，记录失败并尝试降级模式
+          this.markSWUnavailable();
+          const canFallback = await this.tryFallbackExecution(task);
+          if (!canFallback) {
+            this.tasks.delete(task.id);
+            this.emitEvent('taskRejected', task, result.reason || 'UNKNOWN');
+          }
         }
+      }
+    } catch (error) {
+      // SW 通信异常，标记为不可用
+      console.error('[SWTaskQueue] SW communication error:', error);
+      this.markSWUnavailable();
+      
+      // 尝试降级模式
+      const canFallback = await this.tryFallbackExecution(task);
+      if (!canFallback) {
+        this.tasks.delete(task.id);
+        this.emitEvent('taskRejected', task, 'SW_ERROR');
       }
     }
   }
@@ -602,10 +967,7 @@ class SWTaskQueueService {
       await taskStorageWriter.createTask(
         task.id,
         task.type as 'image' | 'video' | 'character' | 'inspiration_board' | 'chat',
-        {
-          prompt: task.params.prompt,
-          ...task.params,
-        }
+        task.params as { prompt: string; [key: string]: unknown }
       );
 
       // 异步执行任务（fire-and-forget）
@@ -845,9 +1207,9 @@ class SWTaskQueueService {
     this.emitEvent('taskUpdated', updatedTask);
   }
 
-  private emitEvent(type: 'taskCreated' | 'taskUpdated' | 'taskDeleted' | 'taskSynced', task: Task): void;
+  private emitEvent(type: 'taskCreated' | 'taskUpdated' | 'taskDeleted' | 'taskSynced' | 'taskStatus' | 'taskCompleted' | 'taskFailed', task: Task): void;
   private emitEvent(type: 'taskRejected', task: Task, reason: string): void;
-  private emitEvent(type: 'taskCreated' | 'taskUpdated' | 'taskDeleted' | 'taskSynced' | 'taskRejected', task: Task, reason?: string): void {
+  private emitEvent(type: 'taskCreated' | 'taskUpdated' | 'taskDeleted' | 'taskSynced' | 'taskRejected' | 'taskStatus' | 'taskCompleted' | 'taskFailed', task: Task, reason?: string): void {
     // 任务变更时清除读取缓存
     if (type !== 'taskSynced') {
       taskStorageReader.invalidateCache();

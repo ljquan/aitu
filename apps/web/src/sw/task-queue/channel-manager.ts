@@ -304,6 +304,22 @@ export class SWChannelManager {
   }
 
   /**
+   * Check if a workflow has an active client channel
+   * Used for handler readiness detection before sending tool requests
+   */
+  hasWorkflowClientChannel(workflowId: string): boolean {
+    return this.workflowChannels.has(workflowId);
+  }
+
+  /**
+   * Check if there are any active client channels
+   * Used as fallback when workflow-specific channel is not available
+   */
+  hasAnyClientChannel(): boolean {
+    return this.channels.size > 0;
+  }
+
+  /**
    * 创建 RPC 订阅映射
    * 处理器直接返回响应值（Promise 或同步值）
    */
@@ -622,6 +638,11 @@ export class SWChannelManager {
       if (!executor && data?.geminiConfig && data?.videoConfig) {
         initWorkflowHandler(this.sw, data.geminiConfig, data.videoConfig);
         this.workflowHandlerInitialized = true;
+        
+        // 持久化配置到 IndexedDB
+        taskQueueStorage.saveAllConfig(data.geminiConfig, data.videoConfig).catch((error) => {
+          console.warn('[SWChannelManager] Failed to persist config from init:', error);
+        });
       }
       
       // 重新发送待处理的工具请求（处理页面刷新场景）
@@ -864,6 +885,12 @@ export class SWChannelManager {
         apiKey: config.apiKey,
         baseUrl: config.baseUrl,
       };
+      
+      // 持久化配置到 IndexedDB，确保 SW 重启后可恢复
+      // fire-and-forget，不阻塞工作流提交
+      taskQueueStorage.saveAllConfig(geminiConfig, videoConfig).catch((error) => {
+        console.warn('[SWChannelManager] Failed to persist config:', error);
+      });
       
       // 如果 executor 不存在，初始化它
       let executor = getWorkflowExecutor();

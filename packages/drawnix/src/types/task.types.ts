@@ -35,7 +35,7 @@ export interface TaskQueueState {
  */
 export interface TaskEvent {
   /** Event type */
-  type: 'taskCreated' | 'taskUpdated' | 'taskDeleted' | 'taskSynced' | 'taskRejected';
+  type: 'taskCreated' | 'taskUpdated' | 'taskDeleted' | 'taskSynced' | 'taskRejected' | 'taskStatus' | 'taskCompleted' | 'taskFailed';
   /** The task that triggered the event */
   task: Task;
   /** Timestamp when the event occurred */
