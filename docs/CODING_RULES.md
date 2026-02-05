@@ -425,6 +425,38 @@ private config: Config | null = null;
 
 **原因**: ESLint 规则 `@typescript-eslint/no-inferrable-types` 要求移除可从初始值推断的冗余类型注解，保持代码简洁。当变量赋值为 `false`、`true`、数字或字符串字面量时，TypeScript 能自动推断类型。
 
+#### 枚举（enum）不能使用 import type 导入
+
+**场景**: 当枚举既作为类型又作为运行时值使用时
+
+❌ **错误示例**:
+```typescript
+// 错误：使用 type-only import 导入枚举
+import type { TaskType, TaskStatus } from './types';
+
+// 运行时错误：TaskType is not defined
+const config = {
+  [TaskType.IMAGE]: 10000,  // ❌ TaskType 在运行时不存在
+  [TaskType.VIDEO]: 20000,
+};
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：枚举作为值使用时，必须使用普通 import
+import { TaskType } from './types';
+
+// 纯类型可以继续使用 import type
+import type { TaskStatus, TaskError } from './types';
+
+const config = {
+  [TaskType.IMAGE]: 10000,  // ✅ TaskType 在运行时可用
+  [TaskType.VIDEO]: 20000,
+};
+```
+
+**原因**: TypeScript 的 `import type` 在编译时会被完全移除，不会产生任何运行时代码。而 `enum` 在 TypeScript 中既是类型也是值（会编译为 JavaScript 对象），当代码中使用枚举成员作为对象键或进行比较时，需要运行时存在该值。如果使用 `import type` 导入枚举，运行时会抛出 `ReferenceError: xxx is not defined`。
+
 #### Service Worker 与主线程模块不共享
 
 **场景**: 需要在 Service Worker 和主线程中使用相同逻辑时

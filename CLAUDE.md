@@ -130,7 +130,7 @@ Service Worker (后台执行)
 ### 必须遵守
 
 1. **文件大小限制**：单个文件不超过 500 行
-2. **类型定义**：对象用 `interface`，联合类型用 `type`，避免 `any`
+2. **类型定义**：对象用 `interface`，联合类型用 `type`，避免 `any`；枚举作为值使用时不能用 `import type`
 3. **组件规范**：函数组件 + Hooks，事件处理器用 `useCallback`
 4. **定时器清理**：`setInterval` 必须保存 ID，提供 `destroy()` 方法
 5. **API 请求**：禁止重试，区分业务失败和网络错误
