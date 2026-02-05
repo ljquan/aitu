@@ -531,6 +531,7 @@ export function completeLLMApiLog(
     resultUrl?: string;
     resultText?: string;
     responseBody?: string;
+    remoteId?: string;
   }
 ): void {
   const log = memoryLogs.find(l => l.id === logId);
@@ -543,6 +544,7 @@ export function completeLLMApiLog(
     log.resultUrl = params.resultUrl;
     log.resultText = params.resultText ? truncateText(params.resultText, 1000) : undefined;
     log.responseBody = params.responseBody ? truncateText(params.responseBody, 2000) : undefined;
+    if (params.remoteId) log.remoteId = params.remoteId;
     
     // 更新 IndexedDB
     updateLogInDB(log);
@@ -592,6 +594,7 @@ export function failLLMApiLog(
     duration: number;
     errorMessage: string;
     responseBody?: string;
+    remoteId?: string;
   }
 ): void {
   const log = memoryLogs.find(l => l.id === logId);
@@ -601,6 +604,7 @@ export function failLLMApiLog(
     log.duration = params.duration;
     log.errorMessage = truncateError(params.errorMessage);
     log.responseBody = params.responseBody ? truncateText(params.responseBody, 2000) : undefined;
+    if (params.remoteId) log.remoteId = params.remoteId;
     
     // 更新 IndexedDB
     updateLogInDB(log);
