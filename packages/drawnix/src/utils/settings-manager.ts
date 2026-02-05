@@ -7,6 +7,9 @@
 import { CryptoUtils } from './crypto-utils';
 import { DRAWNIX_SETTINGS_KEY } from '../constants/storage';
 import { getSafeErrorMessage } from '@aitu/utils';
+import { configIndexedDBWriter } from './config-indexeddb-writer';
+import type { GeminiConfig } from './gemini-api/types';
+import type { VideoAPIConfig } from './config-indexeddb-writer';
 
 // ====================================
 // 类型定义
@@ -77,6 +80,8 @@ class SettingsManager {
       // 加密功能初始化完成后，解密已加载的敏感数据
       await this.decryptSensitiveDataForLoading(this.settings);
       this.initializeFromUrl();
+      // 初始化完成后，同步配置到 IndexedDB，供 SW 读取
+      await this.syncToIndexedDB();
       // console.log('SettingsManager initialization completed');
     } catch (error) {
       console.error('SettingsManager initialization failed:', error);
@@ -283,8 +288,44 @@ class SettingsManager {
       // 使用单个 key 存储序列化的设置
       const settingsJson = JSON.stringify(settingsToSave);
       localStorage.setItem(DRAWNIX_SETTINGS_KEY, settingsJson);
+      
+      // 同步到 IndexedDB，供 SW 读取（fire-and-forget，不阻塞）
+      this.syncToIndexedDB().catch((error) => {
+        console.warn('[SettingsManager] Failed to sync to IndexedDB:', error);
+      });
     } catch (error) {
       console.warn('Failed to save settings to localStorage:', error);
+    }
+  }
+
+  /**
+   * 同步配置到 IndexedDB
+   * 将当前设置转换为 SW 需要的配置格式并写入 IndexedDB
+   */
+  private async syncToIndexedDB(): Promise<void> {
+    if (typeof window === 'undefined') return;
+
+    try {
+      const gemini = this.settings.gemini;
+      
+      // 构建 GeminiConfig（与 SW 期望的格式一致）
+      const geminiConfig: GeminiConfig = {
+        apiKey: gemini.apiKey,
+        baseUrl: gemini.baseUrl,
+        modelName: gemini.imageModelName,
+      };
+      
+      // 构建 VideoAPIConfig（与 SW 期望的格式一致）
+      const videoConfig: VideoAPIConfig = {
+        apiKey: gemini.apiKey,
+        baseUrl: gemini.baseUrl,
+        model: gemini.videoModelName,
+      };
+      
+      await configIndexedDBWriter.saveConfig(geminiConfig, videoConfig);
+    } catch (error) {
+      // IndexedDB 写入失败不影响正常流程
+      console.warn('[SettingsManager] Failed to sync config to IndexedDB:', error);
     }
   }
 

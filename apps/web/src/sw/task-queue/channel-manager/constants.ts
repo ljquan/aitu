@@ -123,7 +123,7 @@ export const SW_EVENTS = {
   SW_NEW_VERSION_READY: 'sw:newVersionReady',
   SW_ACTIVATED: 'sw:activated',
   SW_UPDATED: 'sw:updated',
-  SW_REQUEST_CONFIG: 'sw:requestConfig',
+  // Note: SW_REQUEST_CONFIG 已移除 - 配置现在同步到 IndexedDB，SW 直接读取
 
   // MCP events
   MCP_TOOL_RESULT: 'mcp:toolResult',

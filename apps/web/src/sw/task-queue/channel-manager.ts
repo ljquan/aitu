@@ -19,6 +19,7 @@ import {
   initWorkflowHandler,
   updateWorkflowConfig,
   resendPendingToolRequests,
+  ensureWorkflowHandlerInitialized,
 } from './workflow-handler';
 import type { Workflow, MainThreadToolResponseMessage } from './workflow-types';
 import { taskQueueStorage, type StoredPendingToolRequest } from './storage';
@@ -647,17 +648,23 @@ export class SWChannelManager {
       // 初始化任务队列（不再传递配置，配置随任务传递）
       await this.taskQueue?.initialize();
       
-      // 初始化工作流处理器（如果提供了配置，用于兼容旧客户端）
-      // 注意：新架构下工作流配置也应随工作流提交时传递
-      const executor = getWorkflowExecutor();
-      if (!executor && data?.geminiConfig && data?.videoConfig) {
-        initWorkflowHandler(this.sw, data.geminiConfig, data.videoConfig);
+      // 初始化工作流处理器
+      // 优先使用传入的配置，否则从 IndexedDB 读取（主线程会自动同步配置到 IndexedDB）
+      const initialized = await ensureWorkflowHandlerInitialized(
+        this.sw,
+        data?.geminiConfig,
+        data?.videoConfig
+      );
+      
+      if (initialized) {
         this.workflowHandlerInitialized = true;
         
-        // 持久化配置到 IndexedDB
-        taskQueueStorage.saveAllConfig(data.geminiConfig, data.videoConfig).catch((error) => {
-          console.warn('[SWChannelManager] Failed to persist config from init:', error);
-        });
+        // 如果传入了配置，持久化到 IndexedDB（兼容旧客户端）
+        if (data?.geminiConfig && data?.videoConfig) {
+          taskQueueStorage.saveAllConfig(data.geminiConfig, data.videoConfig).catch((error) => {
+            console.warn('[SWChannelManager] Failed to persist config from init:', error);
+          });
+        }
       }
       
       // 重新发送待处理的工具请求（处理页面刷新场景）
@@ -2274,12 +2281,7 @@ export class SWChannelManager {
     this.broadcastToAll(SW_EVENTS.SW_UPDATED, { version });
   }
 
-  /**
-   * 发送请求配置事件
-   */
-  sendSWRequestConfig(reason: string): void {
-    this.broadcastToAll(SW_EVENTS.SW_REQUEST_CONFIG, { reason });
-  }
+  // Note: sendSWRequestConfig 已移除 - 配置现在同步到 IndexedDB，SW 直接读取
 
   // ============================================================================
   // MCP 事件发送方法

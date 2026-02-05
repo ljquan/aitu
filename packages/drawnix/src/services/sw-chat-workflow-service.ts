@@ -125,6 +125,7 @@ export async function sendChatWorkflow(
     });
 
     // Ensure SW client is initialized (with timeout protection)
+    // 配置已由 SettingsManager 同步到 IndexedDB，SW 直接读取
     if (!swChannelClient.isInitialized()) {
       const SW_INIT_TIMEOUT = 10000; // 10 seconds
       try {
@@ -136,16 +137,8 @@ export async function sendChatWorkflow(
         if (!initSuccess) {
           throw new Error('Service Worker initialization timeout');
         }
-        await swChannelClient.init({
-          geminiConfig: {
-            apiKey: settings.apiKey,
-            baseUrl: settings.baseUrl,
-            modelName: settings.chatModel,
-          },
-          videoConfig: {
-            baseUrl: 'https://api.tu-zi.com',
-          },
-        });
+        // 配置从 IndexedDB 读取，无需传递
+        await swChannelClient.init({});
       } catch (initError) {
         throw new Error(`Chat workflow requires Service Worker: ${initError instanceof Error ? initError.message : 'Initialization failed'}`);
       }

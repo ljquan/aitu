@@ -80,6 +80,7 @@ export interface SWChannelEventHandlers {
   onSWNewVersionReady?: (event: import('./types').SWNewVersionReadyEvent) => void;
   onSWActivated?: (event: import('./types').SWActivatedEvent) => void;
   onSWUpdated?: (event: import('./types').SWUpdatedEvent) => void;
+  /** @deprecated 配置现在同步到 IndexedDB，SW 直接读取，不再需要请求主线程 */
   onSWRequestConfig?: (event: import('./types').SWRequestConfigEvent) => void;
   // MCP events
   onMCPToolResult?: (event: import('./types').MCPToolResultEvent) => void;
@@ -1220,7 +1221,7 @@ export class SWChannelClient {
     this.subscribeEvent<import('./types').SWActivatedEvent>('sw:activated', () => this.eventHandlers.onSWActivated);
     this.subscribeEvent<import('./types').SWUpdatedEvent>('sw:updated', () => this.eventHandlers.onSWUpdated);
 
-    this.subscribeEvent<import('./types').SWRequestConfigEvent>('sw:requestConfig', () => this.eventHandlers.onSWRequestConfig);
+    // Note: sw:requestConfig 已移除 - 配置现在同步到 IndexedDB，SW 直接读取
 
     // ============================================================================
     // MCP 事件订阅
