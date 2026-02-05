@@ -29,6 +29,8 @@ export interface GistInfo {
   filesCount: number;
   url: string;
   isCurrent: boolean;
+  /** 是否为分片主 Gist（包含 master-index.json） */
+  isMaster: boolean;
 }
 
 /** 同步上下文值 */
@@ -216,13 +218,11 @@ export function GitHubSyncProvider({ children }: GitHubSyncProviderProps) {
       setIsConfigured(hasToken);
 
       if (hasToken) {
-        // 验证 Token
-        const isValid = await tokenService.validateToken();
+        // 验证 Token 并获取用户信息（一次请求完成）
+        const { isValid, userInfo: info } = await tokenService.validateAndGetUserInfo();
         setIsConnected(isValid);
 
         if (isValid) {
-          // 获取用户信息
-          const info = await tokenService.getUserInfo();
           setUserInfo(info);
 
           // 获取配置
@@ -406,8 +406,8 @@ export function GitHubSyncProvider({ children }: GitHubSyncProviderProps) {
         return false;
       }
 
-      // 验证 Token 有效性
-      const isValid = await tokenService.validateToken(token);
+      // 验证 Token 有效性并获取用户信息（一次请求完成）
+      const { isValid, userInfo: info } = await tokenService.validateAndGetUserInfo(token);
       if (!isValid) {
         setError('Token 无效或已过期');
         return false;
@@ -422,32 +422,33 @@ export function GitHubSyncProvider({ children }: GitHubSyncProviderProps) {
         return false;
       }
 
-      // 获取用户信息
-      const info = await tokenService.getUserInfo();
       setUserInfo(info);
 
-      // 自动查找并连接第一个同步 Gist
+      // 自动查找主数据库并同步（sync 内部会使用 findSyncGist 选择最新的主 Gist）
       try {
-        const gists = await syncEngine.listSyncGists();
-        if (gists.length > 0) {
-          const firstGist = gists[0];
-          logInfo('Auto-connecting to gist', { gistId: maskId(firstGist.id) });
-          
-          const result = await syncEngine.switchToGist(firstGist.id);
-          
-          // 更新配置状态（无论同步是否成功，Gist ID 已经被设置）
-          const syncConfig = await syncEngine.getConfig();
-          setConfig(syncConfig);
-          setLastSyncTime(syncConfig.lastSyncTime);
-          setGistUrl(syncEngine.getGistUrl());
-          
-          if (!result.success) {
-            logWarning('Auto-connect sync failed', { error: result.error });
-          } else {
-            // 同步成功后，处理画板切换逻辑
-            logSuccess('Auto-connect sync successful');
-            await handleBoardSwitchAfterSync(result);
-          }
+        logInfo('Auto-connecting and syncing...');
+        
+        // 重置 gistId，强制 sync() 重新选择正确的主数据库
+        await syncEngine.saveConfig({ gistId: null });
+        
+        // 调用 sync()，它会自动查找包含 master-index.json 的最新主 Gist
+        const result = await syncEngine.sync();
+        
+        // 更新配置状态（无论同步是否成功，Gist ID 可能已经被设置）
+        const syncConfig = await syncEngine.getConfig();
+        setConfig(syncConfig);
+        setLastSyncTime(syncConfig.lastSyncTime);
+        setGistUrl(syncEngine.getGistUrl());
+        
+        if (!result.success) {
+          logWarning('Auto-connect sync failed', { error: result.error });
+        } else {
+          // 同步成功后，处理画板切换逻辑
+          logSuccess('Auto-connect sync successful', { 
+            downloaded: result.downloaded,
+            gistId: syncConfig.gistId ? maskId(syncConfig.gistId) : null,
+          });
+          await handleBoardSwitchAfterSync(result);
         }
       } catch (error) {
         logError('Failed to auto-connect gist', error instanceof Error ? error : new Error(String(error)));

@@ -78,18 +78,54 @@ export const WorkZoneContent: React.FC<WorkZoneContentProps> = ({
     // 异步 claim 工作流
     (async () => {
       try {
-        const { swChannelClient } = await import('../../services/sw-channel/client');
+        const { workflowSubmissionService } = await import('../../services/workflow-submission-service');
         
-        // 等待 swChannelClient 初始化（最多 5 秒）
-        let waited = 0;
-        while (!swChannelClient.isInitialized() && waited < 5000) {
-          await new Promise(r => setTimeout(r, 200));
-          waited += 200;
+        // 首先检查是否由降级引擎管理
+        if (workflowSubmissionService.isWorkflowManagedByFallback(workflowId)) {
+          // 降级模式：从降级引擎获取状态
+          const fallbackWorkflow = workflowSubmissionService.getWorkflowFromFallback(workflowId);
+          if (fallbackWorkflow) {
+            const status = fallbackWorkflow.status;
+            if (status === 'completed' || status === 'failed' || status === 'cancelled') {
+              onWorkflowStateChange?.(
+                workflowId,
+                status === 'completed' ? 'completed' : 'failed',
+                fallbackWorkflow.error
+              );
+            }
+            // 降级模式下工作流正在运行，不需要额外操作
+            return;
+          }
         }
         
+        // 尝试通过 SW claim
+        const { swChannelClient } = await import('../../services/sw-channel/client');
+        
+        // 快速检查 SW 是否可用（不再等待 5 秒）
         if (!swChannelClient.isInitialized()) {
-          // SW 未初始化，标记为失败
-          onWorkflowStateChange?.(workflowId, 'failed', '无法连接到 Service Worker');
+          // SW 未初始化，尝试用降级模式恢复工作流
+          console.log('[WorkZoneContent] SW not available, trying fallback resume for:', workflowId);
+          const resumed = await workflowSubmissionService.resumeWorkflowWithFallback(workflowId);
+          if (resumed) {
+            console.log('[WorkZoneContent] Successfully resumed workflow with fallback:', workflowId);
+            // 工作流已恢复，事件会通过 fallback engine 发送
+            return;
+          }
+          
+          // 恢复失败，检查本地缓存状态
+          const localWorkflow = workflowSubmissionService.getWorkflow(workflowId);
+          if (localWorkflow) {
+            const status = localWorkflow.status;
+            if (status === 'completed' || status === 'failed' || status === 'cancelled') {
+              onWorkflowStateChange?.(
+                workflowId,
+                status === 'completed' ? 'completed' : 'failed',
+                localWorkflow.error
+              );
+            }
+          } else {
+            onWorkflowStateChange?.(workflowId, 'failed', '工作流已丢失，请重试');
+          }
           return;
         }
         
@@ -106,7 +142,23 @@ export const WorkZoneContent: React.FC<WorkZoneContentProps> = ({
             );
           }
         } else {
-          // 工作流不存在或 claim 失败，标记为失败
+          // 工作流不存在或 claim 失败
+          // 检查本地缓存
+          const localWorkflow = workflowSubmissionService.getWorkflow(workflowId);
+          if (localWorkflow && (localWorkflow.status === 'running' || localWorkflow.status === 'pending')) {
+            // 本地有运行中的工作流，可能是降级模式
+            // 不标记为失败，让它继续运行
+            return;
+          }
+          
+          // 尝试使用降级模式恢复工作流
+          console.log('[WorkZoneContent] SW claim failed, trying fallback resume for:', workflowId);
+          const resumed = await workflowSubmissionService.resumeWorkflowWithFallback(workflowId);
+          if (resumed) {
+            console.log('[WorkZoneContent] Successfully resumed workflow with fallback:', workflowId);
+            return;
+          }
+          
           onWorkflowStateChange?.(workflowId, 'failed', result.error || '工作流已丢失，请重试');
         }
       } catch (error) {

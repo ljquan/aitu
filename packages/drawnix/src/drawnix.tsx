@@ -296,19 +296,11 @@ export const Drawnix: React.FC<DrawnixProps> = ({
     if (board && value && value.length > 0) {
       const restoreWorkZones = async () => {
         const { WorkZoneTransforms } = await import('./plugins/with-workzone');
-        const { shouldUseSWTaskQueue } = await import('./services/task-queue');
         const { TaskStatus } = await import('./types/task.types');
 
-        // In SW mode, ensure tasks are synced from SW first
-        let swInitialized = false;
-        if (shouldUseSWTaskQueue()) {
-          const { swTaskQueueService } = await import('./services/sw-task-queue-service');
-          // Wait for SW to be initialized and tasks synced
-          swInitialized = await swTaskQueueService.initialize();
-          if (swInitialized) {
-            await swTaskQueueService.syncTasksFromSW();
-          }
-        }
+        // Initialize SW service (内部会检查 shouldUseSWTaskQueue 并使用 swChannelClient.ensureReady)
+        const { swTaskQueueService } = await import('./services/sw-task-queue-service');
+        const swInitialized = await swTaskQueueService.initialize();
 
         // Query all chat workflows from SW (only if SW is initialized)
         // Now returns ALL workflows including completed ones for proper state sync
@@ -342,6 +334,19 @@ export const Drawnix: React.FC<DrawnixProps> = ({
 
         for (const workzone of workzones) {
           const swWorkflow = activeWorkflows.find(w => w.id === workzone.workflow.id);
+          
+          // 检查工作流是否已完成，如果是则自动删除 WorkZone
+          // 注意：需要确保没有 pending/running 步骤（AI 分析可能会添加后续步骤）
+          const workflowStatus = swWorkflow?.status || workzone.workflow.status;
+          const stepsToCheck = swWorkflow?.steps || workzone.workflow.steps;
+          const hasPendingOrRunningSteps = stepsToCheck.some(
+            step => step.status === 'running' || step.status === 'pending' || step.status === 'pending_main_thread'
+          );
+          
+          if (workflowStatus === 'completed' && !hasPendingOrRunningSteps) {
+            WorkZoneTransforms.removeWorkZone(board, workzone.id);
+            continue;
+          }
           
           const hasRunningSteps = workzone.workflow.steps.some(
             step => step.status === 'running' || step.status === 'pending'
@@ -407,9 +412,18 @@ export const Drawnix: React.FC<DrawnixProps> = ({
                 // If SW workflow completed, we'll receive workflow:completed event
                 return step;
               }
+              // For media generation steps (generate_image, generate_video, etc.),
+              // they may be pending and need to be resumed via fallback engine
+              const mediaGenerationSteps = ['generate_image', 'generate_video', 'generate_grid_image', 'generate_inspiration_board'];
+              if (mediaGenerationSteps.includes(step.mcp)) {
+                // Keep status for fallback engine to resume
+                // The WorkZoneContent claim logic will trigger fallback resume
+                return step;
+              }
+              
               // For other steps without taskId (like insert_mindmap, insert_mermaid),
               // they are synchronous and should have completed before refresh
-              // If they're still running/pending, mark as failed
+              // If they're still running, mark as failed (pending is ok, will be skipped)
               if (step.status === 'running') {
                 return {
                   ...step,

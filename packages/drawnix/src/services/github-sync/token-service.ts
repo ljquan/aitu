@@ -159,37 +159,72 @@ class TokenService {
     }
   }
 
+  // 缓存用户信息，避免重复请求
+  private cachedUserInfo: { login: string; name: string | null; avatar_url: string } | null = null;
+
   /**
-   * 获取 Token 关联的 GitHub 用户信息
+   * 验证 Token 并获取用户信息（一次请求完成两个目的）
+   * 比分别调用 validateToken + getUserInfo 更高效
    */
-  async getUserInfo(): Promise<{ login: string; name: string | null; avatar_url: string } | null> {
-    const token = await this.getToken();
-    if (!token) {
-      return null;
+  async validateAndGetUserInfo(token?: string): Promise<{
+    isValid: boolean;
+    userInfo: { login: string; name: string | null; avatar_url: string } | null;
+  }> {
+    const tokenToValidate = token || await this.getToken();
+    
+    if (!tokenToValidate) {
+      return { isValid: false, userInfo: null };
+    }
+
+    // 检查缓存
+    if (!token && this.tokenValidated && this.cachedToken === tokenToValidate && this.cachedUserInfo) {
+      return { isValid: true, userInfo: this.cachedUserInfo };
     }
 
     try {
       const response = await fetch('https://api.github.com/user', {
         headers: {
-          'Authorization': `Bearer ${token}`,
+          'Authorization': `Bearer ${tokenToValidate}`,
           'Accept': 'application/vnd.github.v3+json',
         },
       });
 
       if (!response.ok) {
-        return null;
+        return { isValid: false, userInfo: null };
       }
 
       const data = await response.json();
-      return {
+      const userInfo = {
         login: data.login,
         name: data.name,
         avatar_url: data.avatar_url,
       };
+
+      // 缓存结果
+      if (!token) {
+        this.tokenValidated = true;
+        this.cachedUserInfo = userInfo;
+        localStorage.setItem(TOKEN_VALIDATED_KEY, 'true');
+      }
+
+      return { isValid: true, userInfo };
     } catch (error) {
-      logError('TokenService] Failed to get user info:', error);
-      return null;
+      logError('TokenService] Token validation failed:', error);
+      return { isValid: false, userInfo: null };
     }
+  }
+
+  /**
+   * 获取 Token 关联的 GitHub 用户信息
+   */
+  async getUserInfo(): Promise<{ login: string; name: string | null; avatar_url: string } | null> {
+    // 使用缓存
+    if (this.cachedUserInfo && this.tokenValidated) {
+      return this.cachedUserInfo;
+    }
+
+    const result = await this.validateAndGetUserInfo();
+    return result.userInfo;
   }
 
   /**

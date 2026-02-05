@@ -4,7 +4,7 @@
  * 统一宫格图和灵感图的拆分逻辑，提供可配置的拆分策略
  */
 
-import { loadImage, trimBorders } from './image-border-utils';
+import { loadImage, trimBorders } from '@aitu/utils';
 
 /**
  * 分割后的图片元素

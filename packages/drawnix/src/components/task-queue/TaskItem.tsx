@@ -298,7 +298,7 @@ export const TaskItem: React.FC<TaskItemProps> = React.memo(({
                   </div>
                 ) : mediaUrl ? (
                   <>
-                    <video src={mediaUrl} muted playsInline poster={thumbnailUrl || undefined} />
+                    <video src={mediaUrl} muted playsInline />
                     {/* 视频播放按钮覆盖层 */}
                     <div className="task-item__video-play-overlay">
                       <PlayCircleIcon size="32px" />

@@ -72,13 +72,6 @@ async function executeAsync(params: ImageGenerationParams): Promise<MCPResult> {
   }
 
   try {
-    // console.log('[ImageGenerationTool] Generating image with params:', {
-    //   prompt: prompt.substring(0, 100) + (prompt.length > 100 ? '...' : ''),
-    //   size,
-    //   referenceImages: referenceImages?.length || 0,
-    //   quality,
-    // });
-
     // 调用 Gemini 图片生成 API
     const result = await defaultGeminiClient.generateImage(prompt, {
       size: size || '1x1',
@@ -352,15 +345,15 @@ export const imageGenerationTool: MCPTool = {
   },
 
   execute: async (params: Record<string, unknown>, options?: MCPExecuteOptions): Promise<MCPResult> => {
+    console.log('[ImageGenerationTool] execute called with mode:', options?.mode);
     const typedParams = params as unknown as ImageGenerationParams;
     const mode = options?.mode || 'async';
 
     if (mode === 'queue') {
-      // 确保 SW 任务队列已初始化
-      const { shouldUseSWTaskQueue, swTaskQueueService } = await import('../../services/task-queue');
-      if (shouldUseSWTaskQueue()) {
-        await swTaskQueueService.initialize();
-      }
+      // 队列模式：直接使用 taskQueueService
+      // taskQueueService 会根据 SW 可用性自动选择正确的服务
+      // - SW 模式：任务提交到 SW 后台执行
+      // - 降级模式：任务在主线程立即执行
       return executeQueue(typedParams, options || {});
     }
 

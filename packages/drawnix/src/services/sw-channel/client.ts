@@ -44,6 +44,10 @@ import type {
   DebugStatusResult,
 } from './types';
 import { callWithDefault, callOperation } from './rpc-helpers';
+import { geminiSettings, settingsManager } from '../../utils/settings-manager';
+// Import from isolated module to avoid circular dependencies
+// IMPORTANT: sw-detection.ts does NOT import task queue services
+import { shouldUseSWTaskQueue } from '../task-queue/sw-detection';
 
 // ============================================================================
 // 事件处理器类型
@@ -207,6 +211,58 @@ export class SWChannelClient {
    */
   isInitialized(): boolean {
     return this.initialized && !!this.channel?.isReady;
+  }
+
+  /**
+   * 确保 SW 客户端已就绪
+   * 统一的 SW 初始化入口，替代分散在各处的 ensureSWInitialized 函数
+   * 
+   * 检查顺序：
+   * 1. URL 参数检查（?sw=0 禁用 SW）
+   * 2. 已初始化检查
+   * 3. 设置验证
+   * 4. 初始化并配置
+   */
+  async ensureReady(): Promise<boolean> {
+    // 1. URL 参数检查
+    if (!shouldUseSWTaskQueue()) {
+      return false;
+    }
+
+    // 2. 已初始化检查
+    if (this.isInitialized()) {
+      return true;
+    }
+
+    // 3. 设置验证
+    const settings = geminiSettings.get();
+    if (!settings.apiKey || !settings.baseUrl) {
+      return false;
+    }
+
+    // 4. 初始化并配置
+    try {
+      await settingsManager.waitForInitialization();
+      const initSuccess = await this.initialize();
+      if (!initSuccess) {
+        return false;
+      }
+
+      const result = await this.init({
+        geminiConfig: {
+          apiKey: settings.apiKey,
+          baseUrl: settings.baseUrl,
+          modelName: settings.imageModelName,
+        },
+        videoConfig: {
+          baseUrl: settings.baseUrl,
+        },
+      });
+      return result.success;
+    } catch (error) {
+      console.error('[SWChannelClient] ensureReady failed:', error);
+      return false;
+    }
   }
 
   /**
@@ -488,14 +544,7 @@ export class SWChannelClient {
     hasPendingToolRequest?: boolean;
     error?: string;
   }> {
-    console.log(`[SWChannelClient] 🔄 Claiming workflow: ${workflowId}`);
     const result = await this.callRPC('workflow:claim', { workflowId }, { success: false, error: 'Claim failed' });
-    console.log(`[SWChannelClient] Claim result:`, {
-      success: result.success,
-      status: result.workflow?.status,
-      hasPendingToolRequest: result.hasPendingToolRequest,
-      error: result.error,
-    });
     return result;
   }
 
@@ -566,33 +615,6 @@ export class SWChannelClient {
         return { ret: ReturnCode.ReceiverCallbackError, msg: String(error) };
       }
     });
-  }
-
-  /**
-   * 响应主线程工具请求
-   * @deprecated 使用 registerToolRequestHandler 直接返回结果，减少一次交互
-   */
-  async respondToToolRequest(
-    requestId: string,
-    success: boolean,
-    result?: unknown,
-    error?: string,
-    addSteps?: MainThreadToolResponse['addSteps']
-  ): Promise<TaskOperationResult> {
-    this.ensureInitialized();
-    const response = await this.channel!.call('workflow:respondTool', { 
-      requestId, 
-      success, 
-      result, 
-      error, 
-      addSteps 
-    });
-    
-    if (response.ret !== ReturnCode.Success) {
-      return { success: false, error: response.msg || 'Respond tool failed' };
-    }
-    
-    return response.data || { success: true };
   }
 
   // ============================================================================
@@ -944,6 +966,61 @@ export class SWChannelClient {
    */
   async deleteCache(url: string): Promise<TaskOperationResult> {
     return callOperation(this.channel, 'cache:delete', { url }, 'Delete cache failed');
+  }
+
+  // ============================================================================
+  // 执行器方法 (Media Executor)
+  // ============================================================================
+
+  /**
+   * 健康检查 - 用于检测 SW 是否可用
+   */
+  async ping(): Promise<boolean> {
+    if (!this.initialized || !this.channel) {
+      return false;
+    }
+    try {
+      const response = await this.channel.call('ping', undefined);
+      return response.ret === ReturnCode.Success;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * 调用执行器执行媒体生成任务
+   *
+   * SW 会在后台执行任务，结果直接写入 IndexedDB 的 tasks 表。
+   * 此方法立即返回，不等待任务完成。
+   *
+   * @param params 执行参数
+   * @returns 提交结果（不是执行结果）
+   */
+  async callExecutor(params: {
+    taskId: string;
+    type: 'image' | 'video' | 'ai_analyze';
+    params: Record<string, unknown>;
+  }): Promise<{ success: boolean; error?: string }> {
+    this.ensureInitialized();
+
+    try {
+      const response = await this.channel!.call('executor:execute', params);
+
+      if (response.ret !== ReturnCode.Success) {
+        return {
+          success: false,
+          error: response.msg || 'Executor call failed',
+        };
+      }
+
+      return response.data || { success: true };
+    } catch (error) {
+      console.error('[SWChannelClient] executor:execute error:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
   }
 
   // ============================================================================

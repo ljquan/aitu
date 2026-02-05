@@ -6,9 +6,9 @@
  */
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { taskQueueService } from '../services/task-queue';
+import { taskQueueService, swTaskQueueService, shouldUseSWTaskQueue } from '../services/task-queue';
+import { taskStorageReader } from '../services/task-storage-reader';
 import { Task, TaskStatus, TaskType, GenerationParams } from '../types/task.types';
-import { swTaskQueueService, shouldUseSWTaskQueue } from '../services/task-queue';
 
 /**
  * Return type for useTaskQueue hook
@@ -118,37 +118,31 @@ export function useTaskQueue(): UseTaskQueueReturn {
     };
   }, [updatePaginationState]);
 
-  // 渲染时从 SW 同步任务数据（确保数据加载）
+  // 渲染时从 IndexedDB 加载任务数据
   useEffect(() => {
     if (syncAttempted.current) return;
     syncAttempted.current = true;
 
-    const syncFromSW = async () => {
-      if (!shouldUseSWTaskQueue()) {
-        setIsLoading(false);
-        return;
-      }
-      
+    const loadTasks = async () => {
       try {
-        // 同步 SW 任务到本地（只加载第一页）
-        await swTaskQueueService.syncTasksFromSW();
-        // 从 swTaskQueueService 获取任务并更新本地 taskQueueService
-        const swTasks = swTaskQueueService.getAllTasks();
-        if (swTasks.length > 0) {
-          taskQueueService.restoreTasks(swTasks);
+        // 直接从 IndexedDB 读取任务（SW 和降级模式统一逻辑）
+        const storedTasks = await taskStorageReader.getAllTasks();
+        if (storedTasks.length > 0) {
+          // 恢复任务到 taskQueueService 内存中（用于后续的实时更新）
+          taskQueueService.restoreTasks(storedTasks);
         }
-        // 同步完成后，强制刷新一次任务列表
+        // 加载完成后，刷新任务列表
         setTasks(taskQueueService.getAllTasks());
         // 更新分页状态
         updatePaginationState();
       } catch {
-        // 静默忽略同步错误
+        // 静默忽略错误
       } finally {
         setIsLoading(false);
       }
     };
 
-    syncFromSW();
+    loadTasks();
   }, [updatePaginationState]);
 
   // 加载更多任务
@@ -218,6 +212,7 @@ export function useTaskQueue(): UseTaskQueueReturn {
   }, []);
 
   const retryTask = useCallback((taskId: string) => {
+    // taskQueueService 在 SW 模式下已经是 swTaskQueueService
     taskQueueService.retryTask(taskId);
   }, []);
 

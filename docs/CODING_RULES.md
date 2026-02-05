@@ -222,6 +222,96 @@ export function sanitizeObject(obj: unknown): unknown { ... }
 - 主线程：`packages/drawnix/src/utils/sanitize-utils.ts`
 - Service Worker：`apps/web/src/sw/task-queue/utils/sanitize-utils.ts`
 
+#### 模块循环依赖导致 TDZ 错误
+
+**场景**: 多个服务模块相互导入，形成循环依赖链，导致 ES 模块初始化时的 TDZ (Temporal Dead Zone) 错误
+
+❌ **错误示例**:
+```typescript
+// task-queue/index.ts - 导入 sw-task-queue-service
+import { swTaskQueueService } from '../sw-task-queue-service';
+export function shouldUseSWTaskQueue() { ... }
+export { swTaskQueueService };
+
+// sw-task-queue-service.ts - 导入 sw-channel/client
+import { swChannelClient } from './sw-channel';
+export const swTaskQueueService = SWTaskQueueService.getInstance();
+
+// sw-channel/client.ts - 导入 task-queue（循环！）
+import { shouldUseSWTaskQueue } from '../task-queue';  // ❌ 循环依赖
+export const swChannelClient = SWChannelClient.getInstance();
+
+// 结果：Uncaught ReferenceError: Cannot access 'swChannelClient' before initialization
+```
+
+```typescript
+// chat-workflow-client.ts
+const checkAndSubscribe = () => {
+  // ❌ ES 模块环境不支持 CommonJS require
+  const { swChannelClient: client } = require('./client');
+};
+// 结果：Uncaught ReferenceError: require is not defined
+```
+
+✅ **正确示例**:
+```typescript
+// 1. 将共享函数提取到独立的隔离模块
+// task-queue/sw-detection.ts - 不导入任何服务模块
+export function shouldUseSWTaskQueue(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  if (!('serviceWorker' in navigator)) return false;
+  return true;
+}
+
+// 2. 服务文件从隔离模块导入
+// sw-channel/client.ts
+import { shouldUseSWTaskQueue } from '../task-queue/sw-detection';  // ✅ 无循环
+
+// 3. 使用服务注册表延迟服务访问
+// task-queue/service-registry.ts - 不导入任何服务模块
+export const serviceRegistry = {
+  swTaskQueueService: null,
+  legacyTaskQueueService: null,
+};
+export function registerService(name, service) {
+  serviceRegistry[name] = service;
+}
+
+// 4. 服务创建后注册到注册表
+// sw-task-queue-service.ts
+export const swTaskQueueService = SWTaskQueueService.getInstance();
+import { registerService } from './task-queue/service-registry';
+registerService('swTaskQueueService', swTaskQueueService);
+
+// 5. 入口文件使用 Proxy 延迟访问
+// task-queue/index.ts
+import { serviceRegistry } from './service-registry';
+export const taskQueueService = new Proxy({}, {
+  get(_target, prop) {
+    const service = shouldUseSWTaskQueue() 
+      ? serviceRegistry.swTaskQueueService 
+      : serviceRegistry.legacyTaskQueueService;
+    return service[prop];
+  },
+});
+
+// 6. 单例构造函数中延迟访问其他模块
+// sw-task-queue-service.ts
+private constructor() {
+  // ✅ 使用 queueMicrotask 延迟，等待其他模块初始化完成
+  queueMicrotask(() => {
+    this.setupSWClientHandlers();  // swChannelClient 此时已初始化
+  });
+}
+```
+
+**原因**: ES 模块是静态解析的，循环依赖会导致某些模块在被访问时尚未完成初始化。解决方案是将共享代码提取到独立模块（打破依赖链），并使用延迟访问模式（Proxy、queueMicrotask）。
+
+**相关文件**:
+- `packages/drawnix/src/services/task-queue/sw-detection.ts` - 隔离的检测函数
+- `packages/drawnix/src/services/task-queue/service-registry.ts` - 服务注册表
+- `packages/drawnix/src/services/task-queue/index.ts` - 使用 Proxy 的入口
+
 #### Service Worker 枚举值使用小写
 
 **场景**: 读取 SW 任务队列数据（如 `sw-task-queue` 数据库）进行过滤时
@@ -353,9 +443,44 @@ export const boardToImage = (board: PlaitBoard) => {  // ✅ Plait 特有
 - ID 生成：`generateId()`, `generateUUID()`
 - 日期格式化：`formatDate()`, `formatDuration()`, `formatFileSize()`
 - DOM 操作：`download()`, `copyToClipboard()`
-- 安全工具：`sanitizeObject()`, `sanitizeUrl()`, `getSafeErrorMessage()`
+- 安全工具：`sanitizeObject()`, `sanitizeUrl()`, `sanitizeRequestBody()`, `getSafeErrorMessage()`
 - 字符串处理：`truncate()`, `capitalize()`, `toKebabCase()`
 - 异步工具：`debounce()`, `throttle()`
+- Blob 转换：`blobToBase64()`, `pureBase64ToBlob()`, `dataUrlToBlob()`, `blobToDataUrl()`
+- 设备信息：`getDeviceId()`, `getDeviceName()`, `getDeviceType()`
+- 格式化：`formatSize()`, `formatDurationMs()`, `formatPercent()`, `formatRelativeTime()`
+- IndexedDB：`openIndexedDB()`, `getById()`, `getAll()`, `getAllWithCursor()`, `put()`, `deleteById()`
+
+#### 避免不必要的函数包装/别名
+
+**场景**: 导入工具函数后，创建了一个简单包装函数
+
+❌ **错误示例**:
+```typescript
+import { truncate, sanitizeRequestBody as sanitizeBody } from '@aitu/utils';
+
+// 错误：不必要的包装，没有添加任何功能
+const truncateText = (text: string, maxLength: number) => truncate(text, maxLength);
+const sanitizeRequestBody = sanitizeBody;
+
+// 使用
+log.prompt = truncateText(prompt, 2000);
+log.body = sanitizeRequestBody(body);
+```
+
+✅ **正确示例**:
+```typescript
+import { truncate, sanitizeRequestBody } from '@aitu/utils';
+
+// 正确：直接使用导入的函数
+log.prompt = truncate(prompt, 2000);
+log.body = sanitizeRequestBody(body);
+```
+
+**原因**:
+- 不必要的包装增加了代码量和阅读负担
+- 在调用链中增加了一层，调试时更难追踪
+- 如果确实需要别名，使用 `import { x as y }` 语法即可
 
 ### React 组件规范
 - 使用函数组件和 Hooks
@@ -1332,6 +1457,52 @@ const submitToSW = async (workflow) => {
 ```
 
 **原因**: Service Worker 的 `workflowHandler` 需要收到 `TASK_QUEUE_INIT` 消息后才会初始化。如果在 SW 初始化前提交工作流，消息会被暂存到 `pendingWorkflowMessages`，等待配置到达。若配置永远不到达（如 `swTaskQueueService.initialize()` 未被调用），工作流就永远不会开始执行，步骤状态保持 `pending`。
+
+### Service Worker 初始化统一入口
+
+**场景**: 需要确保 SW 客户端已初始化并配置好后再进行 API 调用
+
+❌ **错误示例**:
+```typescript
+// 错误：在各处重复 SW 初始化逻辑
+async function callSWApi() {
+  if (shouldUseSWTaskQueue()) {
+    if (!swChannelClient.isInitialized()) {
+      const settings = geminiSettings.get();
+      if (settings.apiKey && settings.baseUrl) {
+        await settingsManager.waitForInitialization();
+        await swChannelClient.initialize();
+        await swChannelClient.init({
+          geminiConfig: { apiKey: settings.apiKey, baseUrl: settings.baseUrl },
+          videoConfig: { baseUrl: settings.baseUrl },
+        });
+      }
+    }
+    // 使用 SW...
+  }
+}
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：使用统一入口
+async function callSWApi() {
+  const useSW = await swChannelClient.ensureReady();
+  
+  if (useSW) {
+    // 使用 SW...
+  } else {
+    // 降级到主线程...
+  }
+}
+```
+
+**统一入口说明**:
+- `swChannelClient.ensureReady()`: 统一的异步初始化入口，内部处理 URL 参数检查、设置验证、初始化和配置
+- `swTaskQueueService.initialize()`: 任务队列服务初始化，内部调用 `ensureReady()` + 设置 visibility 监听器
+- `shouldUseSWTaskQueue()`: 同步检查函数，仅用于判断模式，不进行初始化
+
+**原因**: 分散的 SW 初始化逻辑会导致代码重复、维护困难，且容易遗漏某些检查步骤。使用统一入口可以确保所有初始化逻辑集中管理，便于维护和调试。
 
 ### Service Worker 更新提示在开发模式下被跳过
 
@@ -2688,7 +2859,7 @@ export function useTaskQueue() {
 
 ✅ **正确示例**:
 ```typescript
-// 正确：渲染时从 SW 同步数据
+// 正确：渲染时直接从 IndexedDB 加载数据
 export function useTaskQueue() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const syncAttempted = useRef(false);
@@ -2697,34 +2868,96 @@ export function useTaskQueue() {
     setTasks(taskQueueService.getAllTasks());
   }, []);
 
-  // 渲染时从 SW 同步
+  // 渲染时从 IndexedDB 加载
   useEffect(() => {
     if (syncAttempted.current) return;
     syncAttempted.current = true;
 
-    const syncFromSW = async () => {
-      if (!shouldUseSWTaskQueue()) return;
-      await swTaskQueueService.syncTasksFromSW();
-      const swTasks = swTaskQueueService.getAllTasks();
-      if (swTasks.length > 0) {
-        taskQueueService.restoreTasks(swTasks);
+    const loadTasks = async () => {
+      // 直接从 IndexedDB 读取任务
+      const storedTasks = await taskStorageReader.getAllTasks();
+      if (storedTasks.length > 0) {
+        taskQueueService.restoreTasks(storedTasks);
       }
     };
-    syncFromSW();
+    loadTasks();
   }, []);
 }
 ```
 
 **原因**:
 - `taskQueueService` 是纯内存服务，页面刷新后数据丢失
-- `swTaskQueueService` 通过 SW 持久化数据到 IndexedDB
-- 组件渲染时需要从 SW 同步数据到本地服务，确保 UI 显示正确
+- 任务数据持久化在 IndexedDB 中，直接通过 `taskStorageReader` 读取
+- 避免 postMessage RPC 的 1MB 大小限制和通信不稳定性
 6. **响应数据格式可能有多种嵌套结构**，需要灵活解析而非假设单一格式
 
 **相关文件**:
 - `packages/drawnix/src/services/sw-channel/client.ts` - 主应用的 SW 通道客户端
 - `apps/web/src/sw/task-queue/channel-manager.ts` - SW 端的通道管理器
 - `apps/web/public/sw-debug/duplex-client.js` - 调试页面的 duplex 客户端
+
+### 降级模式（?sw=0）下任务必须自动执行
+
+**场景**: 用户通过 `?sw=0` URL 参数禁用 Service Worker，使用降级模式
+
+❌ **错误示例**:
+```typescript
+// 错误：降级模式下只创建任务，没有执行
+class TaskQueueService {
+  createTask(params: GenerationParams, type: TaskType): Task {
+    const task = { id: generateTaskId(), type, status: TaskStatus.PROCESSING, ... };
+    this.tasks.set(task.id, task);
+    this.persistTask(task);  // 保存到 IndexedDB
+    this.emitEvent('taskCreated', task);
+    return task;  // 任务被创建但永远不会执行！
+  }
+}
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：创建任务后自动触发执行
+class TaskQueueService {
+  createTask(params: GenerationParams, type: TaskType): Task {
+    const task = { id: generateTaskId(), type, status: TaskStatus.PROCESSING, ... };
+    this.tasks.set(task.id, task);
+    this.persistTask(task);
+    this.emitEvent('taskCreated', task);
+    
+    // 自动执行任务（fire-and-forget）
+    this.executeTask(task).catch((error) => {
+      console.error('[TaskQueueService] Task execution error:', error);
+    });
+    
+    return task;
+  }
+  
+  private async executeTask(task: Task): Promise<void> {
+    const executor = await executorFactory.getExecutor();
+    // 根据任务类型执行
+    if (task.type === TaskType.IMAGE) {
+      await executor.generateImage({ taskId: task.id, prompt: task.params.prompt, ... });
+    } else if (task.type === TaskType.VIDEO) {
+      await executor.generateVideo({ taskId: task.id, prompt: task.params.prompt, ... });
+    }
+    // 轮询等待完成
+    const result = await waitForTaskCompletion(task.id, { timeout: 10 * 60 * 1000 });
+    // 更新状态
+    ...
+  }
+}
+```
+
+**原因**:
+- SW 模式下，任务由 SW 自动执行（在 `submitToSW` 中）
+- 降级模式下，任务只保存到 IndexedDB，没有后台进程执行它们
+- `legacyTaskQueueService` 必须在 `createTask` 后自动调用 `executeTask`
+- 同样，`retryTask` 也需要在重置状态后触发执行
+
+**相关文件**:
+- `packages/drawnix/src/services/task-queue-service.ts` - 降级模式任务服务
+- `packages/drawnix/src/services/media-executor/factory.ts` - 执行器工厂
+- `packages/drawnix/src/services/media-executor/fallback-executor.ts` - 降级执行器
 
 ### 设置保存后需要主动更新 Service Worker 配置
 
@@ -3208,6 +3441,68 @@ catch (error) {
 - 在中间层创建新的 `Error` 对象会丢失这些属性
 - 如果需要在上层检查特殊错误类型，必须重新抛出原始错误
 - 或者在检查时同时检查 `error.message` 内容作为备选
+
+### LLM API 日志必须记录异步任务的 remoteId
+
+**场景**: 异步任务（视频生成、异步图片生成如 `nb24k-async`）需要记录远程任务 ID 便于调试和任务恢复追踪
+
+❌ **错误示例**:
+```typescript
+// failLLMApiLog 参数类型不支持 remoteId
+export function failLLMApiLog(
+  logId: string,
+  params: {
+    httpStatus?: number;
+    duration: number;
+    errorMessage: string;
+    responseBody?: string;
+    // 缺少 remoteId 字段
+  }
+): void { ... }
+
+// 调用时 remoteId 被忽略或导致类型错误
+failLLMApiLog(logId, {
+  duration,
+  errorMessage: msg,
+  remoteId: taskRemoteId,  // ❌ 类型错误
+});
+```
+
+✅ **正确示例**:
+```typescript
+// 参数类型支持 remoteId
+export function failLLMApiLog(
+  logId: string,
+  params: {
+    httpStatus?: number;
+    duration: number;
+    errorMessage: string;
+    responseBody?: string;
+    remoteId?: string;  // ✅ 支持异步任务 ID
+  }
+): void {
+  const log = memoryLogs.find(l => l.id === logId);
+  if (log) {
+    // ... 其他字段
+    if (params.remoteId) log.remoteId = params.remoteId;  // ✅ 记录 remoteId
+    updateLogInDB(log);
+  }
+}
+
+// completeLLMApiLog 同样需要支持
+export function completeLLMApiLog(
+  logId: string,
+  params: {
+    // ... 其他字段
+    remoteId?: string;  // ✅ 成功时也记录 remoteId
+  }
+): void { ... }
+```
+
+**原因**:
+- 异步任务通过 `remoteId` 标识后端任务，是恢复轮询的关键信息
+- 调试时需要通过 `remoteId` 追踪任务在后端的状态
+- `LLMApiLog` 接口已定义 `remoteId` 字段，日志函数参数也需要支持
 
 ### Service Worker 静态资源回退应尝试所有版本缓存
 
@@ -5836,6 +6131,110 @@ const modelId = chatMessage.aiContext?.model?.id;
 
 ---
 
+#### LLM 响应格式兼容性
+
+**场景**: 解析 AI 模型返回的工作流 JSON 时，不同模型返回格式可能不同。
+
+❌ **错误示例**:
+```typescript
+// 错误：只处理标准格式，忽略其他可能的格式
+function parseToolCalls(response: string) {
+  const parsed = JSON.parse(response);
+  // 只处理 {"content": "...", "next": [...]} 格式
+  return parsed.next.map(item => ({...}));
+}
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：支持多种 AI 返回格式
+function parseToolCalls(response: string): ToolCall[] {
+  // 格式 1: {"content": "分析完成", "next": [{"mcp": "...", "args": {...}}]}
+  const workflowJson = parseWorkflowJson(response);
+  if (workflowJson?.next.length > 0) {
+    return workflowJson.next.map(...);
+  }
+
+  // 格式 2: {"content": "[{\"mcp\": \"...\", \"args\": {...}}]"}
+  // content 字段本身是 JSON 数组字符串
+  if (next.length === 0 && parsed.content?.trim().startsWith('[')) {
+    const contentParsed = JSON.parse(parsed.content);
+    if (Array.isArray(contentParsed)) next = contentParsed;
+  }
+
+  // 格式 3: [{"mcp": "...", "args": {...}}] 直接数组
+  if (cleaned.trim().startsWith('[')) {
+    const parsed = JSON.parse(cleaned);
+    if (Array.isArray(parsed)) return parsed.map(...);
+  }
+
+  // 格式 4: 支持 name/mcp 和 arguments/args 字段名
+  const name = parsed.name || parsed.mcp;
+  const args = parsed.arguments || parsed.args || parsed.params;
+  
+  return toolCalls;
+}
+```
+
+**原因**: 不同 LLM 模型（GPT、Gemini、DeepSeek 等）对同一 prompt 可能返回不同格式的 JSON，必须兼容多种格式以确保工作流正确执行。
+
+---
+
+#### 工作流状态同步使用轮询机制
+
+**场景**: 在 UI 组件中同步工作流执行状态时。
+
+❌ **错误示例**:
+```typescript
+// 错误：完全依赖 SW 事件推送更新 UI
+useEffect(() => {
+  const subscription = workflowEvents.subscribe((event) => {
+    if (event.type === 'step_completed') {
+      setWorkflow(prev => updateStep(prev, event));
+    }
+  });
+  return () => subscription.unsubscribe();
+}, []);
+// 问题：SW 事件可能因连接断开、页面刷新等原因丢失
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：使用轮询 IndexedDB 作为可靠的同步机制
+// 1. 创建公共服务
+class WorkflowStatusSyncService {
+  subscribe(workflowId: string, callback: StatusChangeCallback): () => void {
+    // 定时从 IndexedDB 读取最新状态
+    // 检测变化后调用 callback
+  }
+}
+
+// 2. 提供 React Hook
+export function useWorkflowStatusSync(
+  workflowId: string | null,
+  onStatusChange: (change: WorkflowStatusChange) => void
+): void {
+  useEffect(() => {
+    if (!workflowId) return;
+    return workflowStatusSyncService.subscribe(workflowId, onStatusChange);
+  }, [workflowId]);
+}
+
+// 3. 多个组件共享同一服务（WorkZone、ChatDrawer 等）
+const runningWorkflowIds = useMemo(() => 
+  workflows.filter(w => w.status === 'running').map(w => w.id),
+[workflows]);
+
+useMultiWorkflowStatusSync(runningWorkflowIds, handleStatusChange);
+```
+
+**原因**: 
+1. SW 事件通道（postMessage）不可靠，页面刷新、SW 更新都可能导致事件丢失
+2. 轮询 IndexedDB 是"单一数据真相"原则的体现
+3. 多组件共享同一服务可避免重复轮询
+
+---
+
 ### UI 图标库规范
 
 #### 验证 TDesign 图标库导出名称
@@ -6220,6 +6619,84 @@ async submit(workflow: WorkflowDefinition): Promise<void> {
 
 **相关文件**:
 - `packages/drawnix/src/services/workflow-submission-service.ts`
+
+### 降级路径必须保持与 SW 模式相同的功能行为
+
+**场景**: 当 Service Worker 不可用时，代码会降级到主线程直接调用 API。降级路径需要保持与 SW 模式相同的功能行为，包括日志记录、错误处理等。
+
+❌ **错误示例**:
+```typescript
+// 错误：降级路径没有记录 LLM API 日志
+async function generateImageDirect(prompt: string): Promise<any> {
+  const response = await fetch('/images/generations', {
+    method: 'POST',
+    body: JSON.stringify({ prompt }),
+  });
+  return response.json();
+  // ❌ 没有记录日志，调试面板看不到这次调用
+}
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：降级路径也要记录日志
+import { startLLMApiLog, completeLLMApiLog, failLLMApiLog } from './llm-api-logger';
+
+async function generateImageDirect(prompt: string): Promise<any> {
+  const startTime = Date.now();
+  
+  // 开始记录
+  const logId = startLLMApiLog({
+    endpoint: '/images/generations',
+    model: modelName,
+    taskType: 'image',
+    prompt,
+  });
+  
+  try {
+    const response = await fetch('/images/generations', {
+      method: 'POST',
+      body: JSON.stringify({ prompt }),
+    });
+    
+    if (!response.ok) {
+      const error = await response.text();
+      failLLMApiLog(logId, {
+        httpStatus: response.status,
+        duration: Date.now() - startTime,
+        errorMessage: error,
+      });
+      throw new Error(error);
+    }
+    
+    const result = await response.json();
+    completeLLMApiLog(logId, {
+      httpStatus: response.status,
+      duration: Date.now() - startTime,
+      resultType: 'image',
+    });
+    return result;
+  } catch (error) {
+    failLLMApiLog(logId, {
+      duration: Date.now() - startTime,
+      errorMessage: error.message,
+    });
+    throw error;
+  }
+}
+```
+
+**原因**:
+- SW 模式和降级模式都写入同一个 IndexedDB（`llm-api-logs`）
+- 调试面板 `/sw-debug.html?tab=llmapi` 直接从 IndexedDB 读取日志
+- 如果降级路径不记录日志，调试时会漏掉这些 API 调用
+- 统一的日志记录有助于成本追踪和问题排查
+
+**相关文件**:
+- `packages/drawnix/src/services/media-executor/llm-api-logger.ts` - 主线程日志记录器
+- `apps/web/src/sw/task-queue/llm-api-logger.ts` - SW 日志记录器
+- `packages/drawnix/src/utils/gemini-api/services.ts` - `generateImageDirect`
+- `packages/drawnix/src/services/video-api-service.ts` - `submitVideoGeneration`
 
 ### 分页查询必须在服务端过滤
 
@@ -6701,4 +7178,111 @@ async deleteBoard(id: string) {
 - React useEffect 中的订阅可能在组件渲染后才建立
 - 热更新（HMR）可能导致旧的订阅被替换
 - 关键业务逻辑不应依赖于"某处可能存在的订阅者"
+
+### 自定义菜单/按钮组件的焦点样式和键盘导航
+
+**场景**: 实现自定义菜单、下拉列表等交互组件时
+
+❌ **错误示例**:
+```scss
+// 错误：没有处理焦点样式，浏览器会显示默认的蓝色边框
+.menu-item {
+  background-color: transparent;
+  border: 1px solid transparent;
+  // 缺少 outline 处理
+}
+```
+
+```tsx
+// 错误：菜单没有键盘导航支持
+const Menu = ({ children }) => {
+  return (
+    <div className="menu">
+      {children}
+    </div>
+  );
+};
+```
+
+✅ **正确示例**:
+```scss
+// 正确：移除默认焦点边框，用 focus-visible 提供键盘导航反馈
+.menu-item {
+  background-color: transparent;
+  border: 1px solid transparent;
+  outline: none;  // 移除浏览器默认蓝色焦点边框
+
+  &:hover {
+    background-color: var(--color-surface-primary-container);
+  }
+
+  &:focus-visible {
+    // 仅键盘导航时显示视觉反馈（鼠标点击不会触发）
+    background-color: var(--color-surface-primary-container);
+  }
+}
+```
+
+```tsx
+// 正确：完整的键盘导航和无障碍支持
+const Menu = ({ children, onClose }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const getFocusableItems = useCallback(() => {
+    return Array.from(
+      containerRef.current?.querySelectorAll<HTMLButtonElement>(
+        'button.menu-item:not([disabled])'
+      ) || []
+    );
+  }, []);
+
+  const handleKeyDown = useCallback((event: React.KeyboardEvent) => {
+    const items = getFocusableItems();
+    const currentIndex = items.findIndex(item => item === document.activeElement);
+
+    switch (event.key) {
+      case 'ArrowDown':
+        event.preventDefault();
+        items[(currentIndex + 1) % items.length]?.focus();
+        break;
+      case 'ArrowUp':
+        event.preventDefault();
+        items[(currentIndex - 1 + items.length) % items.length]?.focus();
+        break;
+      case 'Escape':
+        event.preventDefault();
+        onClose?.();
+        break;
+    }
+  }, [getFocusableItems, onClose]);
+
+  // 菜单打开时自动聚焦第一项
+  useEffect(() => {
+    requestAnimationFrame(() => {
+      getFocusableItems()[0]?.focus();
+    });
+  }, []);
+
+  return (
+    <div ref={containerRef} role="menu" onKeyDown={handleKeyDown}>
+      {children}
+    </div>
+  );
+};
+
+// MenuItem 添加 role="menuitem"
+const MenuItem = ({ onClick, children }) => (
+  <button className="menu-item" onClick={onClick} role="menuitem">
+    {children}
+  </button>
+);
+```
+
+**关键点**:
+- `outline: none` 移除浏览器默认蓝色焦点边框
+- `focus-visible` 仅在键盘导航时提供视觉反馈，鼠标点击不会触发
+- 支持 ↑↓ 箭头键循环切换焦点
+- 支持 Escape 关闭菜单
+- 菜单打开时自动聚焦第一项
+- 添加 `role="menu"` 和 `role="menuitem"` 支持无障碍
 

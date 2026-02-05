@@ -202,6 +202,7 @@ export const aiAnalyzeTool: SWMCPTool = {
       }
 
       let fullResponse: string;
+      let responseData: any = null;
 
       if (useStream) {
         // Streaming mode: parse SSE and accumulate content
@@ -216,16 +217,16 @@ export const aiAnalyzeTool: SWMCPTool = {
         });
       } else {
         // Non-streaming mode: parse JSON response
-        const data = await response.json();
-        fullResponse = data.choices?.[0]?.message?.content || '';
+        responseData = await response.json();
+        fullResponse = responseData.choices?.[0]?.message?.content || '';
       }
-      
+
       // Complete LLM API log
-      // 流式响应完成后，构造一个类似非流式的响应体用于调试显示
+      // 流式响应：构造类似非流式的响应体；非流式响应：记录完整的 JSON 响应
       const responseBodyForLog = useStream ? JSON.stringify({
         choices: [{ message: { content: fullResponse } }],
         _note: 'Reconstructed from streaming response',
-      }, null, 2) : undefined;
+      }, null, 2) : (responseData ? JSON.stringify(responseData, null, 2) : undefined);
       
       completeLLMApiLog(logId, {
         httpStatus: response.status,

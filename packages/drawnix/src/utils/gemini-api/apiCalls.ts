@@ -7,48 +7,9 @@
 import { GeminiConfig, GeminiMessage, GeminiResponse, VideoGenerationOptions } from './types';
 import { DEFAULT_CONFIG, VIDEO_DEFAULT_CONFIG } from './config';
 import { analytics } from '../posthog-analytics';
-import { shouldUseSWTaskQueue } from '../../services/task-queue';
 import { swChannelClient } from '../../services/sw-channel';
-import { geminiSettings, settingsManager } from '../settings-manager';
 import type { ChatStartParams, ChatMessage as SWChatMessage } from '../../services/sw-channel';
 import { isAuthError, dispatchApiAuthError } from '../api-auth-error-event';
-
-/**
- * 确保 SW 客户端已初始化
- */
-async function ensureSWInitialized(): Promise<boolean> {
-  if (!shouldUseSWTaskQueue()) {
-    return false;
-  }
-  
-  if (swChannelClient.isInitialized()) {
-    return true;
-  }
-  
-  const settings = geminiSettings.get();
-  if (!settings.apiKey || !settings.baseUrl) {
-    return false;
-  }
-  
-  try {
-    await settingsManager.waitForInitialization();
-    await swChannelClient.initialize();
-    const result = await swChannelClient.init({
-      geminiConfig: {
-        apiKey: settings.apiKey,
-        baseUrl: settings.baseUrl,
-        modelName: settings.chatModel,
-      },
-      videoConfig: {
-        baseUrl: settings.baseUrl,
-      },
-    });
-    return result.success;
-  } catch (error) {
-    console.error('[ApiCalls] SW client initialization failed:', error);
-    return false;
-  }
-}
 
 /**
  * 将 GeminiMessage 转换为 SW ChatMessage 格式
@@ -202,7 +163,7 @@ export async function callApiStreamRaw(
   signal?: AbortSignal
 ): Promise<GeminiResponse> {
   // 尝试使用 SW 模式
-  const useSW = await ensureSWInitialized();
+  const useSW = await swChannelClient.ensureReady();
   
   if (useSW) {
     // console.log('[ApiCalls] Using SW mode for streaming API call');

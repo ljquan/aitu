@@ -192,10 +192,390 @@ export interface PromptsData {
   imagePromptHistory: ImagePromptHistoryItem[];
 }
 
-/** 任务数据 - tasks.json */
+/** 任务数据 - tasks.json (旧格式，用于向后兼容) */
 export interface TasksData {
   /** 已完成的任务列表 */
   completedTasks: Task[];
+}
+
+// ====================================
+// 任务分页同步类型 (新格式)
+// ====================================
+
+/** 分页同步版本号 */
+export const PAGED_SYNC_VERSION = 1;
+
+/** 分页同步配置 */
+export const PAGED_SYNC_CONFIG = {
+  /** 每页最多任务数 */
+  MAX_TASKS_PER_PAGE: 50,
+  /** 每页最大大小（5MB） */
+  MAX_PAGE_SIZE: 5 * 1024 * 1024,
+  /** 每页最多工作流数 */
+  MAX_WORKFLOWS_PER_PAGE: 20,
+  /** 提示词预览截断长度 */
+  PROMPT_PREVIEW_LENGTH: 100,
+} as const;
+
+/** 任务索引 - task-index.json */
+export interface TaskIndex {
+  /** 版本号 */
+  version: number;
+  /** 更新时间 */
+  updatedAt: number;
+  /** 分页信息 */
+  pages: TaskPageInfo[];
+  /** 任务索引项（轻量元数据） */
+  items: TaskIndexItem[];
+}
+
+/** 任务分页信息 */
+export interface TaskPageInfo {
+  /** 分页 ID */
+  pageId: number;
+  /** 文件名 */
+  filename: string;
+  /** 任务数量 */
+  itemCount: number;
+  /** 总大小（字节） */
+  totalSize: number;
+  /** 更新时间 */
+  updatedAt: number;
+}
+
+/** 任务索引项（轻量元数据，用于增量同步判断） */
+export interface TaskIndexItem {
+  /** 任务 ID */
+  id: string;
+  /** 任务类型 */
+  type: string;
+  /** 任务状态 */
+  status: string;
+  /** 创建时间 */
+  createdAt: number;
+  /** 更新时间 */
+  updatedAt: number;
+  /** 完成时间 */
+  completedAt?: number;
+  /** 同步版本号（内容变更时递增，用于增量同步） */
+  syncVersion: number;
+  /** 所在分页 ID */
+  pageId: number;
+  /** 提示词预览（截断） */
+  promptPreview?: string;
+  /** 结果缩略图 URL */
+  thumbnailUrl?: string;
+}
+
+/** 任务详情分页 - tasks_p{n}.json */
+export interface TaskPage {
+  /** 分页 ID */
+  pageId: number;
+  /** 更新时间 */
+  updatedAt: number;
+  /** 精简的任务列表 */
+  tasks: CompactTask[];
+}
+
+/** 精简的任务结构（省略大字段） */
+export interface CompactTask {
+  /** 任务 ID */
+  id: string;
+  /** 任务类型 */
+  type: string;
+  /** 任务状态 */
+  status: string;
+  /** 生成参数（省略大字段） */
+  params: CompactGenerationParams;
+  /** 创建时间 */
+  createdAt: number;
+  /** 更新时间 */
+  updatedAt: number;
+  /** 开始时间 */
+  startedAt?: number;
+  /** 完成时间 */
+  completedAt?: number;
+  /** 精简的结果 */
+  result?: CompactTaskResult;
+  /** 精简的错误信息 */
+  error?: CompactTaskError;
+  /** 进度 */
+  progress?: number;
+  /** 远程任务 ID */
+  remoteId?: string;
+  /** 执行阶段 */
+  executionPhase?: string;
+  /** 是否已保存到媒体库 */
+  savedToLibrary?: boolean;
+  /** 是否已插入画布 */
+  insertedToCanvas?: boolean;
+  /** 同步版本号 */
+  syncVersion: number;
+}
+
+/** 精简的生成参数（省略大字段） */
+export interface CompactGenerationParams {
+  /** 提示词（可能被截断） */
+  prompt: string;
+  /** 宽度 */
+  width?: number;
+  /** 高度 */
+  height?: number;
+  /** 尺寸 */
+  size?: string;
+  /** 时长 */
+  duration?: number;
+  /** 风格 */
+  style?: string;
+  /** 模型 */
+  model?: string;
+  /** 是否自动插入画布 */
+  autoInsertToCanvas?: boolean;
+  /** 其他非大字段参数 */
+  [key: string]: unknown;
+}
+
+/** 精简的任务结果（省略大字段：chatResponse, toolCalls） */
+export interface CompactTaskResult {
+  /** 结果 URL */
+  url?: string;
+  /** 格式 */
+  format?: string;
+  /** 大小 */
+  size?: number;
+  /** 宽度 */
+  width?: number;
+  /** 高度 */
+  height?: number;
+  /** 时长 */
+  duration?: number;
+  /** 缩略图 URL */
+  thumbnailUrl?: string;
+  /** 角色用户名 */
+  characterUsername?: string;
+  /** 角色头像 URL */
+  characterProfileUrl?: string;
+  /** 角色永久链接 */
+  characterPermalink?: string;
+  /** 注意：省略 chatResponse 和 toolCalls 大字段 */
+}
+
+/** 精简的任务错误（省略 details.apiResponse） */
+export interface CompactTaskError {
+  /** 错误码 */
+  code: string;
+  /** 错误消息 */
+  message: string;
+  /** 注意：省略 details 大字段 */
+}
+
+// ====================================
+// 工作流分页同步类型
+// ====================================
+
+/** 工作流状态类型 */
+export type WorkflowSyncStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
+
+/** 工作流索引 - workflow-index.json */
+export interface WorkflowIndex {
+  /** 版本号 */
+  version: number;
+  /** 更新时间 */
+  updatedAt: number;
+  /** 分页信息 */
+  pages: WorkflowPageInfo[];
+  /** 工作流索引项（轻量元数据） */
+  items: WorkflowIndexItem[];
+}
+
+/** 工作流分页信息 */
+export interface WorkflowPageInfo {
+  /** 分页 ID */
+  pageId: number;
+  /** 文件名 */
+  filename: string;
+  /** 工作流数量 */
+  itemCount: number;
+  /** 总大小（字节） */
+  totalSize: number;
+  /** 更新时间 */
+  updatedAt: number;
+}
+
+/** 工作流索引项（轻量元数据） */
+export interface WorkflowIndexItem {
+  /** 工作流 ID */
+  id: string;
+  /** 工作流状态 */
+  status: WorkflowSyncStatus;
+  /** 步骤数量 */
+  stepCount: number;
+  /** 创建时间 */
+  createdAt: number;
+  /** 更新时间 */
+  updatedAt: number;
+  /** 完成时间 */
+  completedAt?: number;
+  /** 同步版本号 */
+  syncVersion: number;
+  /** 所在分页 ID */
+  pageId: number;
+  /** 用户输入预览 */
+  userInputPreview?: string;
+}
+
+/** 工作流详情分页 - workflows_p{n}.json */
+export interface WorkflowPage {
+  /** 分页 ID */
+  pageId: number;
+  /** 更新时间 */
+  updatedAt: number;
+  /** 精简的工作流列表 */
+  workflows: CompactWorkflow[];
+}
+
+/** 精简的工作流结构 */
+export interface CompactWorkflow {
+  /** 工作流 ID */
+  id: string;
+  /** 精简的步骤列表 */
+  steps: CompactWorkflowStep[];
+  /** 工作流状态 */
+  status: WorkflowSyncStatus;
+  /** 创建时间 */
+  createdAt: number;
+  /** 更新时间 */
+  updatedAt: number;
+  /** 完成时间 */
+  completedAt?: number;
+  /** 错误信息 */
+  error?: string;
+  /** 精简的上下文 */
+  context?: CompactWorkflowContext;
+  /** 发起画板 ID */
+  initiatorBoardId?: string;
+  /** 同步版本号 */
+  syncVersion: number;
+}
+
+/** 精简的工作流步骤 */
+export interface CompactWorkflowStep {
+  /** 步骤 ID */
+  id: string;
+  /** MCP 工具名 */
+  mcp: string;
+  /** 描述 */
+  description: string;
+  /** 步骤状态 */
+  status: string;
+  /** 精简的结果 */
+  result?: CompactWorkflowStepResult;
+  /** 错误信息 */
+  error?: string;
+  /** 执行时长 */
+  duration?: number;
+  /** 依赖步骤 */
+  dependsOn?: string[];
+  /** 注意：省略 args 大字段 */
+}
+
+/** 精简的工作流步骤结果 */
+export interface CompactWorkflowStepResult {
+  /** 是否成功 */
+  success: boolean;
+  /** 结果类型 */
+  type: 'image' | 'video' | 'text' | 'canvas' | 'error';
+  /** 精简的数据 */
+  data?: {
+    /** URL */
+    url?: string;
+    /** 任务 ID */
+    taskId?: string;
+    /** 多个任务 ID */
+    taskIds?: string[];
+    /** 注意：省略 content 等大字段 */
+  };
+  /** 错误信息 */
+  error?: string;
+}
+
+/** 精简的工作流上下文 */
+export interface CompactWorkflowContext {
+  /** 用户输入（可能被截断） */
+  userInput?: string;
+  /** 模型 */
+  model?: string;
+  /** 参数 */
+  params?: {
+    count?: number;
+    size?: string;
+    duration?: string;
+  };
+  /** 文本模型 */
+  textModel?: string;
+  /** 注意：省略 selection, referenceImages 等大字段 */
+}
+
+// ====================================
+// 分页同步辅助类型
+// ====================================
+
+/** 任务同步变更 */
+export interface TaskSyncChanges {
+  /** 需要上传的任务 ID */
+  toUpload: string[];
+  /** 需要下载的任务 ID */
+  toDownload: string[];
+  /** 需要上传的分页 ID */
+  pagesToUpload: number[];
+  /** 需要下载的分页 ID */
+  pagesToDownload: number[];
+  /** 跳过的任务 ID（终态且未变更） */
+  skipped: string[];
+}
+
+/** 工作流同步变更 */
+export interface WorkflowSyncChanges {
+  /** 需要上传的工作流 ID */
+  toUpload: string[];
+  /** 需要下载的工作流 ID */
+  toDownload: string[];
+  /** 需要上传的分页 ID */
+  pagesToUpload: number[];
+  /** 需要下载的分页 ID */
+  pagesToDownload: number[];
+  /** 跳过的工作流 ID */
+  skipped: string[];
+}
+
+/** 分页同步结果 */
+export interface PagedSyncResult {
+  /** 是否成功 */
+  success: boolean;
+  /** 上传的任务数 */
+  tasksUploaded: number;
+  /** 下载的任务数 */
+  tasksDownloaded: number;
+  /** 上传的工作流数 */
+  workflowsUploaded: number;
+  /** 下载的工作流数 */
+  workflowsDownloaded: number;
+  /** 跳过的任务数（终态未变更） */
+  tasksSkipped: number;
+  /** 跳过的工作流数 */
+  workflowsSkipped: number;
+  /** 错误信息 */
+  error?: string;
+}
+
+/** 任务同步格式类型 */
+export type TaskSyncFormat = 'legacy' | 'paged';
+
+/** 检测任务同步格式 */
+export function detectTaskSyncFormat(files: Record<string, string>): TaskSyncFormat {
+  if (files[SYNC_FILES_PAGED.TASK_INDEX]) return 'paged';
+  if (files[SYNC_FILES.TASKS]) return 'legacy';
+  return 'legacy';
 }
 
 /** 同步的媒体文件 - media_{base64url}.json（基于 URL） */
@@ -493,6 +873,32 @@ export const SYNC_FILES = {
   urlFromMediaFile: (filename: string) => decodeFilenameToUrl(filename),
   /** 判断是否是媒体文件 */
   isMediaFile: (filename: string) => filename.startsWith('media_') && filename.endsWith('.json'),
+} as const;
+
+/** 分页同步文件名常量 */
+export const SYNC_FILES_PAGED = {
+  /** 任务索引文件 */
+  TASK_INDEX: 'task-index.json',
+  /** 任务详情分页文件 */
+  taskPageFile: (pageId: number) => `tasks_p${pageId}.json`,
+  /** 判断是否是任务分页文件 */
+  isTaskPageFile: (filename: string) => /^tasks_p\d+\.json$/.test(filename),
+  /** 从文件名提取任务分页 ID */
+  getTaskPageId: (filename: string) => {
+    const match = filename.match(/^tasks_p(\d+)\.json$/);
+    return match ? parseInt(match[1], 10) : null;
+  },
+  /** 工作流索引文件 */
+  WORKFLOW_INDEX: 'workflow-index.json',
+  /** 工作流详情分页文件 */
+  workflowPageFile: (pageId: number) => `workflows_p${pageId}.json`,
+  /** 判断是否是工作流分页文件 */
+  isWorkflowPageFile: (filename: string) => /^workflows_p\d+\.json$/.test(filename),
+  /** 从文件名提取工作流分页 ID */
+  getWorkflowPageId: (filename: string) => {
+    const match = filename.match(/^workflows_p(\d+)\.json$/);
+    return match ? parseInt(match[1], 10) : null;
+  },
 } as const;
 
 /**

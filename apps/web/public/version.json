@@ -1,6 +1,9 @@
 {
-  "version": "0.5.68",
-  "buildTime": "2026-02-03T12:38:13.331Z",
+  "version": "0.5.72",
+  "buildTime": "2026-02-05T02:29:45.981Z",
   "gitCommit": "unknown",
-  "changelog": []
+  "changelog": [
+    "implement failed URL caching for external image requests",
+    "add master badge and enhance Gist handling"
+  ]
 }

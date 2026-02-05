@@ -221,7 +221,8 @@ export class ChatWorkflowClient {
    * Initialize event subscriptions when swChannelClient is ready
    */
   private initializeSubscriptions(): void {
-    // Wait for swChannelClient to be initialized
+    // Use the top-level imported swChannelClient
+    // The circular dependency is now resolved via sw-detection.ts isolation
     const checkAndSubscribe = () => {
       if (!swChannelClient.isInitialized()) {
         // Retry after a short delay
@@ -244,7 +245,7 @@ export class ChatWorkflowClient {
       ];
 
       for (const msgType of chatWorkflowTypes) {
-        const unsub = swChannelClient.subscribeToEvent(msgType, (message) => {
+        const unsub = swChannelClient.subscribeToEvent(msgType, (message: unknown) => {
           const typedMessage = message as ChatWorkflowSWToMainMessage;
           // Emit to subject
           this.messageSubject.next(typedMessage);
@@ -257,7 +258,8 @@ export class ChatWorkflowClient {
       this.initialized = true;
     };
 
-    checkAndSubscribe();
+    // Defer to next tick to ensure all modules are fully initialized
+    setTimeout(checkAndSubscribe, 0);
   }
 
   /**

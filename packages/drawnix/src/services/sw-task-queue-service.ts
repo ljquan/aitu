@@ -27,8 +27,13 @@ import {
   sanitizeGenerationParams,
 } from '../utils/validation-utils';
 import { swChannelClient, SWTask } from './sw-channel';
-import { geminiSettings, settingsManager } from '../utils/settings-manager';
+import { geminiSettings } from '../utils/settings-manager';
 import { taskStorageReader } from './task-storage-reader';
+import {
+  executorFactory,
+  taskStorageWriter,
+  waitForTaskCompletion,
+} from './media-executor';
 
 /**
  * Service Worker Task Queue Service
@@ -48,8 +53,11 @@ class SWTaskQueueService {
     this.tasks = new Map();
     this.taskUpdates$ = new Subject();
 
-    // Setup SW client handlers
-    this.setupSWClientHandlers();
+    // Defer SW client handler setup to avoid circular dependency issues
+    // swChannelClient may not be initialized at this point due to module load order
+    queueMicrotask(() => {
+      this.setupSWClientHandlers();
+    });
   }
 
   static getInstance(): SWTaskQueueService {
@@ -61,7 +69,7 @@ class SWTaskQueueService {
 
   /**
    * 设置 visibility 变化监听器
-   * 当页面变为可见时，主动从 SW 同步任务状态
+   * 当页面变为可见时，清除任务缓存，下次读取时会重新从 IndexedDB 获取最新数据
    * 这样即使事件丢失（如 SW 更新），也能获取到最新状态
    */
   private setupVisibilityListener(): void {
@@ -71,10 +79,8 @@ class SWTaskQueueService {
     this.visibilityListenerRegistered = true;
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible' && this.initialized) {
-        // 页面变为可见时，静默同步任务状态
-        this.syncTasksFromSW().catch(() => {
-          // 静默忽略错误
-        });
+        // 页面变为可见时，清除缓存，下次读取时会重新从 IndexedDB 获取
+        taskStorageReader.invalidateCache();
       }
     });
   }
@@ -107,35 +113,10 @@ class SWTaskQueueService {
    */
   private async doInitialize(): Promise<boolean> {
     try {
-      // Wait for settings manager to finish decrypting sensitive data
-      await settingsManager.waitForInitialization();
+      // 使用统一的 SW 初始化入口
+      const success = await swChannelClient.ensureReady();
       
-      const settings = geminiSettings.get();
-      if (!settings.apiKey || !settings.baseUrl) {
-        return false;
-      }
-
-      // Initialize SW channel
-      const success = await swChannelClient.initialize();
-      if (!success) {
-        return false;
-      }
-
-      // Initialize SW with config
-      const initResult = await swChannelClient.init({
-        geminiConfig: {
-          apiKey: settings.apiKey,
-          baseUrl: settings.baseUrl,
-          modelName: settings.imageModelName,
-          textModelName: settings.textModelName,
-        },
-        videoConfig: {
-          baseUrl: settings.baseUrl || 'https://api.tu-zi.com',
-          apiKey: settings.apiKey,
-        },
-      });
-
-      this.initialized = initResult.success;
+      this.initialized = success;
       if (this.initialized) {
         // 设置 visibility 监听器，页面可见时同步状态
         this.setupVisibilityListener();
@@ -250,11 +231,43 @@ class SWTaskQueueService {
   }
 
   async retryTask(taskId: string): Promise<void> {
+    // 检查本地状态（如果有）
     const task = this.tasks.get(taskId);
-    if (!task || (task.status !== TaskStatus.FAILED && task.status !== TaskStatus.CANCELLED)) {
+    if (task && task.status !== TaskStatus.FAILED && task.status !== TaskStatus.CANCELLED) {
       return;
     }
-    await swChannelClient.retryTask(taskId);
+    
+    // 优先尝试 SW 执行
+    if (swChannelClient.isInitialized()) {
+      console.log('[SWTaskQueueService] Retrying task via SW:', taskId);
+      await swChannelClient.retryTask(taskId);
+      return;
+    }
+    
+    // SW 不可用时，使用降级执行器
+    console.log('[SWTaskQueueService] SW not available, trying fallback for retry:', taskId);
+    if (task) {
+      // 重置任务状态
+      task.status = TaskStatus.PROCESSING;
+      task.error = undefined;
+      task.progress = 0;
+      task.startedAt = Date.now();
+      task.remoteId = undefined;
+      this.tasks.set(taskId, task);
+      this.emitEvent('taskUpdated', task);
+      
+      // 尝试降级执行
+      const canFallback = await this.tryFallbackExecution(task);
+      if (!canFallback) {
+        // 降级也失败，标记任务失败
+        task.status = TaskStatus.FAILED;
+        task.error = { code: 'FALLBACK_UNAVAILABLE', message: 'SW 和降级模式都不可用' };
+        this.tasks.set(taskId, task);
+        this.emitEvent('taskUpdated', task);
+      }
+    } else {
+      console.warn('[SWTaskQueueService] Cannot retry: task not found and SW not available');
+    }
   }
 
   async deleteTask(taskId: string): Promise<void> {
@@ -321,7 +334,7 @@ class SWTaskQueueService {
       result: task.result,
       error: task.error,
       progress: task.progress,
-      phase: task.executionPhase as SWTask['phase'],
+      executionPhase: task.executionPhase as SWTask['executionPhase'],
       insertedToCanvas: task.insertedToCanvas,
     };
   }
@@ -333,40 +346,6 @@ class SWTaskQueueService {
     hasMore: true,
     pageSize: 50,
   };
-
-  /**
-   * Sync tasks from IndexedDB to local state
-   * 只加载第一页，避免内存溢出
-   */
-  async syncTasksFromSW(): Promise<void> {
-    try {
-      if (await taskStorageReader.isAvailable()) {
-        // 获取所有任务并只取第一页
-        const allTasks = await taskStorageReader.getAllTasks();
-        const firstPageTasks = allTasks.slice(0, this.paginationState.pageSize);
-        
-        // 清空现有任务，重新加载
-        this.tasks.clear();
-        
-        for (const task of firstPageTasks) {
-          this.tasks.set(task.id, task);
-        }
-        
-        // 更新分页状态
-        this.paginationState.total = allTasks.length;
-        this.paginationState.loadedCount = firstPageTasks.length;
-        this.paginationState.hasMore = firstPageTasks.length < allTasks.length;
-        
-        // 如果同步到任务数据，标记为已初始化
-        if (this.paginationState.loadedCount > 0 && !this.initialized) {
-          this.initialized = true;
-          this.setupVisibilityListener();
-        }
-      }
-    } catch {
-      // 静默忽略同步错误
-    }
-  }
 
   /**
    * 加载更多任务（分页）
@@ -549,12 +528,17 @@ class SWTaskQueueService {
     if (!this.initialized) {
       const success = await this.initialize();
       if (!success) {
-        this.tasks.delete(task.id);
-        this.emitEvent('taskRejected', task, 'NO_API_KEY');
+        // SW 初始化失败，尝试降级模式
+        const canFallback = await this.tryFallbackExecution(task);
+        if (!canFallback) {
+          this.tasks.delete(task.id);
+          this.emitEvent('taskRejected', task, 'NO_API_KEY');
+        }
         return;
       }
     }
 
+    // 尝试使用 SW 执行
     const result = await swChannelClient.createTask({
       taskId: task.id,
       taskType: task.type as 'image' | 'video',
@@ -566,8 +550,127 @@ class SWTaskQueueService {
         this.tasks.delete(task.id);
         this.emitEvent('taskRejected', task, 'DUPLICATE');
       } else {
-        this.tasks.delete(task.id);
-        this.emitEvent('taskRejected', task, result.reason || 'UNKNOWN');
+        // SW 执行失败，尝试降级模式
+        const canFallback = await this.tryFallbackExecution(task);
+        if (!canFallback) {
+          this.tasks.delete(task.id);
+          this.emitEvent('taskRejected', task, result.reason || 'UNKNOWN');
+        }
+      }
+    }
+  }
+
+  /**
+   * 尝试使用降级执行器执行任务
+   * 当 SW 不可用时调用
+   */
+  private async tryFallbackExecution(task: Task): Promise<boolean> {
+    try {
+      // 检查是否有 API 配置
+      const settings = geminiSettings.get();
+      if (!settings.apiKey || !settings.baseUrl) {
+        return false;
+      }
+
+      // 使用执行器工厂获取执行器（会自动选择降级执行器）
+      const executor = await executorFactory.getExecutor();
+
+      // 先创建任务记录
+      await taskStorageWriter.createTask(
+        task.id,
+        task.type as 'image' | 'video' | 'character' | 'inspiration_board' | 'chat',
+        {
+          prompt: task.params.prompt,
+          ...task.params,
+        }
+      );
+
+      // 异步执行任务（fire-and-forget）
+      this.executeWithFallback(task, executor).catch((error) => {
+        console.error('[SWTaskQueue] Fallback execution error:', error);
+      });
+
+      return true;
+    } catch (error) {
+      console.error('[SWTaskQueue] Failed to start fallback execution:', error);
+      return false;
+    }
+  }
+
+  /**
+   * 使用降级执行器执行任务并监听结果
+   */
+  private async executeWithFallback(
+    task: Task,
+    executor: Awaited<ReturnType<typeof executorFactory.getExecutor>>
+  ): Promise<void> {
+    try {
+      // 根据任务类型执行
+      switch (task.type) {
+        case TaskType.IMAGE:
+          await executor.generateImage({
+            taskId: task.id,
+            prompt: task.params.prompt,
+            model: task.params.model,
+            size: task.params.size,
+            referenceImages: task.params.referenceImages as string[] | undefined,
+            count: task.params.count as number | undefined,
+          });
+          break;
+        case TaskType.VIDEO:
+          await executor.generateVideo({
+            taskId: task.id,
+            prompt: task.params.prompt,
+            model: task.params.model,
+            duration: task.params.duration?.toString(),
+            size: task.params.size,
+          });
+          break;
+        default:
+          throw new Error(`Unsupported task type for fallback: ${task.type}`);
+      }
+
+      // 轮询等待任务完成
+      const result = await waitForTaskCompletion(task.id, {
+        timeout: 10 * 60 * 1000, // 10 分钟
+        onProgress: (updatedTask) => {
+          // 更新本地状态
+          const localTask = this.tasks.get(task.id);
+          if (localTask) {
+            localTask.status = updatedTask.status;
+            localTask.progress = updatedTask.progress;
+            localTask.updatedAt = Date.now();
+            this.emitEvent('taskStatus', localTask);
+          }
+        },
+      });
+
+      // 更新本地状态
+      const localTask = this.tasks.get(task.id);
+      if (localTask && result.task) {
+        localTask.status = result.task.status;
+        localTask.result = result.task.result;
+        localTask.error = result.task.error;
+        localTask.completedAt = result.task.completedAt;
+        localTask.updatedAt = Date.now();
+
+        if (result.success) {
+          this.emitEvent('taskCompleted', localTask);
+        } else {
+          this.emitEvent('taskFailed', localTask);
+        }
+      }
+    } catch (error: any) {
+      // 更新任务失败状态
+      const localTask = this.tasks.get(task.id);
+      if (localTask) {
+        localTask.status = TaskStatus.FAILED;
+        localTask.error = {
+          code: 'FALLBACK_ERROR',
+          message: error.message || 'Fallback execution failed',
+        };
+        localTask.updatedAt = Date.now();
+        this.emitEvent('taskFailed', localTask);
       }
     }
   }

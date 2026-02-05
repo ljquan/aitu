@@ -6,69 +6,15 @@
  */
 
 import JSZip from 'jszip';
-import { sanitizeFilename, isVolcesDomain, getFileExtension } from '@aitu/utils';
-
-/**
- * Open URL in new tab (fallback for CORS-restricted domains)
- * User can right-click to save the file
- */
-export function openInNewTab(url: string): void {
-  window.open(url, '_blank');
-}
-
-/**
- * Download from an existing Blob directly
- * Useful when we already have the blob cached locally
- *
- * @param blob - The blob to download
- * @param filename - The filename to save as
- */
-export function downloadFromBlob(blob: Blob, filename: string): void {
-  // 确保 Blob 有正确的 MIME 类型
-  const blobUrl = URL.createObjectURL(blob);
-
-  const link = document.createElement('a');
-  link.href = blobUrl;
-  link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-
-  // 延迟释放 URL，确保下载完成
-  setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
-}
-
-/**
- * Download a file from URL
- * Handles cross-origin URLs by fetching as blob first
- * SW will deduplicate concurrent requests to the same URL
- *
- * @param url - The URL of the file to download
- * @param filename - Optional filename (will be sanitized if provided)
- * @returns Promise that resolves when download is complete
- */
-export async function downloadFile(
-  url: string,
-  filename?: string
-): Promise<void> {
-  // Fetch the file as blob to handle cross-origin URLs
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error(`HTTP error! status: ${response.status}`);
-  }
-  const blob = await response.blob();
-
-  // Determine filename
-  let finalFilename = filename;
-  if (!finalFilename) {
-    // Try to extract filename from URL
-    const urlPath = new URL(url).pathname;
-    finalFilename = urlPath.substring(urlPath.lastIndexOf('/') + 1) || 'download';
-  }
-
-  // Use downloadFromBlob to trigger download
-  downloadFromBlob(blob, finalFilename);
-}
+import {
+  sanitizeFilename,
+  isVolcesDomain,
+  getFileExtension,
+  downloadFromBlob,
+  downloadFile,
+  openInNewTab,
+  processBatchWithConcurrency,
+} from '@aitu/utils';
 
 /**
  * Download a media file with auto-generated filename from prompt
@@ -97,8 +43,6 @@ export async function downloadMediaFile(
   return downloadFile(url, filename);
 }
 
-// getFileExtension is now re-exported from @aitu/utils above
-
 /**
  * 批量下载项接口
  */
@@ -109,32 +53,6 @@ export interface BatchDownloadItem {
   type: 'image' | 'video';
   /** 可选文件名 */
   filename?: string;
-}
-
-/**
- * 带并发限制的批量处理
- * @param items 要处理的项目
- * @param handler 处理函数
- * @param concurrency 并发数限制
- */
-async function processBatchWithConcurrency<T, R>(
-  items: T[],
-  handler: (item: T, index: number) => Promise<R>,
-  concurrency: number = 3
-): Promise<R[]> {
-  const results: R[] = [];
-  let currentIndex = 0;
-  
-  const workers = Array(Math.min(concurrency, items.length)).fill(null).map(async () => {
-    while (currentIndex < items.length) {
-      const index = currentIndex++;
-      const result = await handler(items[index], index);
-      results[index] = result;
-    }
-  });
-  
-  await Promise.all(workers);
-  return results;
 }
 
 /**

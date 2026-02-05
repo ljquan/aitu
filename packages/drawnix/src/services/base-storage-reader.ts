@@ -110,9 +110,6 @@ export abstract class BaseStorageReader<TCache> {
       // 缓存结果
       this.availabilityChecked = true;
       this.isAvailableResult = hasStore;
-      
-      // 只在首次检查时输出日志
-      console.log(`[${this.logPrefix}] isAvailable:`, hasStore);
       return hasStore;
     } catch (error) {
       console.warn(`[${this.logPrefix}] isAvailable failed:`, error);

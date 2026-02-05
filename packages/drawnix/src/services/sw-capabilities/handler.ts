@@ -288,15 +288,15 @@ export class SWCapabilitiesHandler {
   private async handleMindmap(params: MindmapParams): Promise<CapabilityResult> {
     const board = boardRef;
     if (!board) {
+      console.error('[SWCapabilities] ❌ handleMindmap: 画布未初始化');
       return { success: false, error: '画布未初始化', type: 'error' };
     }
 
     const { markdown } = params;
     if (!markdown) {
+      console.error('[SWCapabilities] ❌ handleMindmap: 缺少 markdown 参数');
       return { success: false, error: '缺少 markdown 参数', type: 'error' };
     }
-
-    // console.log('[SWCapabilities] handleMindmap called, markdown length:', markdown.length);
 
     try {
       // Dynamic import markdown-to-drawnix
@@ -331,7 +331,6 @@ export class SWCapabilitiesHandler {
 
       // Insert to canvas at viewport center
       const insertResult = this.insertElementsToCanvasAtPoint(board, [mindElement], viewportCenter);
-      // console.log('[SWCapabilities] Insert result:', insertResult);
 
       if (insertResult.success) {
         // Center the inserted mindmap in viewport after a short delay
@@ -341,17 +340,17 @@ export class SWCapabilitiesHandler {
 
         if (targetWorkZone) {
           // Remove the WorkZone after successful insertion
-          // console.log('[SWCapabilities] Removing WorkZone:', targetWorkZone.id);
           setTimeout(() => {
             WorkZoneTransforms.removeWorkZone(board, targetWorkZone!.id);
-            // console.log('[SWCapabilities] WorkZone removed successfully');
-            
+
             // Dispatch event to notify AI input bar that generation is complete
             window.dispatchEvent(new CustomEvent('ai-generation-complete', {
               detail: { type: 'mindmap', success: true }
             }));
           }, 100);
         }
+      } else {
+        console.error('[SWCapabilities] ❌ Mindmap insert failed:', insertResult.error);
       }
 
       return {
@@ -361,7 +360,7 @@ export class SWCapabilitiesHandler {
         error: insertResult.error,
       };
     } catch (error: any) {
-      console.error('[SWCapabilities] Mindmap conversion failed:', error);
+      console.error('[SWCapabilities] ❌ Mindmap conversion failed:', error);
       return {
         success: false,
         error: `思维导图转换失败: ${error.message}`,

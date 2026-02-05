@@ -8,7 +8,7 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Task, TaskType } from '../types/task.types';
-import { swTaskQueueService, shouldUseSWTaskQueue } from '../services/task-queue';
+import { taskQueueService } from '../services/task-queue';
 import { taskStorageReader } from '../services/task-storage-reader';
 
 export interface UseFilteredTaskQueueOptions {
@@ -65,15 +65,15 @@ export function useFilteredTaskQueue(
   // 重试延迟（毫秒）
   const retryDelay = 500;
 
-  // 加载任务数据（优先直接读取 IndexedDB，避免 postMessage 限制）
+  // 加载任务数据（直接读取 IndexedDB，无论 SW 模式还是降级模式）
   const loadTasks = useCallback(async (offset = 0, append = false): Promise<boolean> => {
-    if (!shouldUseSWTaskQueue() || taskType === undefined) {
+    if (taskType === undefined) {
       setIsLoading(false);
       return false;
     }
 
     try {
-      // 直接从 IndexedDB 读取
+      // 直接从 IndexedDB 读取（SW 模式和降级模式都使用同一个数据库）
       if (await taskStorageReader.isAvailable()) {
         const result = await taskStorageReader.getTasksByType(taskType, offset, pageSize);
         
@@ -91,23 +91,7 @@ export function useFilteredTaskQueue(
         return true;
       }
       
-      // Fallback: 通过 swTaskQueueService 获取
-      const result = await swTaskQueueService.loadTasksByType(taskType, offset, pageSize);
-      
-      if (result.success) {
-        if (append) {
-          setTasks(prev => {
-            const existingIds = new Set(prev.map(t => t.id));
-            const newTasks = result.tasks.filter(t => !existingIds.has(t.id));
-            return [...prev, ...newTasks];
-          });
-        } else {
-          setTasks(result.tasks);
-        }
-        setTotalCount(result.total);
-        setHasMore(result.hasMore);
-        return true;
-      }
+      // taskStorageReader 不可用，返回失败
       return false;
     } catch {
       // 静默忽略错误
@@ -155,10 +139,9 @@ export function useFilteredTaskQueue(
   }, [loadTasks, taskType, retryCount]);
 
   // 监听任务更新事件（新任务创建、状态变化等）
+  // SW 模式和降级模式都使用 taskQueueService（它会根据模式选择正确的服务）
   useEffect(() => {
-    if (!shouldUseSWTaskQueue()) return;
-
-    const subscription = swTaskQueueService.observeTaskUpdates().subscribe((event) => {
+    const subscription = taskQueueService.observeTaskUpdates().subscribe((event) => {
       if (event.type === 'taskCreated' && event.task.type === taskType) {
         // 新任务添加到列表头部
         setTasks(prev => {
@@ -206,14 +189,14 @@ export function useFilteredTaskQueue(
     }
   }, [loadTasks, taskType]);
 
-  // 重试任务
+  // 重试任务（使用 taskQueueService，它会根据模式选择正确的服务）
   const retryTask = useCallback((taskId: string) => {
-    swTaskQueueService.retryTask(taskId);
+    taskQueueService.retryTask(taskId);
   }, []);
 
-  // 删除任务
+  // 删除任务（使用 taskQueueService，它会根据模式选择正确的服务）
   const deleteTask = useCallback((taskId: string) => {
-    swTaskQueueService.deleteTask(taskId);
+    taskQueueService.deleteTask(taskId);
   }, []);
 
   // 计算已加载数量

@@ -5,14 +5,19 @@
  * 使用通用的媒体生成工具函数来减少重复代码
  */
 
-import type { SWTask, TaskResult, HandlerConfig, TaskHandler } from '../types';
+import type {
+  SWTask,
+  TaskResult,
+  HandlerConfig,
+  TaskHandler,
+} from '../types';
 import { TaskExecutionPhase } from '../types';
 import {
   mergeReferenceImages,
   pollVideoUntilComplete,
   fetchImageWithCache,
   parseSize,
-  cropImageToAspectRatio,
+  fitImageToCanvas,
 } from '../utils/media-generation-utils';
 import type { LLMReferenceImage } from '../llm-api-logger';
 
@@ -34,19 +39,12 @@ interface SubmitResult {
   logId: string;
 }
 
-interface KlingSubmitResult {
-  taskId: string;
-  logId: string;
-  action2: 'text2video' | 'image2video';
-}
-
 /**
  * Video generation handler
  */
 export class VideoHandler implements TaskHandler {
   private abortControllers: Map<string, AbortController> = new Map();
-  private pollingIntervals: Map<string, ReturnType<typeof setInterval>> =
-    new Map();
+  private pollingIntervals: Map<string, ReturnType<typeof setInterval>> = new Map();
 
   /**
    * Execute video generation task
@@ -56,15 +54,14 @@ export class VideoHandler implements TaskHandler {
     this.abortControllers.set(task.id, abortController);
 
     try {
-      if (this.isKlingModel((task.params as any)?.model)) {
-        return await this.executeKling(task, config, abortController.signal);
-      }
-
       config.onProgress(task.id, 0, TaskExecutionPhase.SUBMITTING);
 
       // Submit video generation request
-      const { response: submitResponse, logId } =
-        await this.submitVideoGeneration(task, config, abortController.signal);
+      const { response: submitResponse, logId } = await this.submitVideoGeneration(
+        task,
+        config,
+        abortController.signal
+      );
 
       // Notify remote ID
       config.onRemoteId(task.id, submitResponse.id);
@@ -104,20 +101,7 @@ export class VideoHandler implements TaskHandler {
     const logId = originalLog?.id;
 
     try {
-      if (this.isKlingModel((task.params as any)?.model)) {
-        return await this.resumeKling(
-          task,
-          config,
-          abortController.signal,
-          logId
-        );
-      }
-
-      config.onProgress(
-        task.id,
-        task.progress || 0,
-        TaskExecutionPhase.POLLING
-      );
+      config.onProgress(task.id, task.progress || 0, TaskExecutionPhase.POLLING);
 
       const result = await this.pollUntilComplete(
         task.remoteId,
@@ -138,279 +122,6 @@ export class VideoHandler implements TaskHandler {
    */
   cancel(taskId: string): void {
     this.cleanup(taskId);
-  }
-
-  private isKlingModel(model?: string): boolean {
-    return !!model && model.startsWith('kling');
-  }
-
-  private normalizeKlingBaseUrl(baseUrl: string): string {
-    const trimmed = baseUrl.replace(/\/$/, '');
-    return trimmed.endsWith('/v1') ? trimmed.slice(0, -3) : trimmed;
-  }
-
-  private deriveAspectRatio(size?: string): string | undefined {
-    if (!size || !size.includes('x')) return undefined;
-    const [wRaw, hRaw] = size.split('x');
-    const width = Number(wRaw);
-    const height = Number(hRaw);
-    if (!width || !height) return undefined;
-    const gcd = (a: number, b: number): number => (b === 0 ? a : gcd(b, a % b));
-    const div = gcd(width, height);
-    return `${width / div}:${height / div}`;
-  }
-
-  private async executeKling(
-    task: SWTask,
-    config: HandlerConfig,
-    signal: AbortSignal
-  ): Promise<TaskResult> {
-    config.onProgress(task.id, 0, TaskExecutionPhase.SUBMITTING);
-
-    const { taskId, logId, action2 } = await this.submitKlingVideoGeneration(
-      task,
-      config,
-      signal
-    );
-
-    config.onRemoteId(task.id, taskId);
-    config.onProgress(task.id, 5, TaskExecutionPhase.POLLING);
-
-    return await this.pollKlingUntilComplete(
-      taskId,
-      action2,
-      task.id,
-      config,
-      signal,
-      logId
-    );
-  }
-
-  private async resumeKling(
-    task: SWTask,
-    config: HandlerConfig,
-    signal: AbortSignal,
-    logId?: string
-  ): Promise<TaskResult> {
-    const action2: 'text2video' | 'image2video' =
-      ((task.params as any)?.klingAction2 as
-        | 'text2video'
-        | 'image2video'
-        | undefined) ||
-      ((task.params as any)?.uploadedImages?.length > 0 ||
-      (task.params as any)?.referenceImages?.length > 0
-        ? 'image2video'
-        : 'text2video');
-
-    return await this.pollKlingUntilComplete(
-      task.remoteId!,
-      action2,
-      task.id,
-      config,
-      signal,
-      logId
-    );
-  }
-
-  private async submitKlingVideoGeneration(
-    task: SWTask,
-    config: HandlerConfig,
-    signal: AbortSignal
-  ): Promise<KlingSubmitResult> {
-    const { videoConfig } = config;
-    const { params } = task as any;
-
-    const refUrls = mergeReferenceImages({
-      referenceImages: params.referenceImages as string[] | undefined,
-      uploadedImages: params.uploadedImages as any[] | undefined,
-      inputReference: params.inputReference as string | undefined,
-      inputReferences: params.inputReferences as any[] | undefined,
-    });
-
-    const action2: 'text2video' | 'image2video' =
-      (params.klingAction2 as 'text2video' | 'image2video' | undefined) ||
-      (refUrls.length > 0 ? 'image2video' : 'text2video');
-
-    if (action2 === 'image2video' && refUrls.length === 0) {
-      throw new Error('Kling image2video requires a reference image');
-    }
-
-    const baseUrl = this.normalizeKlingBaseUrl(videoConfig.baseUrl);
-    const aspectRatio =
-      params.aspect_ratio || this.deriveAspectRatio(params.size);
-    const duration = params.duration || params.seconds;
-
-    const body = {
-      model_name: params.model || 'kling-v1-5',
-      prompt: params.prompt,
-      image: refUrls[0],
-      aspect_ratio: aspectRatio,
-      duration: duration ? String(duration) : undefined,
-      ...(params.params || {}),
-    };
-
-    const { debugFetch } = await import('../debug-fetch');
-    const { startLLMApiLog, failLLMApiLog } = await import('../llm-api-logger');
-
-    const startTime = Date.now();
-    const logId = startLLMApiLog({
-      endpoint: `/kling/v1/videos/${action2}`,
-      model: params.model || 'kling-v1-5',
-      taskType: 'video',
-      prompt: params.prompt as string,
-      requestBody: JSON.stringify(body, null, 2),
-      hasReferenceImages: refUrls.length > 0,
-      referenceImageCount: refUrls.length,
-      taskId: task.id,
-    });
-
-    const response = await debugFetch(
-      `${baseUrl}/kling/v1/videos/${action2}`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(videoConfig.apiKey
-            ? { Authorization: `Bearer ${videoConfig.apiKey}` }
-            : {}),
-        },
-        body: JSON.stringify(body),
-        signal,
-      },
-      {
-        label: `🎬 提交 Kling 视频生成 (${params.model || 'kling-v1-5'})`,
-        logResponseBody: true,
-      }
-    );
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      failLLMApiLog(logId, {
-        httpStatus: response.status,
-        duration: Date.now() - startTime,
-        errorMessage: errorText,
-        responseBody: errorText,
-      });
-      throw new Error(
-        `Kling submission failed: ${response.status} - ${errorText}`
-      );
-    }
-
-    const data = await response.json();
-    const taskId = data?.data?.task_id;
-    if (!taskId) {
-      throw new Error('Kling submission missing task_id');
-    }
-
-    return { taskId, logId, action2 };
-  }
-
-  private async pollKlingUntilComplete(
-    taskId: string,
-    action2: 'text2video' | 'image2video',
-    localTaskId: string,
-    config: HandlerConfig,
-    signal: AbortSignal,
-    logId?: string
-  ): Promise<TaskResult> {
-    const { videoConfig } = config;
-    const { debugFetch } = await import('../debug-fetch');
-    const { completeLLMApiLog, failLLMApiLog } = await import(
-      '../llm-api-logger'
-    );
-    const startTime = Date.now();
-    const baseUrl = this.normalizeKlingBaseUrl(videoConfig.baseUrl);
-
-    for (let attempt = 0; attempt < 1080; attempt += 1) {
-      await new Promise((resolve) => setTimeout(resolve, 5000));
-
-      const response = await debugFetch(
-        `${baseUrl}/kling/v1/videos/${action2}/${taskId}`,
-        {
-          method: 'GET',
-          headers: videoConfig.apiKey
-            ? { Authorization: `Bearer ${videoConfig.apiKey}` }
-            : undefined,
-          signal,
-        },
-        {
-          label: `🎬 查询 Kling 视频任务 (${taskId})`,
-          logResponseBody: true,
-        }
-      );
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        if (logId) {
-          failLLMApiLog(logId, {
-            httpStatus: response.status,
-            duration: Date.now() - startTime,
-            errorMessage: errorText,
-            responseBody: errorText,
-          });
-        }
-        throw new Error(
-          `Kling query failed: ${response.status} - ${errorText}`
-        );
-      }
-
-      const data = await response.json();
-      const status = data?.data?.task_status;
-
-      if (status === 'succeed') {
-        const videoUrl = data?.data?.task_result?.videos?.[0]?.url;
-        if (!videoUrl) {
-          throw new Error('No video URL in Kling response');
-        }
-
-        if (logId) {
-          completeLLMApiLog(logId, {
-            httpStatus: 200,
-            duration: Date.now() - startTime,
-            resultType: 'video',
-            resultCount: 1,
-            resultUrl: videoUrl,
-            responseBody: JSON.stringify(data),
-          });
-        }
-
-        return {
-          url: videoUrl,
-          format: 'mp4',
-          size: 0,
-          duration:
-            parseFloat(data?.data?.task_result?.videos?.[0]?.duration || '0') ||
-            0,
-        };
-      }
-
-      if (status === 'failed') {
-        const message =
-          data?.data?.task_status_msg || 'Kling generation failed';
-        if (logId) {
-          failLLMApiLog(logId, {
-            duration: Date.now() - startTime,
-            errorMessage: message,
-            responseBody: JSON.stringify(data),
-          });
-        }
-        throw new Error(message);
-      }
-
-      config.onProgress(
-        localTaskId,
-        5 + Math.min(90, attempt * 0.1),
-        TaskExecutionPhase.POLLING
-      );
-    }
-
-    if (logId) {
-      failLLMApiLog(logId, {
-        duration: Date.now() - startTime,
-        errorMessage: 'Kling generation timeout',
-      });
-    }
-    throw new Error('Kling generation timeout');
   }
 
   /**
@@ -449,7 +160,7 @@ export class VideoHandler implements TaskHandler {
     // 同时收集裁剪后的图片信息用于日志
     const { getImageInfo } = await import('../utils/media-generation-utils');
     const referenceImageInfos: LLMReferenceImage[] = [];
-
+    
     if (refUrls.length > 0) {
       // 解析目标尺寸
       const targetSize = params.size ? parseSize(params.size as string) : null;
@@ -460,16 +171,12 @@ export class VideoHandler implements TaskHandler {
           // 使用通用函数从缓存获取图片
           let blob = await fetchImageWithCache(url, signal);
           if (blob) {
-            // 如果指定了目标尺寸，裁剪图片到匹配的宽高比
+            // 如果指定了目标尺寸，将图片适配到精确的目标尺寸（居中放置，主色调填充背景）
             if (targetSize) {
-              blob = await cropImageToAspectRatio(
-                blob,
-                targetSize.width,
-                targetSize.height
-              );
+              blob = await fitImageToCanvas(blob, targetSize.width, targetSize.height);
             }
-
-            // 获取裁剪后的图片信息用于日志
+            
+            // 获取处理后的图片信息用于日志
             try {
               const info = await getImageInfo(blob, signal);
               referenceImageInfos.push({
@@ -479,32 +186,19 @@ export class VideoHandler implements TaskHandler {
                 height: info.height,
               });
             } catch (err) {
-              console.warn(
-                `[VideoHandler] Failed to get cropped image info for log`,
-                err
-              );
-              referenceImageInfos.push({
-                url,
-                size: blob.size,
-                width: 0,
-                height: 0,
-              });
+              console.warn(`[VideoHandler] Failed to get processed image info for log`, err);
+              referenceImageInfos.push({ url, size: blob.size, width: 0, height: 0 });
             }
-
+            
             formData.append('input_reference', blob, `reference-${i + 1}.png`);
           } else {
             // 缓存和网络都失败时，回退到发送 URL
-            console.warn(
-              `[VideoHandler] Failed to get reference image: ${url}`
-            );
+            console.warn(`[VideoHandler] Failed to get reference image: ${url}`);
             formData.append('input_reference', url);
             referenceImageInfos.push({ url, size: 0, width: 0, height: 0 });
           }
         } catch (err) {
-          console.warn(
-            `[VideoHandler] Error fetching reference image: ${url}`,
-            err
-          );
+          console.warn(`[VideoHandler] Error fetching reference image: ${url}`, err);
           formData.append('input_reference', url);
           referenceImageInfos.push({ url, size: 0, width: 0, height: 0 });
         }
@@ -513,24 +207,20 @@ export class VideoHandler implements TaskHandler {
 
     // Import loggers
     const { debugFetch } = await import('../debug-fetch');
-    const { startLLMApiLog, completeLLMApiLog, failLLMApiLog } = await import(
-      '../llm-api-logger'
-    );
-
+    const { startLLMApiLog, completeLLMApiLog, failLLMApiLog } = await import('../llm-api-logger');
+    
     const startTime = Date.now();
     const model = (params.model as string) || 'veo3';
-
+    
     // 构建请求参数的日志表示（FormData 无法直接序列化）
     const requestParamsForLog = {
       model,
       prompt: params.prompt,
       ...(params.duration && { seconds: params.duration }),
       ...(params.size && { size: params.size }),
-      ...(refUrls.length > 0 && {
-        input_reference: `[${refUrls.length} images]`,
-      }),
+      ...(refUrls.length > 0 && { input_reference: `[${refUrls.length} images]` }),
     };
-
+    
     const logId = startLLMApiLog({
       endpoint: '/videos',
       model,
@@ -544,21 +234,17 @@ export class VideoHandler implements TaskHandler {
     });
 
     // Use debugFetch for logging
-    const response = await debugFetch(
-      `${videoConfig.baseUrl}/videos`,
-      {
-        method: 'POST',
-        headers: videoConfig.apiKey
-          ? { Authorization: `Bearer ${videoConfig.apiKey}` }
-          : undefined,
-        body: formData,
-        signal,
-      },
-      {
-        label: `🎬 提交视频生成 (${model})`,
-        logResponseBody: true,
-      }
-    );
+    const response = await debugFetch(`${videoConfig.baseUrl}/videos`, {
+      method: 'POST',
+      headers: videoConfig.apiKey
+        ? { Authorization: `Bearer ${videoConfig.apiKey}` }
+        : undefined,
+      body: formData,
+      signal,
+    }, {
+      label: `🎬 提交视频生成 (${model})`,
+      logResponseBody: true,
+    });
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -568,9 +254,7 @@ export class VideoHandler implements TaskHandler {
         errorMessage: errorText,
         responseBody: errorText,
       });
-      throw new Error(
-        `Video submission failed: ${response.status} - ${errorText}`
-      );
+      throw new Error(`Video submission failed: ${response.status} - ${errorText}`);
     }
 
     const data = await response.json();

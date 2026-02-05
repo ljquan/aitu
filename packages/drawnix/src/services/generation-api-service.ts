@@ -89,8 +89,6 @@ class GenerationAPIService {
     });
 
     try {
-      // console.log(`[GenerationAPI] Starting generation for task ${taskId} (${type})`);
-
       // Get timeout for this task type
       const timeout =
         TASK_TIMEOUT[type.toUpperCase() as keyof typeof TASK_TIMEOUT];
@@ -117,7 +115,6 @@ class GenerationAPIService {
       const result = await Promise.race([generationPromise, timeoutPromise]);
 
       const duration = Date.now() - startTime;
-      // console.log(`[GenerationAPI] Generation completed for task ${taskId}`);
 
       // Track success
       analytics.trackModelSuccess({
@@ -350,8 +347,6 @@ class GenerationAPIService {
 
       // 获取 quality 参数（如果有）
       const quality = (params as any).quality as '1k' | '2k' | '4k' | undefined;
-
-      // console.log('[GenerationAPI] Image generation params - model:', params.model, 'size:', size);
 
       // 调用新的图片生成接口
       const result = await defaultGeminiClient.generateImage(params.prompt, {

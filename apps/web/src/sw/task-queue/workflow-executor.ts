@@ -19,7 +19,8 @@ import type {
 } from './workflow-types';
 import type { GeminiConfig, VideoAPIConfig } from './types';
 import { TaskExecutionPhase } from './types';
-import { executeSWMCPTool, getSWMCPTool, requiresMainThread } from './mcp/tools';
+import { getSWMCPTool, requiresMainThread, isCanvasTool, isMediaGenerationTool } from './mcp/tools';
+import { executeMCPToolForWorkflow } from './media-executor';
 import { taskQueueStorage } from './storage';
 import { taskStepRegistry } from './task-step-registry';
 
@@ -476,12 +477,9 @@ export class WorkflowExecutor {
    * @param workflowId 工作流 ID
    */
   async resendPendingToolRequestsForWorkflow(workflowId: string): Promise<void> {
-    console.log(`[WorkflowExecutor] 🔄 Resending pending tool requests for workflow ${workflowId}`);
-    
     const { getChannelManager } = await import('./channel-manager');
     const cm = getChannelManager();
     if (!cm) {
-      console.log('[WorkflowExecutor] ❌ ChannelManager not available');
       return;
     }
 
@@ -495,7 +493,6 @@ export class WorkflowExecutor {
       }
 
       memoryRequestCount++;
-      console.log(`[WorkflowExecutor] 📤 Resending memory request: ${requestId}, tool: ${requestInfo.toolName}`);
 
       // 异步重新发送请求
       (async () => {
@@ -510,7 +507,6 @@ export class WorkflowExecutor {
           );
 
           if (response) {
-            console.log(`[WorkflowExecutor] ✓ Tool response received: ${requestId}, success: ${response.success}`);
             pending.resolve({
               type: 'MAIN_THREAD_TOOL_RESPONSE',
               requestId: requestInfo.requestId,
@@ -522,26 +518,22 @@ export class WorkflowExecutor {
               addSteps: response.addSteps as MainThreadToolResponseMessage['addSteps'],
             });
           } else {
-            console.log(`[WorkflowExecutor] ❌ Tool request timed out: ${requestId}`);
             pending.reject(new Error(`Tool request timed out: ${requestInfo.toolName}`));
           }
         } catch (error) {
           console.error(`[WorkflowExecutor] ❌ Tool request failed: ${requestId}`, error);
           pending.reject(error instanceof Error ? error : new Error(String(error)));
         }
-      })();
+        })();
     }
-    console.log(`[WorkflowExecutor] Memory pending requests: ${memoryRequestCount}`);
 
     // 同时检查 IndexedDB 中的待处理请求（SW 重启后内存中的请求会丢失）
     const storedRequests = await taskQueueStorage.getAllPendingToolRequests();
     const workflowStoredRequests = storedRequests.filter(r => r.workflowId === workflowId);
-    console.log(`[WorkflowExecutor] IndexedDB pending requests for workflow: ${workflowStoredRequests.length}`);
     
     for (const storedRequest of workflowStoredRequests) {
       // 如果内存中没有这个请求，说明是 SW 重启后的遗留请求
       if (!this.pendingToolRequests.has(storedRequest.requestId)) {
-        console.log(`[WorkflowExecutor] 📤 Resending IndexedDB request: ${storedRequest.requestId}, tool: ${storedRequest.toolName}`);
         
         // 重新发送并等待响应
         (async () => {
@@ -556,11 +548,8 @@ export class WorkflowExecutor {
             );
 
             if (response) {
-              console.log(`[WorkflowExecutor] ✓ Recovered tool response: ${storedRequest.requestId}, success: ${response.success}`);
               // 处理响应（更新工作流状态）
               await this.handleRecoveredToolResponse(storedRequest, response);
-            } else {
-              console.log(`[WorkflowExecutor] ❌ Recovered tool request timed out: ${storedRequest.requestId}`);
             }
           } catch (error) {
             console.error(`[WorkflowExecutor] ❌ Failed to resend tool request ${storedRequest.requestId}:`, error);
@@ -743,7 +732,9 @@ export class WorkflowExecutor {
       while (true) {
         // Find next executable steps
         const executableSteps = workflow.steps.filter((step) => {
-          if (step.status === 'completed' || step.status === 'failed' || step.status === 'skipped' || step.status === 'running') {
+          // Skip steps that are already processed or in progress
+          if (step.status === 'completed' || step.status === 'failed' || step.status === 'skipped' || 
+              step.status === 'running' || step.status === 'pending_main_thread') {
             return false;
           }
           // Check dependencies
@@ -756,14 +747,17 @@ export class WorkflowExecutor {
           return true;
         });
 
+        // 检查是否有正在执行或等待主线程的步骤
         const hasRunningSteps = workflow.steps.some(s => s.status === 'running');
+        const hasPendingMainThreadSteps = workflow.steps.some(s => s.status === 'pending_main_thread');
 
         if (executableSteps.length === 0) {
-          if (hasRunningSteps) {
+          if (hasRunningSteps || hasPendingMainThreadSteps) {
             // Some steps are still running (e.g. delegated to main thread)
+            // Or waiting for main thread to execute (pending_main_thread)
             // Wait for them to finish before checking again
-            // console.log(`[WorkflowExecutor] No more executable steps but ${workflow.steps.filter(s => s.status === 'running').length} are still running`);
-            break; // Exit the loop, execution will resume via updateWorkflowStepForTask
+            // console.log(`[WorkflowExecutor] No more executable steps but ${workflow.steps.filter(s => s.status === 'running' || s.status === 'pending_main_thread').length} are still running/pending`);
+            break; // Exit the loop, execution will resume via updateWorkflowStepForTask or main thread polling
           }
 
           // Check if all steps are actually finished
@@ -835,8 +829,6 @@ export class WorkflowExecutor {
     } catch (error: any) {
       // 检查是否是等待客户端的错误
       if (error?.isAwaitingClient || error?.message?.startsWith('AWAITING_CLIENT:')) {
-        console.log(`[WorkflowExecutor] ⏳ Workflow ${workflowId} waiting for client to reconnect`);
-        
         // 不标记为失败，保持 running 状态
         // pending request 已保存在 IndexedDB，客户端重连后会通过 claimWorkflow 继续执行
         workflow.updatedAt = Date.now();
@@ -985,8 +977,32 @@ export class WorkflowExecutor {
     this.sendStepStatus(workflow.id, step);
 
     try {
-      // Check if this tool needs to run in main thread
-      if (requiresMainThread(step.mcp) || !getSWMCPTool(step.mcp)) {
+      // Check if this is a Canvas tool (must run in main thread)
+      // Canvas tools are marked as pending_main_thread and will be executed by main thread polling
+      if (isCanvasTool(step.mcp)) {
+        // 合并 batch options 到 args（与之前逻辑保持一致）
+        step.args = {
+          ...step.args,
+          ...(step.options?.batchId !== undefined && { batchId: step.options.batchId }),
+          ...(typeof step.options?.batchIndex === 'number' && { batchIndex: step.options.batchIndex }),
+          ...(typeof step.options?.batchTotal === 'number' && { batchTotal: step.options.batchTotal }),
+          ...(typeof step.options?.globalIndex === 'number' && { globalIndex: step.options.globalIndex }),
+        };
+        
+        // 标记为等待主线程执行
+        step.status = 'pending_main_thread';
+        step.duration = Date.now() - startTime;
+        
+        // 保存到 IndexedDB，主线程会轮询并执行
+        await taskQueueStorage.saveWorkflow(workflow);
+        this.sendStepStatus(workflow.id, step);
+        
+        // 返回，不继续等待。主线程执行完后会更新 IndexedDB
+        return;
+      }
+      
+      // Check if this tool needs to run in main thread (media generation tools)
+      if (isMediaGenerationTool(step.mcp) || (!getSWMCPTool(step.mcp) && requiresMainThread(step.mcp))) {
         // Delegate to main thread
         // Merge batch options into args for main thread (batchId, batchIndex, batchTotal)
         // Note: batchId etc. are now included directly in step.args by workflow-converter.ts
@@ -1049,7 +1065,7 @@ export class WorkflowExecutor {
         // The step should be marked as 'running' until the task completes
         const imageVideoTools = ['generate_image', 'generate_video', 'generate_grid_image', 'generate_inspiration_board'];
         if (imageVideoTools.includes(step.mcp) && response.taskId) {
-          const typeMap: Record<string, string> = {
+          const typeMap: Record<string, 'image' | 'video'> = {
             'generate_image': 'image',
             'generate_grid_image': 'image',
             'generate_inspiration_board': 'image',
@@ -1057,7 +1073,7 @@ export class WorkflowExecutor {
           };
           step.result = {
             success: true,
-            type: typeMap[step.mcp] || 'image',
+            type: typeMap[step.mcp] ?? 'image',
             data: resultData,
             taskId: response.taskId,
             taskIds: response.taskIds,
@@ -1088,8 +1104,8 @@ export class WorkflowExecutor {
           data: resultData,
         };
       } else {
-        // Execute in SW
-        const toolConfig: SWMCPToolConfig = {
+        // Execute in SW using unified media executor
+        const result = await executeMCPToolForWorkflow(step.mcp, step.args, {
           geminiConfig: this.config.geminiConfig,
           videoConfig: this.config.videoConfig,
           signal,
@@ -1099,9 +1115,7 @@ export class WorkflowExecutor {
           onRemoteId: (remoteId) => {
             // Store remote ID for recovery
           },
-        };
-
-        const result = await executeSWMCPTool(step.mcp, step.args, toolConfig);
+        });
 
         // Check if this is a canvas operation that needs delegation
         if (result.success && result.type === 'canvas' && (result.data as any)?.delegateToMainThread) {
@@ -1174,7 +1188,6 @@ export class WorkflowExecutor {
 
         // Handle additional steps (from ai_analyze executed in SW) with deduplication
         if (result.addSteps && result.addSteps.length > 0) {
-          // console.log(`[SW-WorkflowExecutor] Adding ${result.addSteps.length} new steps from ${step.mcp}`);
           const actuallyAddedSteps: typeof result.addSteps = [];
           for (const newStep of result.addSteps) {
             if (!workflow.steps.find(s => s.id === newStep.id)) {
@@ -1266,7 +1279,6 @@ export class WorkflowExecutor {
       
       if (!cm) {
         // channelManager 不可用，保留 pending request 等待后续重试
-        console.log(`[WorkflowExecutor] ⏳ channelManager not available, waiting for client: ${toolName}`);
         const awaitError = new Error(`AWAITING_CLIENT:${toolName}`);
         (awaitError as any).isAwaitingClient = true;
         throw awaitError;
@@ -1284,7 +1296,6 @@ export class WorkflowExecutor {
 
       if (!response) {
         // 超时或无客户端连接，保留 pending request 等待后续重试
-        console.log(`[WorkflowExecutor] ⏳ Tool request timed out, waiting for client: ${toolName}`);
         const awaitError = new Error(`AWAITING_CLIENT:${toolName}`);
         (awaitError as any).isAwaitingClient = true;
         throw awaitError;

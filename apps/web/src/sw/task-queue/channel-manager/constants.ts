@@ -33,8 +33,8 @@ export const RPC_METHODS = {
   // Workflow
   WORKFLOW_SUBMIT: 'workflow:submit',
   WORKFLOW_CANCEL: 'workflow:cancel',
-  // Note: WORKFLOW_GET_STATUS 和 WORKFLOW_GET_ALL 已移除，主线程直接从 IndexedDB 读取
-  WORKFLOW_RESPOND_TOOL: 'workflow:respondTool',
+  // Note: WORKFLOW_GET_STATUS、WORKFLOW_GET_ALL、WORKFLOW_RESPOND_TOOL 已移除
+  // 主线程直接从 IndexedDB 读取，工具响应通过 sendToolRequest 直接返回
   WORKFLOW_CLAIM: 'workflow:claim', // 客户端声明接管工作流
 
   // Thumbnail (图片缩略图，由 SW 生成)
@@ -78,6 +78,10 @@ export const RPC_METHODS = {
 
   // Cache management
   CACHE_DELETE: 'cache:delete',
+
+  // Executor (媒体执行器 - SW 可选降级方案)
+  PING: 'ping',
+  EXECUTOR_EXECUTE: 'executor:execute',
 } as const;
 
 // ============================================================================

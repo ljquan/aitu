@@ -404,7 +404,33 @@ export class SWTaskQueue {
         return;
       }
       
-      // No success log or remoteId found - mark as failed (don't re-submit to avoid extra cost)
+      // 检查任务是否刚刚开始（SUBMITTING 阶段），如果是则重新执行
+      // 这样 SW 更新不会导致刚开始的任务直接失败
+      if (task.executionPhase === TaskExecutionPhase.SUBMITTING) {
+        // 重置进度并重新执行
+        task.progress = 0;
+        task.updatedAt = Date.now();
+        this.tasks.set(task.id, task);
+        this.runningTasks.add(task.id);
+        
+        await taskQueueStorage.saveTask(task);
+        
+        this.broadcastToClients({
+          type: 'TASK_STATUS',
+          taskId: task.id,
+          status: task.status,
+          progress: 0,
+          phase: task.executionPhase,
+          updatedAt: task.updatedAt,
+        });
+
+        this.executeTaskInternal(task).catch(() => {
+          // 静默忽略执行错误，错误会在 handleTaskError 中处理
+        });
+        return;
+      }
+      
+      // No success log or remoteId found and not in submitting phase - mark as failed (don't re-submit to avoid extra cost)
       await this.handleTaskError(task.id, new Error('任务中断且无法恢复（未找到已完成的结果）'));
     } else if (
       // Image/inspiration board task in processing - try to recover from LLM API logs
@@ -667,26 +693,36 @@ export class SWTaskQueue {
    * Retry a failed or cancelled task
    */
   async retryTask(taskId: string): Promise<void> {
-    const task = this.tasks.get(taskId);
-    if (!task || (task.status !== TaskStatus.FAILED && task.status !== TaskStatus.CANCELLED)) {
+    console.log('[SW retryTask] Called with taskId:', taskId);
+    console.log('[SW retryTask] Tasks in memory:', this.tasks.size);
+    
+    let task = this.tasks.get(taskId);
+    console.log('[SW retryTask] Task from memory:', task ? `${task.id} (${task.status})` : 'not found');
+    
+    // 如果内存中没有任务，尝试从 IndexedDB 加载
+    if (!task) {
+      console.log('[SW retryTask] Loading from IndexedDB...');
+      const storedTask = await taskQueueStorage.getTask(taskId);
+      console.log('[SW retryTask] Task from storage:', storedTask ? `${storedTask.id} (${storedTask.status})` : 'not found');
+      if (storedTask && (storedTask.status === TaskStatus.FAILED || storedTask.status === TaskStatus.CANCELLED)) {
+        this.tasks.set(taskId, storedTask);
+        task = storedTask;
+      } else {
+        console.warn('[SW retryTask] Task not found or not retryable, returning');
+        return;
+      }
+    }
+    
+    if (task.status !== TaskStatus.FAILED && task.status !== TaskStatus.CANCELLED) {
+      console.warn('[SW retryTask] Task status not retryable:', task.status);
       return;
     }
 
-    // 对于视频/角色任务，尝试从日志恢复 remoteId，确保重试时不会重新提交（避免重复计费）
-    if (!task.remoteId && (task.type === TaskType.VIDEO || task.type === TaskType.CHARACTER)) {
-      try {
-        const { findLatestLogByTaskId } = await import('./llm-api-logger');
-        const latestLog = await findLatestLogByTaskId(task.id);
-        if (latestLog?.remoteId) {
-          task.remoteId = latestLog.remoteId;
-        } else if (latestLog?.responseBody) {
-          const data = JSON.parse(latestLog.responseBody);
-          if (data.id) task.remoteId = data.id;
-        }
-      } catch {
-        // 静默忽略恢复 remoteId 失败
-      }
-    }
+    console.log('[SW retryTask] Resetting task for retry, type:', task.type, 'params:', JSON.stringify(task.params).substring(0, 200));
+
+    // 重试时清除 remoteId，强制重新提交任务（获取新的 remoteId）
+    // 不恢复 remoteId，因为失败的任务需要重新生成
+    task.remoteId = undefined;
 
     const now = Date.now();
     task.status = TaskStatus.PROCESSING;
@@ -700,6 +736,7 @@ export class SWTaskQueue {
 
     // Persist
     await taskQueueStorage.saveTask(task);
+    console.log('[SW retryTask] Task saved, broadcasting status change');
 
     // Broadcast status change to all clients
     this.broadcastToClients({
@@ -711,9 +748,10 @@ export class SWTaskQueue {
       updatedAt: task.updatedAt,
     });
 
+    console.log('[SW retryTask] Calling executeTaskInternal...');
     // Execute task immediately (no PENDING state, direct execution)
-    this.executeTaskInternal(task).catch(() => {
-      // 静默忽略执行错误，错误会在 handleTaskError 中处理
+    this.executeTaskInternal(task).catch((error) => {
+      console.error('[SW retryTask] executeTaskInternal failed:', error);
     });
   }
 
@@ -1030,13 +1068,18 @@ export class SWTaskQueue {
    * Internal task execution - assumes task is already set to PROCESSING and in runningTasks
    */
   private async executeTaskInternal(task: SWTask): Promise<void> {
+    console.log('[SW executeTaskInternal] Starting task:', task.id, 'type:', task.type, 'remoteId:', task.remoteId);
+    console.log('[SW executeTaskInternal] geminiConfig:', this.geminiConfig ? 'set' : 'null', 'videoConfig:', this.videoConfig ? `baseUrl=${this.videoConfig.baseUrl}` : 'null');
+    
     if (!this.geminiConfig || !this.videoConfig) {
+      console.error('[SW executeTaskInternal] Config not set, failing task');
       await this.handleTaskError(task.id, new Error('API configuration not initialized. Please check your API key settings.'));
       return;
     }
 
     // 如果任务已经有 remoteId（视频/角色），则直接进入恢复流程，跳过提交阶段，只重试获取进度的接口
     if (task.remoteId && (task.type === TaskType.VIDEO || task.type === TaskType.CHARACTER)) {
+      console.log('[SW executeTaskInternal] Task has remoteId, entering resume flow');
       task.executionPhase = TaskExecutionPhase.POLLING;
       task.updatedAt = Date.now();
       // 更新存储
@@ -1108,10 +1151,13 @@ export class SWTaskQueue {
     };
 
     try {
+      console.log('[SW executeTaskInternal] Getting handler for type:', task.type);
       const handler = this.getHandler(task.type);
       if (!handler) {
+        console.error('[SW executeTaskInternal] No handler found for type:', task.type);
         throw new Error(`No handler for task type: ${task.type}`);
       }
+      console.log('[SW executeTaskInternal] Handler found, executing task...');
 
       // Get timeout for this task type
       const taskTimeout = this.config.timeouts[task.type] || 10 * 60 * 1000; // Default 10 minutes
@@ -1139,6 +1185,9 @@ export class SWTaskQueue {
    */
   private async executeResume(task: SWTask, remoteId: string): Promise<void> {
     if (!this.geminiConfig || !this.videoConfig) {
+      // 配置不存在时，清理 runningTasks 避免任务被"锁定"
+      this.runningTasks.delete(task.id);
+      console.warn(`[SWTaskQueue] executeResume: config not set for task ${task.id}, skipping`);
       return;
     }
 
@@ -1191,7 +1240,8 @@ export class SWTaskQueue {
         (error instanceof Error && error.message.includes('cancelled'));
       
       if (isCancelledOrDeleted) {
-        // 任务被取消或删除，这是正常行为
+        // 任务被取消或删除，这是正常行为，但需要清理 runningTasks
+        this.runningTasks.delete(task.id);
       } else {
         await this.handleTaskError(task.id, error);
       }
