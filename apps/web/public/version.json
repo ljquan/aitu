@@ -1,8 +1,15 @@
 {
-  "version": "0.5.74",
-  "buildTime": "2026-02-05T06:11:58.197Z",
+  "version": "0.5.75",
+  "buildTime": "2026-02-05T07:38:23.503Z",
   "gitCommit": "unknown",
   "changelog": [
-    "perf: 优化同步上传性能，避免 UI 阻塞"
+    "support opening tools via URL parameter and display tool icons in window title",
+    "move ai_analyze to SW and improve debug panel logging",
+    "integrate fake-indexeddb and refactor media executor",
+    "implement LLM API log selection and batch actions",
+    "enhance video handling and task queue management",
+    "perf: 优化同步上传性能，避免 UI 阻塞",
+    "任务队列同步下载远程数据时双向合并",
+    "改进工作流恢复机制和错误处理"
   ]
 }
