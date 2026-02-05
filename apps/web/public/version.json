@@ -1,6 +1,6 @@
 {
   "version": "0.5.74",
-  "buildTime": "2026-02-05T06:11:57.768Z",
+  "buildTime": "2026-02-05T06:11:58.197Z",
   "gitCommit": "unknown",
   "changelog": [
     "perf: 优化同步上传性能，避免 UI 阻塞"
