@@ -4,112 +4,27 @@
  * Defines all types for SW-based task queue management and
  * postMessage communication between main thread and Service Worker.
  *
- * Note: Types are defined independently here to avoid import issues in SW context.
- * Keep in sync with packages/drawnix/src/types/task.types.ts
+ * Core types are imported from the shared types module to ensure consistency.
+ * 核心类型从共享类型模块导入，确保与主线程一致。
  */
-
-import type { ChatToolCall } from './chat-workflow/types';
 
 // ============================================================================
-// Task Enums and Core Types (mirrored from task.types.ts)
+// Re-export Core Types from Shared Module
 // ============================================================================
 
-/**
- * Task status enumeration
- */
-export enum TaskStatus {
-  PENDING = 'pending',
-  PROCESSING = 'processing',
-  COMPLETED = 'completed',
-  FAILED = 'failed',
-  CANCELLED = 'cancelled',
-}
+// Re-export all core types from shared module
+export * from '../../../../../packages/drawnix/src/types/shared/core.types';
 
-/**
- * Task type enumeration
- */
-export enum TaskType {
-  IMAGE = 'image',
-  VIDEO = 'video',
-  CHARACTER = 'character',
-  INSPIRATION_BOARD = 'inspiration_board',
-  CHAT = 'chat',
-}
-
-/**
- * Task execution phase enumeration
- */
-export enum TaskExecutionPhase {
-  SUBMITTING = 'submitting',
-  POLLING = 'polling',
-  DOWNLOADING = 'downloading',
-}
-
-/**
- * Generation parameters interface
- */
-export interface GenerationParams {
-  prompt: string;
-  width?: number;
-  height?: number;
-  size?: string;
-  duration?: number;
-  style?: string;
-  model?: string;
-  seed?: number;
-  sourceVideoTaskId?: string;
-  characterTimestamps?: string;
-  sourceLocalTaskId?: string;
-  gridImageRows?: number;
-  gridImageCols?: number;
-  gridImageLayoutStyle?: 'scattered' | 'grid' | 'circular';
-  inspirationBoardLayoutStyle?: 'inspiration-board';
-  isInspirationBoard?: boolean;
-  inspirationBoardImageCount?: number;
-  /** Whether to auto-insert the result to canvas when task completes */
-  autoInsertToCanvas?: boolean;
-  /** image aspect ratio token (e.g. 16:9) */
-  aspectRatio?: string;
-  [key: string]: unknown;
-}
-
-/**
- * Task result interface
- */
-export interface TaskResult {
-  url: string;
-  format: string;
-  size: number;
-  width?: number;
-  height?: number;
-  duration?: number;
-  thumbnailUrl?: string;
-  characterUsername?: string;
-  characterProfileUrl?: string;
-  characterPermalink?: string;
-  /** Chat response content (chat only) */
-  chatResponse?: string;
-  /** Tool calls made during chat (chat only) */
-  toolCalls?: ChatToolCall[];
-}
-
-/**
- * Task error details interface
- */
-export interface TaskErrorDetails {
-  originalError?: string;
-  apiResponse?: unknown;
-  timestamp?: number;
-}
-
-/**
- * Task error interface
- */
-export interface TaskError {
-  code: string;
-  message: string;
-  details?: TaskErrorDetails;
-}
+// Import types for use in this file
+import type {
+  ChatToolCall,
+  GenerationParams,
+  TaskResult,
+  TaskError,
+  TaskStatus,
+  TaskType,
+  TaskExecutionPhase,
+} from '../../../../../packages/drawnix/src/types/shared/core.types';
 
 // ============================================================================
 // SW Task Definition
