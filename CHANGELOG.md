@@ -1,3 +1,41 @@
+## 0.5.71 (2026-02-05)
+
+### 🚀 Features
+
+- enhance analytics and reporting functionality ([30a9bbfd](https://github.com/ljquan/aitu/commit/30a9bbfd))
+- enhance video handling and task queue management ([4757a0d4](https://github.com/ljquan/aitu/commit/4757a0d4))
+- add master badge and enhance Gist handling ([1dc71a99](https://github.com/ljquan/aitu/commit/1dc71a99))
+- implement failed URL caching for external image requests ([4376be0c](https://github.com/ljquan/aitu/commit/4376be0c))
+- integrate fake-indexeddb and refactor media executor ([dae0bb8a](https://github.com/ljquan/aitu/commit/dae0bb8a))
+- implement unified media execution and workflow enhancements ([900db04d](https://github.com/ljquan/aitu/commit/900db04d))
+- add Gist management panel and enhance sync logging ([061423a9](https://github.com/ljquan/aitu/commit/061423a9))
+
+### 🩹 Fixes
+
+- enhance workflow submission with timeout and retry logic ([84e9436c](https://github.com/ljquan/aitu/commit/84e9436c))
+
+### 🔧 Chores
+
+- bump version to 0.5.70 ([9847d773](https://github.com/ljquan/aitu/commit/9847d773))
+- update build time and refactor imports for consistency ([036cce52](https://github.com/ljquan/aitu/commit/036cce52))
+- update app version to 0.5.69 and adjust build time in version.json ([af1fb113](https://github.com/ljquan/aitu/commit/af1fb113))
+- bump version to 0.5.69 ([f51c14c0](https://github.com/ljquan/aitu/commit/f51c14c0))
+- docs: 添加编码规则 - SW 初始化统一入口 ([f13f809a](https://github.com/ljquan/aitu/commit/f13f809a))
+- docs: 添加编码规则 - 模块循环依赖处理 ([e6a39db6](https://github.com/ljquan/aitu/commit/e6a39db6))
+- docs: 添加降级模式任务执行规则 ([e0f459a6](https://github.com/ljquan/aitu/commit/e0f459a6))
+- refactor: 清理调试日志和未使用代码 ([066eb12d](https://github.com/ljquan/aitu/commit/066eb12d))
+- docs: 更新工具函数规则 - 添加新模块和避免不必要包装 ([8dfcf4a3](https://github.com/ljquan/aitu/commit/8dfcf4a3))
+- docs: 添加编码规则 - 降级路径功能一致性 ([5c86d02b](https://github.com/ljquan/aitu/commit/5c86d02b))
+- docs: 添加 LLM 响应格式兼容性和工作流状态同步规则 ([3d844c42](https://github.com/ljquan/aitu/commit/3d844c42))
+- docs: 添加编码规则 - IndexedDB 直接读取和 RPC 超时处理 ([10f953f7](https://github.com/ljquan/aitu/commit/10f953f7))
+- docs: 添加同步数据格式一致性规则 ([ebb412d1](https://github.com/ljquan/aitu/commit/ebb412d1))
+- docs: 添加同步模块日志规范 ([97332dc7](https://github.com/ljquan/aitu/commit/97332dc7))
+
+### ❤️  Thank You
+
+- liquid <ljquan@qq.com>
+- liquidliang <ljquan@qq.com>
+
 ## 0.5.70 (2026-02-04)
 
 ### 🚀 Features

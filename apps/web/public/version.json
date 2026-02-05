@@ -1,8 +1,9 @@
 {
-  "version": "0.5.70",
-  "buildTime": "2026-02-05T01:04:43.145Z",
+  "version": "0.5.71",
+  "buildTime": "2026-02-05T01:21:18.483Z",
   "gitCommit": "unknown",
   "changelog": [
-    "integrate fake-indexeddb and refactor media executor"
+    "implement unified media execution and workflow enhancements",
+    "add master badge and enhance Gist handling"
   ]
 }
