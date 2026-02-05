@@ -222,6 +222,96 @@ export function sanitizeObject(obj: unknown): unknown { ... }
 - 主线程：`packages/drawnix/src/utils/sanitize-utils.ts`
 - Service Worker：`apps/web/src/sw/task-queue/utils/sanitize-utils.ts`
 
+#### 模块循环依赖导致 TDZ 错误
+
+**场景**: 多个服务模块相互导入，形成循环依赖链，导致 ES 模块初始化时的 TDZ (Temporal Dead Zone) 错误
+
+❌ **错误示例**:
+```typescript
+// task-queue/index.ts - 导入 sw-task-queue-service
+import { swTaskQueueService } from '../sw-task-queue-service';
+export function shouldUseSWTaskQueue() { ... }
+export { swTaskQueueService };
+
+// sw-task-queue-service.ts - 导入 sw-channel/client
+import { swChannelClient } from './sw-channel';
+export const swTaskQueueService = SWTaskQueueService.getInstance();
+
+// sw-channel/client.ts - 导入 task-queue（循环！）
+import { shouldUseSWTaskQueue } from '../task-queue';  // ❌ 循环依赖
+export const swChannelClient = SWChannelClient.getInstance();
+
+// 结果：Uncaught ReferenceError: Cannot access 'swChannelClient' before initialization
+```
+
+```typescript
+// chat-workflow-client.ts
+const checkAndSubscribe = () => {
+  // ❌ ES 模块环境不支持 CommonJS require
+  const { swChannelClient: client } = require('./client');
+};
+// 结果：Uncaught ReferenceError: require is not defined
+```
+
+✅ **正确示例**:
+```typescript
+// 1. 将共享函数提取到独立的隔离模块
+// task-queue/sw-detection.ts - 不导入任何服务模块
+export function shouldUseSWTaskQueue(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  if (!('serviceWorker' in navigator)) return false;
+  return true;
+}
+
+// 2. 服务文件从隔离模块导入
+// sw-channel/client.ts
+import { shouldUseSWTaskQueue } from '../task-queue/sw-detection';  // ✅ 无循环
+
+// 3. 使用服务注册表延迟服务访问
+// task-queue/service-registry.ts - 不导入任何服务模块
+export const serviceRegistry = {
+  swTaskQueueService: null,
+  legacyTaskQueueService: null,
+};
+export function registerService(name, service) {
+  serviceRegistry[name] = service;
+}
+
+// 4. 服务创建后注册到注册表
+// sw-task-queue-service.ts
+export const swTaskQueueService = SWTaskQueueService.getInstance();
+import { registerService } from './task-queue/service-registry';
+registerService('swTaskQueueService', swTaskQueueService);
+
+// 5. 入口文件使用 Proxy 延迟访问
+// task-queue/index.ts
+import { serviceRegistry } from './service-registry';
+export const taskQueueService = new Proxy({}, {
+  get(_target, prop) {
+    const service = shouldUseSWTaskQueue() 
+      ? serviceRegistry.swTaskQueueService 
+      : serviceRegistry.legacyTaskQueueService;
+    return service[prop];
+  },
+});
+
+// 6. 单例构造函数中延迟访问其他模块
+// sw-task-queue-service.ts
+private constructor() {
+  // ✅ 使用 queueMicrotask 延迟，等待其他模块初始化完成
+  queueMicrotask(() => {
+    this.setupSWClientHandlers();  // swChannelClient 此时已初始化
+  });
+}
+```
+
+**原因**: ES 模块是静态解析的，循环依赖会导致某些模块在被访问时尚未完成初始化。解决方案是将共享代码提取到独立模块（打破依赖链），并使用延迟访问模式（Proxy、queueMicrotask）。
+
+**相关文件**:
+- `packages/drawnix/src/services/task-queue/sw-detection.ts` - 隔离的检测函数
+- `packages/drawnix/src/services/task-queue/service-registry.ts` - 服务注册表
+- `packages/drawnix/src/services/task-queue/index.ts` - 使用 Proxy 的入口
+
 #### Service Worker 枚举值使用小写
 
 **场景**: 读取 SW 任务队列数据（如 `sw-task-queue` 数据库）进行过滤时
