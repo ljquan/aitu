@@ -34,6 +34,7 @@ import {
   taskStorageWriter,
   waitForTaskCompletion,
 } from './media-executor';
+import { isAuthError, dispatchApiAuthError } from '../utils/api-auth-error-event';
 
 /**
  * Service Worker Task Queue Service
@@ -751,6 +752,12 @@ class SWTaskQueueService {
       } catch {
         return;
       }
+    }
+
+    // 检测认证错误，触发设置弹窗
+    const errorMessage = error.message || '';
+    if (isAuthError(errorMessage)) {
+      dispatchApiAuthError({ message: errorMessage, source: task?.type || 'task' });
     }
 
     this.updateTaskStatus(taskId, TaskStatus.FAILED, { error });

@@ -386,30 +386,23 @@ function createLLMApiEntry(log, isExpanded, onToggle, isSelectMode = false, isSe
   // Extract request parameters from requestBody
   const reqParams = extractRequestParams(log.requestBody);
 
-  // Render reference images preview
+  // Render reference images preview (仅当分页数据包含完整参考图时才显示)
   let referenceImagesHtml = '';
   if (log.referenceImages && log.referenceImages.length > 0) {
-    const imagesList = log.referenceImages.map(img => {
-      const sizeText = img.size ? formatBytes(img.size) : '-';
-      const dimensions = img.width && img.height ? `${img.width}x${img.height}` : '-';
-      return `
-        <div class="reference-image-item" style="display: inline-flex; flex-direction: column; gap: 4px; border: 1px solid var(--border-color); border-radius: 4px; padding: 4px; background: var(--bg-secondary);">
-          <div style="width: 120px; height: 120px; display: flex; align-items: center; justify-content: center; overflow: hidden; background: #000; border-radius: 2px;">
-            <img src="${img.url}" style="max-width: 100%; max-height: 100%; object-fit: contain; cursor: pointer;" onclick="window.open('${img.url}')" title="点击查看原图">
-          </div>
-          <div style="font-size: 10px; color: var(--text-muted); display: flex; justify-content: space-between; padding: 0 2px;">
-            <span>${sizeText}</span>
-            <span>${dimensions}</span>
-          </div>
-        </div>
-      `;
-    }).join('');
-    
     referenceImagesHtml = `
-      <div class="detail-section">
-        <h4>参考图详情</h4>
-        <div class="reference-images-preview" style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px;">
-          ${imagesList}
+      <div class="detail-section reference-images-section">
+        <h4>参考图详情 (${log.referenceImages.length} 张)</h4>
+        ${renderReferenceImages(log.referenceImages)}
+      </div>
+    `;
+  } else if (log.hasReferenceImages && log.referenceImageCount > 0) {
+    // 分页数据只有数量没有完整数据，显示占位提示
+    referenceImagesHtml = `
+      <div class="detail-section reference-images-section">
+        <h4>参考图详情 (${log.referenceImageCount} 张)</h4>
+        <div style="padding: 16px; text-align: center; color: var(--text-muted); font-size: 12px; background: var(--bg-secondary); border-radius: 4px;">
+          <span style="font-size: 20px;">🖼️</span>
+          <p style="margin: 8px 0 0;">加载中...</p>
         </div>
       </div>
     `;
@@ -526,7 +519,7 @@ function createLLMApiEntry(log, isExpanded, onToggle, isSelectMode = false, isSe
         </div>
       ` : ''}
       ${log.requestBody ? `
-        <div class="detail-section">
+        <div class="detail-section request-body-section">
           <h4>请求参数 (Request Parameters)</h4>
           <pre class="json-highlight">${formatJsonWithHighlight(log.requestBody)}</pre>
         </div>
@@ -538,9 +531,9 @@ function createLLMApiEntry(log, isExpanded, onToggle, isSelectMode = false, isSe
         </div>
       ` : ''}
       ${log.responseBody ? `
-        <div class="detail-section">
+        <div class="detail-section response-body-section">
           <h4>响应体 (Response Body)</h4>
-          <pre>${escapeHtml(log.responseBody)}</pre>
+          <pre class="json-highlight">${formatJsonWithHighlight(log.responseBody)}</pre>
         </div>
       ` : ''}
     </div>
@@ -617,7 +610,7 @@ function createLLMApiEntry(log, isExpanded, onToggle, isSelectMode = false, isSe
 }
 
 /**
- * 更新日志详情中的响应体显示
+ * 更新日志详情中的完整数据显示（包括参考图、请求体、响应体）
  * @param {HTMLElement} entry - 日志条目元素
  * @param {object} fullLog - 完整的日志数据
  */
@@ -625,12 +618,48 @@ function updateResponseBodyDisplay(entry, fullLog) {
   const detailsEl = entry.querySelector('.log-details');
   if (!detailsEl) return;
   
-  // 检查是否已有响应体 section
-  let responseSection = detailsEl.querySelector('.response-body-section');
+  // 1. 更新参考图（如果有）
+  if (fullLog.referenceImages && fullLog.referenceImages.length > 0) {
+    let refSection = detailsEl.querySelector('.reference-images-section');
+    const imagesHtml = renderReferenceImages(fullLog.referenceImages);
+    
+    if (!refSection) {
+      refSection = document.createElement('div');
+      refSection.className = 'detail-section reference-images-section';
+      refSection.innerHTML = `
+        <h4>参考图详情 (${fullLog.referenceImages.length} 张)</h4>
+        ${imagesHtml}
+      `;
+      // 插入到基本信息之后
+      const basicInfoSection = detailsEl.querySelector('.detail-section');
+      if (basicInfoSection && basicInfoSection.nextSibling) {
+        detailsEl.insertBefore(refSection, basicInfoSection.nextSibling);
+      } else {
+        detailsEl.appendChild(refSection);
+      }
+    } else {
+      refSection.innerHTML = `
+        <h4>参考图详情 (${fullLog.referenceImages.length} 张)</h4>
+        ${imagesHtml}
+      `;
+    }
+  }
   
+  // 2. 更新请求体（如果之前没有）
+  if (fullLog.requestBody && !detailsEl.querySelector('.request-body-section')) {
+    const requestSection = document.createElement('div');
+    requestSection.className = 'detail-section request-body-section';
+    requestSection.innerHTML = `
+      <h4>请求参数 (Request Parameters)</h4>
+      <pre class="json-highlight">${formatJsonWithHighlight(fullLog.requestBody)}</pre>
+    `;
+    detailsEl.appendChild(requestSection);
+  }
+  
+  // 3. 更新响应体
+  let responseSection = detailsEl.querySelector('.response-body-section');
   if (fullLog.responseBody) {
     if (!responseSection) {
-      // 创建新的响应体 section
       responseSection = document.createElement('div');
       responseSection.className = 'detail-section response-body-section';
       responseSection.innerHTML = `
@@ -639,29 +668,58 @@ function updateResponseBodyDisplay(entry, fullLog) {
       `;
       detailsEl.appendChild(responseSection);
     } else {
-      // 更新现有的响应体内容
       responseSection.innerHTML = `
         <h4>响应体 (Response Body)</h4>
         <pre class="json-highlight">${formatJsonWithHighlight(fullLog.responseBody)}</pre>
       `;
     }
   }
+}
+
+/**
+ * 渲染参考图列表 HTML
+ * @param {Array} referenceImages - 参考图数组
+ * @returns {string} HTML 字符串
+ */
+function renderReferenceImages(referenceImages) {
+  if (!referenceImages || referenceImages.length === 0) return '';
   
-  // 同时更新请求体（如果之前没有）
-  if (fullLog.requestBody && !detailsEl.querySelector('.request-body-section')) {
-    const requestSection = document.createElement('div');
-    requestSection.className = 'detail-section request-body-section';
-    requestSection.innerHTML = `
-      <h4>请求参数 (Request Parameters)</h4>
-      <pre class="json-highlight">${formatJsonWithHighlight(fullLog.requestBody)}</pre>
+  const imagesList = referenceImages.map((img, index) => {
+    const sizeText = img.size ? formatBytes(img.size) : '-';
+    const dimensions = img.width && img.height ? `${img.width}×${img.height}` : '-';
+    const imgUrl = img.url || '';
+    
+    // 判断是否是有效的可预览图片 URL
+    const isPreviewable = imgUrl && (
+      imgUrl.startsWith('data:image/') || 
+      imgUrl.startsWith('http://') || 
+      imgUrl.startsWith('https://') ||
+      imgUrl.startsWith('/__aitu_cache__/')
+    );
+    
+    return `
+      <div class="reference-image-item" style="display: inline-flex; flex-direction: column; gap: 4px; border: 1px solid var(--border-color); border-radius: 8px; padding: 8px; background: var(--bg-secondary); min-width: 140px;">
+        <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">参考图 ${index + 1}</div>
+        <div style="width: 140px; height: 140px; display: flex; align-items: center; justify-content: center; overflow: hidden; background: #1a1a1a; border-radius: 4px;">
+          ${isPreviewable 
+            ? `<img src="${escapeHtml(imgUrl)}" style="max-width: 100%; max-height: 100%; object-fit: contain; cursor: pointer;" onclick="window.open('${escapeHtml(imgUrl)}')" title="点击查看原图" onerror="this.parentElement.innerHTML='<span style=\\'color:#666;font-size:12px;\\'>加载失败</span>'">`
+            : `<span style="color: #666; font-size: 12px; text-align: center; padding: 8px;">无法预览<br><span style="font-size: 10px; word-break: break-all;">${imgUrl ? imgUrl.substring(0, 30) + '...' : '无 URL'}</span></span>`
+          }
+        </div>
+        <div style="font-size: 11px; color: var(--text-muted); display: flex; justify-content: space-between; padding: 4px 2px 0;">
+          <span title="文件大小">${sizeText}</span>
+          <span title="尺寸">${dimensions}</span>
+        </div>
+        ${img.name ? `<div style="font-size: 10px; color: var(--text-muted); word-break: break-all; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(img.name)}">${escapeHtml(img.name)}</div>` : ''}
+      </div>
     `;
-    // 插入到响应体之前
-    if (responseSection) {
-      detailsEl.insertBefore(requestSection, responseSection);
-    } else {
-      detailsEl.appendChild(requestSection);
-    }
-  }
+  }).join('');
+  
+  return `
+    <div class="reference-images-preview" style="display: flex; flex-wrap: wrap; gap: 12px; margin-top: 8px;">
+      ${imagesList}
+    </div>
+  `;
 }
 
 /**

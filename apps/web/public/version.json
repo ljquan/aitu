@@ -1,6 +1,6 @@
 {
   "version": "0.5.75",
-  "buildTime": "2026-02-05T07:38:23.503Z",
+  "buildTime": "2026-02-05T07:51:18.129Z",
   "gitCommit": "unknown",
   "changelog": [
     "support opening tools via URL parameter and display tool icons in window title",

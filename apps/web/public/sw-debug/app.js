@@ -1241,5 +1241,26 @@ async function init() {
   
 }
 
+// ==================== Global Helper Functions ====================
+
+/**
+ * 切换 base64 图片预览的显示/隐藏
+ * 该函数暴露给 window 用于 inline onclick 调用
+ * @param {string} previewId - 预览元素的 ID
+ */
+window.toggleBase64Preview = function(previewId) {
+  const previewEl = document.getElementById(previewId);
+  if (previewEl) {
+    const isHidden = previewEl.style.display === 'none';
+    previewEl.style.display = isHidden ? 'inline-block' : 'none';
+    
+    // 更新 toggle 按钮的样式
+    const toggleEl = previewEl.parentElement?.querySelector('.base64-preview-toggle');
+    if (toggleEl) {
+      toggleEl.classList.toggle('expanded', isHidden);
+    }
+  }
+};
+
 // Start the app
 init();

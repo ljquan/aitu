@@ -9,7 +9,9 @@ export const isInvalidTokenError = (errorMessage: string): boolean => {
   return message.includes('invalid token') || 
          message.includes('invalid api key') ||
          message.includes('unauthorized') ||
-         message.includes('api_error') && message.includes('invalid');
+         message.includes('401') ||
+         // 检测 API 返回的 rix_api_error 类型的 token 错误
+         (message.includes('rix_api_error') && message.includes('invalid'));
 };
 
 export const notifyGenerationStateChange = (

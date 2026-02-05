@@ -316,6 +316,7 @@ class SettingsManager {
 
   /**
    * 获取特定设置值（支持点记号法）
+   * 返回深拷贝，防止外部修改影响原始设置
    */
   public getSetting<T = any>(path: string): T {
     const keys = path.split('.');
@@ -327,6 +328,12 @@ class SettingsManager {
       } else {
         return undefined as T;
       }
+    }
+    
+    // 返回深拷贝，防止外部代码修改返回值影响原始设置
+    // 这是防止脱敏函数或其他代码意外修改 apiKey 等敏感字段的关键
+    if (value && typeof value === 'object') {
+      return JSON.parse(JSON.stringify(value)) as T;
     }
     
     return value as T;
