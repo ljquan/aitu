@@ -4470,6 +4470,69 @@ const handleSortClick = () => {
 - 避免在 render 中创建新对象/函数
 - 对长列表考虑使用虚拟化
 
+#### CPU 密集型循环需要 yield 让出主线程
+
+**场景**: 在异步函数中执行大量同步操作（JSON.stringify、加密、checksum 计算等）时，即使函数是 async 的，循环内部如果没有 await 点，仍然会连续占用主线程，导致页面卡顿。
+
+❌ **错误示例**:
+```typescript
+// 错误：虽然是 async 函数，但循环内部没有 yield 点
+async function pushToRemote() {
+  // 收集数据
+  const localData = await collectSyncData();
+  
+  // 这个循环会连续执行，阻塞主线程
+  for (const [boardId, board] of localData.boards) {
+    const boardJson = JSON.stringify(board); // 同步操作
+    const encrypted = await cryptoService.encrypt(boardJson); // 虽然有 await，但每次 await 之间的 JSON.stringify 会累积
+    filesToUpdate[boardId] = encrypted;
+  }
+  // 用户可能看到页面卡顿、事件处理器超时警告
+}
+```
+
+✅ **正确示例**:
+```typescript
+import { yieldToMain } from '@aitu/utils';
+
+async function pushToRemote() {
+  const localData = await collectSyncData();
+  
+  let processedCount = 0;
+  for (const [boardId, board] of localData.boards) {
+    const boardJson = JSON.stringify(board);
+    const encrypted = await cryptoService.encrypt(boardJson);
+    filesToUpdate[boardId] = encrypted;
+    
+    // 每处理 3 个画板让出主线程，避免 UI 阻塞
+    processedCount++;
+    if (processedCount % 3 === 0) {
+      await yieldToMain();
+    }
+  }
+}
+
+// yieldToMain 的实现：
+export const yieldToMain = (): Promise<void> => {
+  return new Promise((resolve) => setTimeout(resolve, 0));
+};
+```
+
+**原因**:
+- JavaScript 是单线程的，async/await 只是让代码看起来同步，但仍然在主线程执行
+- 大量 `JSON.stringify()`、加密计算等同步操作会连续占用主线程
+- 浏览器无法处理用户输入、渲染更新，导致 `[Violation] 'mouseup' handler took 606ms` 等警告
+- `yieldToMain()` 通过 `setTimeout(0)` 将后续执行推迟到下一个事件循环，让浏览器有机会处理待处理事件
+
+**最佳实践**:
+- 每 3-5 个耗时操作后调用一次 `await yieldToMain()`
+- 可以使用 `@aitu/utils` 中的 `processBatched()` 函数自动处理分批
+- 适用场景：同步、备份、批量导入导出、大量数据处理
+
+**参考文件**:
+- `packages/utils/src/async/index.ts` - `yieldToMain` 和 `processBatched` 工具函数
+- `packages/drawnix/src/services/github-sync/sync-engine.ts` - 同步引擎中的使用示例
+
 #### 预缓存配置规范
 
 **场景**: 使用 Service Worker 预缓存静态资源时，需要合理配置排除列表

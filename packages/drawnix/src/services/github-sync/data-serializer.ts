@@ -43,6 +43,7 @@ import { workflowSyncService, convertWorkflowsToPagedFormat } from './workflow-s
 import { workflowStorageReader } from '../workflow-storage-reader';
 import type { Board, BoardMetadata, Folder } from '../../types/workspace.types';
 import { cryptoService, isEncryptedData } from './crypto-service';
+import { yieldToMain } from '@aitu/utils';
 
 /**
  * 计算字符串的简单校验和
@@ -136,6 +137,7 @@ class DataSerializer {
     const boardsIndex: Record<string, BoardSyncInfo> = {};
     const boardsMap = new Map<string, BoardData>();
 
+    let processedCount = 0;
     for (const board of boards) {
       const boardJson = JSON.stringify(board.elements);
       boardsIndex[board.id] = {
@@ -144,6 +146,11 @@ class DataSerializer {
         checksum: calculateChecksum(boardJson),
       };
       boardsMap.set(board.id, board);
+      // 每处理 5 个画板让出主线程，避免 UI 阻塞
+      processedCount++;
+      if (processedCount % 5 === 0) {
+        await yieldToMain();
+      }
     }
 
     // 构建工作区数据
@@ -281,8 +288,8 @@ class DataSerializer {
     // 序列化提示词
     files[SYNC_FILES.PROMPTS] = JSON.stringify(data.prompts, null, 2);
 
-    // 序列化任务
-    files[SYNC_FILES.TASKS] = JSON.stringify(data.tasks, null, 2);
+    // 注意：不再生成 tasks.json，改用分页格式同步
+    // 任务同步由 taskSyncService.syncTasks() 单独处理
 
     return files;
   }
@@ -316,18 +323,23 @@ class DataSerializer {
     files[SYNC_FILES.WORKSPACE] = await cryptoService.encrypt(workspaceJson, gistId, customPassword);
 
     // 加密每个画板
+    let boardProcessedCount = 0;
     for (const [boardId, board] of data.boards) {
       const boardJson = JSON.stringify(board);
       files[SYNC_FILES.boardFile(boardId)] = await cryptoService.encrypt(boardJson, gistId, customPassword);
+      // 每处理 3 个画板让出主线程，避免 UI 阻塞
+      boardProcessedCount++;
+      if (boardProcessedCount % 3 === 0) {
+        await yieldToMain();
+      }
     }
 
     // 加密提示词
     const promptsJson = JSON.stringify(data.prompts);
     files[SYNC_FILES.PROMPTS] = await cryptoService.encrypt(promptsJson, gistId, customPassword);
 
-    // 加密任务
-    const tasksJson = JSON.stringify(data.tasks);
-    files[SYNC_FILES.TASKS] = await cryptoService.encrypt(tasksJson, gistId, customPassword);
+    // 注意：不再生成 tasks.json，改用分页格式同步
+    // 任务同步由 taskSyncService.syncTasks() 单独处理
 
     return files;
   }
@@ -361,9 +373,15 @@ class DataSerializer {
     files[SYNC_FILES.WORKSPACE] = await cryptoService.encrypt(workspaceJson, gistId, customPassword);
 
     // 加密每个画板
+    let pagedBoardCount = 0;
     for (const [boardId, board] of data.boards) {
       const boardJson = JSON.stringify(board);
       files[SYNC_FILES.boardFile(boardId)] = await cryptoService.encrypt(boardJson, gistId, customPassword);
+      // 每处理 3 个画板让出主线程，避免 UI 阻塞
+      pagedBoardCount++;
+      if (pagedBoardCount % 3 === 0) {
+        await yieldToMain();
+      }
     }
 
     // 加密提示词
@@ -375,10 +393,16 @@ class DataSerializer {
     files[SYNC_FILES_PAGED.TASK_INDEX] = await cryptoService.encrypt(taskIndexJson, gistId, customPassword);
 
     // 加密任务分页
+    let taskPageCount = 0;
     for (const page of data.taskPages) {
       const pageJson = JSON.stringify(page);
       const filename = SYNC_FILES_PAGED.taskPageFile(page.pageId);
       files[filename] = await cryptoService.encrypt(pageJson, gistId, customPassword);
+      // 每处理 3 个分页让出主线程
+      taskPageCount++;
+      if (taskPageCount % 3 === 0) {
+        await yieldToMain();
+      }
     }
 
     // 加密工作流索引
@@ -386,10 +410,16 @@ class DataSerializer {
     files[SYNC_FILES_PAGED.WORKFLOW_INDEX] = await cryptoService.encrypt(workflowIndexJson, gistId, customPassword);
 
     // 加密工作流分页
+    let workflowPageCount = 0;
     for (const page of data.workflowPages) {
       const pageJson = JSON.stringify(page);
       const filename = SYNC_FILES_PAGED.workflowPageFile(page.pageId);
       files[filename] = await cryptoService.encrypt(pageJson, gistId, customPassword);
+      // 每处理 3 个分页让出主线程
+      workflowPageCount++;
+      if (workflowPageCount % 3 === 0) {
+        await yieldToMain();
+      }
     }
 
     logDebug('DataSerializer: Serialized paged files', {
@@ -465,14 +495,7 @@ class DataSerializer {
       }
     }
 
-    // 解析任务
-    if (files[SYNC_FILES.TASKS]) {
-      try {
-        result.tasks = JSON.parse(files[SYNC_FILES.TASKS]);
-      } catch (e) {
-        logWarning('DataSerializer: Failed to parse tasks:', e);
-      }
-    }
+    // 注意：tasks 使用分页格式同步，不再解析 tasks.json
 
     return result;
   }
@@ -615,25 +638,7 @@ class DataSerializer {
       logWarning('DataSerializer: Prompts file NOT FOUND in input files!');
     }
 
-    // 解析任务
-    if (files[SYNC_FILES.TASKS]) {
-      logDebug('DataSerializer: Parsing tasks, encrypted:', isEncryptedData(files[SYNC_FILES.TASKS]));
-      try {
-        const content = await cryptoService.decryptOrPassthrough(files[SYNC_FILES.TASKS], gistId, customPassword);
-        result.tasks = JSON.parse(content);
-        logDebug('DataSerializer: Tasks parsed successfully:', {
-          completedTasks: result.tasks?.completedTasks?.length || 0,
-        });
-      } catch (e) {
-        // 重新抛出解密错误
-        if (e instanceof Error && e.name === 'DecryptionError') {
-          throw e;
-        }
-        logWarning('DataSerializer: Failed to parse tasks:', e);
-      }
-    } else {
-      logWarning('DataSerializer: Tasks file NOT FOUND in input files!');
-    }
+    // 注意：tasks 使用分页格式同步，不再解析 tasks.json
 
     logDebug('DataSerializer: ========== deserializeFromGistFilesWithDecryption END ==========');
     logDebug('DataSerializer: Final result:', {
@@ -665,8 +670,6 @@ class DataSerializer {
     taskPages: Map<number, TaskPage>;
     workflowIndex: WorkflowIndex | null;
     workflowPages: Map<number, WorkflowPage>;
-    // 兼容旧格式
-    legacyTasks: TasksData | null;
   }> {
     logDebug('DataSerializer: ========== deserializeFromGistFilesPagedWithDecryption START ==========');
     
@@ -679,12 +682,7 @@ class DataSerializer {
       taskPages: new Map<number, TaskPage>(),
       workflowIndex: null as WorkflowIndex | null,
       workflowPages: new Map<number, WorkflowPage>(),
-      legacyTasks: null as TasksData | null,
     };
-
-    // 检测任务格式
-    const taskFormat = detectTaskSyncFormat(files);
-    logDebug('DataSerializer: Detected task format:', taskFormat);
 
     // 解析 manifest
     if (files[SYNC_FILES.MANIFEST]) {
@@ -745,53 +743,36 @@ class DataSerializer {
       }
     }
 
-    // 解析任务（分页格式或旧格式）
-    if (taskFormat === 'paged') {
-      // 解析任务索引
-      if (files[SYNC_FILES_PAGED.TASK_INDEX]) {
-        try {
-          const content = await cryptoService.decryptOrPassthrough(
-            files[SYNC_FILES_PAGED.TASK_INDEX],
-            gistId,
-            customPassword
-          );
-          result.taskIndex = JSON.parse(content);
-          logDebug('DataSerializer: Parsed task index:', {
-            items: result.taskIndex?.items?.length || 0,
-            pages: result.taskIndex?.pages?.length || 0,
-          });
-        } catch (e) {
-          if (e instanceof Error && e.name === 'DecryptionError') throw e;
-          logWarning('DataSerializer: Failed to parse task index:', e);
-        }
+    // 解析任务（只支持分页格式）
+    // 解析任务索引
+    if (files[SYNC_FILES_PAGED.TASK_INDEX]) {
+      try {
+        const content = await cryptoService.decryptOrPassthrough(
+          files[SYNC_FILES_PAGED.TASK_INDEX],
+          gistId,
+          customPassword
+        );
+        result.taskIndex = JSON.parse(content);
+        logDebug('DataSerializer: Parsed task index:', {
+          items: result.taskIndex?.items?.length || 0,
+          pages: result.taskIndex?.pages?.length || 0,
+        });
+      } catch (e) {
+        if (e instanceof Error && e.name === 'DecryptionError') throw e;
+        logWarning('DataSerializer: Failed to parse task index:', e);
       }
+    }
 
-      // 解析任务分页
-      for (const [filename, content] of Object.entries(files)) {
-        if (SYNC_FILES_PAGED.isTaskPageFile(filename)) {
-          try {
-            const decrypted = await cryptoService.decryptOrPassthrough(content, gistId, customPassword);
-            const page: TaskPage = JSON.parse(decrypted);
-            result.taskPages.set(page.pageId, page);
-          } catch (e) {
-            if (e instanceof Error && e.name === 'DecryptionError') throw e;
-            logWarning(`DataSerializer: Failed to parse task page ${filename}:`, e);
-          }
-        }
-      }
-    } else {
-      // 旧格式
-      if (files[SYNC_FILES.TASKS]) {
+    // 解析任务分页
+    for (const [filename, content] of Object.entries(files)) {
+      if (SYNC_FILES_PAGED.isTaskPageFile(filename)) {
         try {
-          const content = await cryptoService.decryptOrPassthrough(
-            files[SYNC_FILES.TASKS],
-            gistId,
-            customPassword
-          );
-          result.legacyTasks = JSON.parse(content);
+          const decrypted = await cryptoService.decryptOrPassthrough(content, gistId, customPassword);
+          const page: TaskPage = JSON.parse(decrypted);
+          result.taskPages.set(page.pageId, page);
         } catch (e) {
           if (e instanceof Error && e.name === 'DecryptionError') throw e;
-          logWarning('DataSerializer: Failed to parse legacy tasks:', e);
+          logWarning(`DataSerializer: Failed to parse task page ${filename}:`, e);
         }
       }
     }
@@ -839,7 +820,6 @@ class DataSerializer {
       taskPagesCount: result.taskPages.size,
       hasWorkflowIndex: !!result.workflowIndex,
       workflowPagesCount: result.workflowPages.size,
-      hasLegacyTasks: !!result.legacyTasks,
     });
 
     return result;

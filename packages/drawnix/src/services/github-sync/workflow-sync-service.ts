@@ -8,6 +8,7 @@ import type { WorkflowDefinition, WorkflowStep } from '../sw-channel/types/workf
 import { gitHubApiService } from './github-api-service';
 import { cryptoService } from './crypto-service';
 import { logDebug, logInfo, logWarning, logError } from './sync-log-service';
+import { yieldToMain } from '@aitu/utils';
 import {
   WorkflowIndex,
   WorkflowIndexItem,
@@ -393,23 +394,25 @@ class WorkflowSyncService {
     gistId: string,
     customPassword?: string
   ): Promise<void> {
-    const files: Record<string, { content: string }> = {};
+    const files: Record<string, string> = {};
 
     // 加密并序列化索引
     const indexJson = JSON.stringify(index, null, 2);
-    files[SYNC_FILES_PAGED.WORKFLOW_INDEX] = {
-      content: await cryptoService.encrypt(indexJson, gistId, customPassword),
-    };
+    files[SYNC_FILES_PAGED.WORKFLOW_INDEX] = await cryptoService.encrypt(indexJson, gistId, customPassword);
 
     // 加密并序列化需要上传的分页
+    let uploadedPageCount = 0;
     for (const pageId of pagesToUpload) {
       const page = pages.find(p => p.pageId === pageId);
       if (page) {
         const pageJson = JSON.stringify(page, null, 2);
         const filename = SYNC_FILES_PAGED.workflowPageFile(pageId);
-        files[filename] = {
-          content: await cryptoService.encrypt(pageJson, gistId, customPassword),
-        };
+        files[filename] = await cryptoService.encrypt(pageJson, gistId, customPassword);
+      }
+      // 每处理 3 个分页让出主线程
+      uploadedPageCount++;
+      if (uploadedPageCount % 3 === 0) {
+        await yieldToMain();
       }
     }
 
@@ -438,6 +441,8 @@ class WorkflowSyncService {
 
     // 构建本地索引
     const { index: localIndex, pages: localPages } = await this.buildLocalIndex();
+    // 让出主线程，避免 UI 阻塞
+    await yieldToMain();
 
     // 如果本地没有工作流，跳过同步
     if (localIndex.items.length === 0) {
@@ -452,12 +457,18 @@ class WorkflowSyncService {
           pagesToDownload.add(item.pageId);
         }
         
+        let emptyDownloadCount = 0;
         for (const pageId of pagesToDownload) {
           const page = await this.downloadRemotePage(pageId, gistId, customPassword);
           if (page) {
             // 恢复工作流到本地 - 需要通过 SW 的 importWorkflows 方法
             // 这里暂时只记录下载数量
             downloaded += page.workflows.length;
+          }
+          // 每处理 2 个分页让出主线程
+          emptyDownloadCount++;
+          if (emptyDownloadCount % 2 === 0) {
+            await yieldToMain();
           }
         }
         
@@ -483,12 +494,18 @@ class WorkflowSyncService {
 
     // 下载需要的分页
     let downloaded = 0;
+    let downloadedPageCount = 0;
     for (const pageId of changes.pagesToDownload) {
       const page = await this.downloadRemotePage(pageId, gistId, customPassword);
       if (page) {
         // 恢复工作流到本地 - 需要通过 SW 的 importWorkflows 方法
         // 这里暂时只记录下载数量
         downloaded += page.workflows.length;
+      }
+      // 每处理 2 个分页让出主线程
+      downloadedPageCount++;
+      if (downloadedPageCount % 2 === 0) {
+        await yieldToMain();
       }
     }
 
