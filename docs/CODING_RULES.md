@@ -2723,7 +2723,7 @@ export function useTaskQueue() {
 
 ✅ **正确示例**:
 ```typescript
-// 正确：渲染时从 SW 同步数据
+// 正确：渲染时直接从 IndexedDB 加载数据
 export function useTaskQueue() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const syncAttempted = useRef(false);
@@ -2732,34 +2732,96 @@ export function useTaskQueue() {
     setTasks(taskQueueService.getAllTasks());
   }, []);
 
-  // 渲染时从 SW 同步
+  // 渲染时从 IndexedDB 加载
   useEffect(() => {
     if (syncAttempted.current) return;
     syncAttempted.current = true;
 
-    const syncFromSW = async () => {
-      if (!shouldUseSWTaskQueue()) return;
-      await swTaskQueueService.syncTasksFromSW();
-      const swTasks = swTaskQueueService.getAllTasks();
-      if (swTasks.length > 0) {
-        taskQueueService.restoreTasks(swTasks);
+    const loadTasks = async () => {
+      // 直接从 IndexedDB 读取任务
+      const storedTasks = await taskStorageReader.getAllTasks();
+      if (storedTasks.length > 0) {
+        taskQueueService.restoreTasks(storedTasks);
       }
     };
-    syncFromSW();
+    loadTasks();
   }, []);
 }
 ```
 
 **原因**:
 - `taskQueueService` 是纯内存服务，页面刷新后数据丢失
-- `swTaskQueueService` 通过 SW 持久化数据到 IndexedDB
-- 组件渲染时需要从 SW 同步数据到本地服务，确保 UI 显示正确
+- 任务数据持久化在 IndexedDB 中，直接通过 `taskStorageReader` 读取
+- 避免 postMessage RPC 的 1MB 大小限制和通信不稳定性
 6. **响应数据格式可能有多种嵌套结构**，需要灵活解析而非假设单一格式
 
 **相关文件**:
 - `packages/drawnix/src/services/sw-channel/client.ts` - 主应用的 SW 通道客户端
 - `apps/web/src/sw/task-queue/channel-manager.ts` - SW 端的通道管理器
 - `apps/web/public/sw-debug/duplex-client.js` - 调试页面的 duplex 客户端
+
+### 降级模式（?sw=0）下任务必须自动执行
+
+**场景**: 用户通过 `?sw=0` URL 参数禁用 Service Worker，使用降级模式
+
+❌ **错误示例**:
+```typescript
+// 错误：降级模式下只创建任务，没有执行
+class TaskQueueService {
+  createTask(params: GenerationParams, type: TaskType): Task {
+    const task = { id: generateTaskId(), type, status: TaskStatus.PROCESSING, ... };
+    this.tasks.set(task.id, task);
+    this.persistTask(task);  // 保存到 IndexedDB
+    this.emitEvent('taskCreated', task);
+    return task;  // 任务被创建但永远不会执行！
+  }
+}
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：创建任务后自动触发执行
+class TaskQueueService {
+  createTask(params: GenerationParams, type: TaskType): Task {
+    const task = { id: generateTaskId(), type, status: TaskStatus.PROCESSING, ... };
+    this.tasks.set(task.id, task);
+    this.persistTask(task);
+    this.emitEvent('taskCreated', task);
+    
+    // 自动执行任务（fire-and-forget）
+    this.executeTask(task).catch((error) => {
+      console.error('[TaskQueueService] Task execution error:', error);
+    });
+    
+    return task;
+  }
+  
+  private async executeTask(task: Task): Promise<void> {
+    const executor = await executorFactory.getExecutor();
+    // 根据任务类型执行
+    if (task.type === TaskType.IMAGE) {
+      await executor.generateImage({ taskId: task.id, prompt: task.params.prompt, ... });
+    } else if (task.type === TaskType.VIDEO) {
+      await executor.generateVideo({ taskId: task.id, prompt: task.params.prompt, ... });
+    }
+    // 轮询等待完成
+    const result = await waitForTaskCompletion(task.id, { timeout: 10 * 60 * 1000 });
+    // 更新状态
+    ...
+  }
+}
+```
+
+**原因**:
+- SW 模式下，任务由 SW 自动执行（在 `submitToSW` 中）
+- 降级模式下，任务只保存到 IndexedDB，没有后台进程执行它们
+- `legacyTaskQueueService` 必须在 `createTask` 后自动调用 `executeTask`
+- 同样，`retryTask` 也需要在重置状态后触发执行
+
+**相关文件**:
+- `packages/drawnix/src/services/task-queue-service.ts` - 降级模式任务服务
+- `packages/drawnix/src/services/media-executor/factory.ts` - 执行器工厂
+- `packages/drawnix/src/services/media-executor/fallback-executor.ts` - 降级执行器
 
 ### 设置保存后需要主动更新 Service Worker 配置
 

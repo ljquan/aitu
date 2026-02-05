@@ -81,11 +81,9 @@ export async function generateImageWithGemini(
   const useSW = await ensureSWInitialized();
   
   if (useSW) {
-    // console.log('[ImageAPI] Using SW mode for image generation');
     return generateImageViaSW(prompt, options, modelName);
   }
   
-  // console.log('[ImageAPI] Using direct fetch for image generation');
   return generateImageDirect(prompt, options, modelName);
 }
 

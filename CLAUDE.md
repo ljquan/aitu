@@ -160,14 +160,14 @@ Service Worker (后台执行)
 10. **postmessage-duplex 1.1.0 通信模式**：RPC 用 `call()` 方法（需响应），单向广播用 `broadcast()` + `onBroadcast()`（fire-and-forget）；SW 用 `enableGlobalRouting` 自动管理 channel
 11. **postmessage-duplex 客户端初始化**：`createFromPage()` 设置 `autoReconnect: true` 处理 SW 更新；禁用日志需 `log: {...}` 配合 `as any`（类型定义不含 log）
 12. **postmessage-duplex 消息大小限制**：单次 RPC 响应不超过 1MB，大数据查询需后端分页+精简数据（去掉 requestBody/responseBody 等大字段）
-13. **任务队列双服务同步**：`taskQueueService`（本地）和 `swTaskQueueService`（SW）是独立的，组件渲染时需调用 `syncTasksFromSW()` 同步数据
+13. **主线程直接读取 IndexedDB**：只读数据直接用 `taskStorageReader.getAllTasks()` 读取，避免 postMessage 限制；写操作通过 SW 或 `taskStorageWriter` 保持一致性
 14. **任务数据持久化**：主线程的 `tasks` Map 只是内存状态，恢复任务必须通过 `importTasks` RPC 持久化到 SW 的 IndexedDB
-15. **工作流恢复状态不一致**：UI 与 SW 状态不一致时（如终态但有运行中步骤），必须先从 SW 获取真实状态，不能直接标记为失败
-16. **错误处理链保持完整**：需要传递特殊错误属性（如 `isAwaitingClient`）时，必须重新抛出原始错误，不能创建新 Error 对象
-17. **SW 重发 Tool Request 需延迟**：页面刷新后 claim 工作流时，SW 重发 pending tool request 需延迟 500ms，等待主线程 handler 准备好
-18. **同步数据双向合并**：下载远程数据时必须与本地合并（基于 ID 去重，`updatedAt` 判断版本），合并后自动上传确保双向同步
-19. **同步数据格式一致性**：`tasks.json` 结构是 `{ completedTasks: Task[] }` 不是数组，画板文件是 `board_{id}.json` 不是 `.drawnix`
-20. **主线程直接读取 IndexedDB**：只读数据（任务列表、工作流状态）应直接从 IndexedDB 读取，避免 postMessage RPC 的不稳定性和 1MB 大小限制；写操作仍需通过 SW 保持数据一致性
+15. **降级模式任务执行**：`?sw=0` 降级模式下，`createTask` 后必须自动触发 `executeTask`，否则任务只会被创建但不会执行
+16. **工作流恢复状态不一致**：UI 与 SW 状态不一致时（如终态但有运行中步骤），必须先从 SW 获取真实状态，不能直接标记为失败
+17. **错误处理链保持完整**：需要传递特殊错误属性（如 `isAwaitingClient`）时，必须重新抛出原始错误，不能创建新 Error 对象
+18. **SW 重发 Tool Request 需延迟**：页面刷新后 claim 工作流时，SW 重发 pending tool request 需延迟 500ms，等待主线程 handler 准备好
+19. **同步数据双向合并**：下载远程数据时必须与本地合并（基于 ID 去重，`updatedAt` 判断版本），合并后自动上传确保双向同步
+20. **同步数据格式一致性**：`tasks.json` 结构是 `{ completedTasks: Task[] }` 不是数组，画板文件是 `board_{id}.json` 不是 `.drawnix`
 21. **RPC 超时与重连**：关键 RPC 调用（如工作流提交）需设置合理超时（15-30秒），超时时主动重新初始化 SW 连接并重试
 22. **降级路径功能一致性**：降级到主线程直接调用 API 时，必须保持与 SW 模式相同的功能行为（如 LLM API 日志记录），否则调试工具会漏掉这些调用
 

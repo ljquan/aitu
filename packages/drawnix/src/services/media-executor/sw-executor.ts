@@ -6,6 +6,7 @@
  */
 
 import { swChannelClient } from '../sw-channel/client';
+import { shouldUseSWTaskQueue } from '../task-queue';
 import type {
   IMediaExecutor,
   ImageGenerationParams,
@@ -46,6 +47,10 @@ export class SWMediaExecutor implements IMediaExecutor {
    * 检查 SW 是否可用
    */
   async isAvailable(): Promise<boolean> {
+    // URL 参数检查：?sw=0 禁用 SW
+    if (!shouldUseSWTaskQueue()) {
+      return false;
+    }
     if (!('serviceWorker' in navigator)) {
       return false;
     }

@@ -27,6 +27,7 @@ import { useChatDrawerControl } from '../contexts/ChatDrawerContext';
 import type { WorkflowMessageData, WorkflowRetryContext, PostProcessingStatus } from '../types/chat.types';
 import type { ParsedGenerationParams } from '../utils/ai-input-parser';
 import { convertToWorkflow, type WorkflowDefinition as LegacyWorkflowDefinition } from '../components/ai-input-bar/workflow-converter';
+import { shouldUseSWTaskQueue } from '../services/task-queue';
 import { WorkZoneTransforms } from '../plugins/with-workzone';
 import { PlaitBoard } from '@plait/core';
 import { geminiSettings } from '../utils/settings-manager';
@@ -110,7 +111,15 @@ export function toWorkflowMessageData(
  * Check if Service Worker is available and ready
  */
 function checkSWAvailable(): boolean {
-  return !!(navigator.serviceWorker && navigator.serviceWorker.controller);
+  // URL 参数检查：?sw=0 禁用 SW
+  const swEnabled = shouldUseSWTaskQueue();
+  if (!swEnabled) {
+    console.log('[checkSWAvailable] SW disabled via URL parameter');
+    return false;
+  }
+  const hasController = !!(navigator.serviceWorker && navigator.serviceWorker.controller);
+  console.log('[checkSWAvailable] SW controller available:', hasController);
+  return hasController;
 }
 
 /**
@@ -663,16 +672,16 @@ export function useWorkflowSubmission(
 
     // Determine execution mode
     const shouldUseSW = useSWExecution && shouldUseSWExecution(parsedInput);
-    // console.log('[useWorkflowSubmission]   - shouldUseSW:', shouldUseSW);
+    console.log('[useWorkflowSubmission] Execution mode check:', { useSWExecution, shouldUseSW });
 
     if (shouldUseSW) {
       // Execute in Service Worker
-      // console.log('[useWorkflowSubmission] ✓ Using SW execution');
+      console.log('[useWorkflowSubmission] Using SW execution');
       await submitToSW(legacyWorkflow, parsedInput, referenceImages, finalRetryContext);
       return { workflowId: legacyWorkflow.id, usedSW: true };
     } else {
       // Return workflow ID - caller (AIInputBar) will handle legacy execution
-      // console.log('[useWorkflowSubmission] ✗ Using legacy execution for:', parsedInput.scenario);
+      console.log('[useWorkflowSubmission] Using fallback execution (SW disabled)');
       return { workflowId: legacyWorkflow.id, usedSW: false };
     }
   }, [workflowControl, useSWExecution, submitToSW]);

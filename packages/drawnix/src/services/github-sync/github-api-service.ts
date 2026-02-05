@@ -306,37 +306,28 @@ class GitHubApiService {
       throw new GitHubApiError('未指定 Gist ID', 400);
     }
 
-    const caller = this.getCallerInfo();
-    const shortId = id.substring(0, 8);
-
     // 页面会话级缓存：只要有缓存就返回，不检查 TTL
     const cached = this.gistCache.get(id);
     if (cached) {
-      const cacheAge = Math.round((Date.now() - cached.timestamp) / 1000);
-      console.log(`[getGist] 缓存命中 gistId=${shortId} cacheAge=${cacheAge}s caller=${caller}`);
       return cached.response;
     }
 
     // 检查是否有进行中的请求（并发去重）
     const pending = this.pendingGistRequests.get(id);
     if (pending) {
-      console.log(`[getGist] 并发去重 gistId=${shortId} caller=${caller}`);
       return pending;
     }
 
     // 发起新请求
-    console.log(`[getGist] 发起新请求 gistId=${shortId} caller=${caller}`);
     const requestPromise = this.request<GistResponse>(`/gists/${id}`)
       .then((response) => {
         // 缓存响应（页面会话级，不会自动过期）
         this.gistCache.set(id, { response, timestamp: Date.now() });
         this.pendingGistRequests.delete(id);
-        console.log(`[getGist] 请求完成并缓存 gistId=${shortId} filesCount=${Object.keys(response.files).length}`);
         return response;
       })
       .catch((error) => {
         this.pendingGistRequests.delete(id);
-        console.error(`[getGist] 请求失败 gistId=${shortId}`, error);
         throw error;
       });
 

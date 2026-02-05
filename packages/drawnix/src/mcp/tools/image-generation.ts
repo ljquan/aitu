@@ -72,13 +72,6 @@ async function executeAsync(params: ImageGenerationParams): Promise<MCPResult> {
   }
 
   try {
-    // console.log('[ImageGenerationTool] Generating image with params:', {
-    //   prompt: prompt.substring(0, 100) + (prompt.length > 100 ? '...' : ''),
-    //   size,
-    //   referenceImages: referenceImages?.length || 0,
-    //   quality,
-    // });
-
     // 调用 Gemini 图片生成 API
     const result = await defaultGeminiClient.generateImage(prompt, {
       size: size || '1x1',
@@ -352,16 +345,24 @@ export const imageGenerationTool: MCPTool = {
   },
 
   execute: async (params: Record<string, unknown>, options?: MCPExecuteOptions): Promise<MCPResult> => {
+    console.log('[ImageGenerationTool] execute called with mode:', options?.mode);
     const typedParams = params as unknown as ImageGenerationParams;
     const mode = options?.mode || 'async';
 
     if (mode === 'queue') {
-      // 确保 SW 任务队列已初始化
+      // 检查 SW 是否可用
       const { shouldUseSWTaskQueue, swTaskQueueService } = await import('../../services/task-queue');
-      if (shouldUseSWTaskQueue()) {
+      const swEnabled = shouldUseSWTaskQueue();
+      console.log('[ImageGenerationTool] SW enabled:', swEnabled);
+      if (swEnabled) {
+        // SW 可用：使用队列模式
         await swTaskQueueService.initialize();
+        return executeQueue(typedParams, options || {});
+      } else {
+        // SW 不可用（降级模式）：改用 async 模式直接执行
+        console.log('[ImageGenerationTool] SW unavailable, using async mode instead of queue');
+        return executeAsync(typedParams);
       }
-      return executeQueue(typedParams, options || {});
     }
 
     return executeAsync(typedParams);

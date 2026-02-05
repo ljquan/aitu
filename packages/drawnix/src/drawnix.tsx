@@ -299,15 +299,12 @@ export const Drawnix: React.FC<DrawnixProps> = ({
         const { shouldUseSWTaskQueue } = await import('./services/task-queue');
         const { TaskStatus } = await import('./types/task.types');
 
-        // In SW mode, ensure tasks are synced from SW first
+        // In SW mode, initialize SW service (tasks are read directly from IndexedDB)
         let swInitialized = false;
         if (shouldUseSWTaskQueue()) {
           const { swTaskQueueService } = await import('./services/sw-task-queue-service');
-          // Wait for SW to be initialized and tasks synced
+          // Wait for SW to be initialized
           swInitialized = await swTaskQueueService.initialize();
-          if (swInitialized) {
-            await swTaskQueueService.syncTasksFromSW();
-          }
         }
 
         // Query all chat workflows from SW (only if SW is initialized)

@@ -1099,7 +1099,9 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
       currentRetryContextRef.current = retryContext;
 
       try {
+        console.log('[AIInputBar] Submitting workflow...');
         const { usedSW } = await submitWorkflowToSW(parsedParams, referenceImages, retryContext, workflow);
+        console.log('[AIInputBar] submitWorkflowToSW returned:', { usedSW });
         if (usedSW) {
           if (prompt.trim()) {
             const hasSelection = allContent.length > 0;
@@ -1126,7 +1128,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
       }
 
       // Fallback: 主线程执行（仅当 SW 不可用时）
-      // console.log(`[AIInputBar] Fallback: Executing workflow in main thread: ${workflow.steps.length} steps`);
+      console.log('[AIInputBar] Fallback: Executing workflow in main thread:', workflow.steps.length, 'steps');
 
       const createdTaskIds: string[] = [];
 
@@ -1222,6 +1224,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
 
       // 执行单个步骤的函数
       const executeStep = async (step: typeof workflow.steps[0]) => {
+        console.log('[AIInputBar] Executing step:', step.mcp, 'with mode:', step.options?.mode);
         const stepStartTime = Date.now();
 
         // 更新步骤为运行中
@@ -1235,11 +1238,13 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
             ...createStepCallbacks(step, stepStartTime),
           };
 
+          console.log('[AIInputBar] Calling mcpRegistry.executeTool for:', step.mcp);
           // 通过 MCP Registry 执行工具
           const result = await mcpRegistry.executeTool(
             { name: step.mcp, arguments: step.args },
             executeOptions
           ) as MCPTaskResult;
+          console.log('[AIInputBar] Tool result:', { success: result.success, taskId: result.taskId, error: result.error });
 
           // 根据结果更新步骤状态
           const currentStepStatus = workflowControl.getWorkflow()?.steps.find(s => s.id === step.id)?.status;

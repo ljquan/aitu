@@ -66,7 +66,7 @@ class SWTaskQueueService {
 
   /**
    * 设置 visibility 变化监听器
-   * 当页面变为可见时，主动从 SW 同步任务状态
+   * 当页面变为可见时，清除任务缓存，下次读取时会重新从 IndexedDB 获取最新数据
    * 这样即使事件丢失（如 SW 更新），也能获取到最新状态
    */
   private setupVisibilityListener(): void {
@@ -76,10 +76,8 @@ class SWTaskQueueService {
     this.visibilityListenerRegistered = true;
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible' && this.initialized) {
-        // 页面变为可见时，静默同步任务状态
-        this.syncTasksFromSW().catch(() => {
-          // 静默忽略错误
-        });
+        // 页面变为可见时，清除缓存，下次读取时会重新从 IndexedDB 获取
+        taskStorageReader.invalidateCache();
       }
     });
   }
@@ -370,40 +368,6 @@ class SWTaskQueueService {
     hasMore: true,
     pageSize: 50,
   };
-
-  /**
-   * Sync tasks from IndexedDB to local state
-   * 只加载第一页，避免内存溢出
-   */
-  async syncTasksFromSW(): Promise<void> {
-    try {
-      if (await taskStorageReader.isAvailable()) {
-        // 获取所有任务并只取第一页
-        const allTasks = await taskStorageReader.getAllTasks();
-        const firstPageTasks = allTasks.slice(0, this.paginationState.pageSize);
-        
-        // 清空现有任务，重新加载
-        this.tasks.clear();
-        
-        for (const task of firstPageTasks) {
-          this.tasks.set(task.id, task);
-        }
-        
-        // 更新分页状态
-        this.paginationState.total = allTasks.length;
-        this.paginationState.loadedCount = firstPageTasks.length;
-        this.paginationState.hasMore = firstPageTasks.length < allTasks.length;
-        
-        // 如果同步到任务数据，标记为已初始化
-        if (this.paginationState.loadedCount > 0 && !this.initialized) {
-          this.initialized = true;
-          this.setupVisibilityListener();
-        }
-      }
-    } catch {
-      // 静默忽略同步错误
-    }
-  }
 
   /**
    * 加载更多任务（分页）

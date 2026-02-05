@@ -399,16 +399,24 @@ export const videoGenerationTool: MCPTool = {
   },
 
   execute: async (params: Record<string, unknown>, options?: MCPExecuteOptions): Promise<MCPResult> => {
+    console.log('[VideoGenerationTool] execute called with mode:', options?.mode);
     const typedParams = params as unknown as VideoGenerationParams;
     const mode = options?.mode || 'async';
 
     if (mode === 'queue') {
-      // 确保 SW 任务队列已初始化
+      // 检查 SW 是否可用
       const { shouldUseSWTaskQueue, swTaskQueueService } = await import('../../services/task-queue');
-      if (shouldUseSWTaskQueue()) {
+      const swEnabled = shouldUseSWTaskQueue();
+      console.log('[VideoGenerationTool] SW enabled:', swEnabled);
+      if (swEnabled) {
+        // SW 可用：使用队列模式
         await swTaskQueueService.initialize();
+        return executeQueue(typedParams, options || {});
+      } else {
+        // SW 不可用（降级模式）：改用 async 模式直接执行
+        console.log('[VideoGenerationTool] SW unavailable, using async mode instead of queue');
+        return executeAsync(typedParams);
       }
-      return executeQueue(typedParams, options || {});
     }
 
     return executeAsync(typedParams);

@@ -214,6 +214,21 @@ class TaskStorageWriter {
   }
 
   /**
+   * 删除任务
+   */
+  async deleteTask(taskId: string): Promise<void> {
+    const db = await this.getDB();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(TASKS_STORE, 'readwrite');
+      const store = transaction.objectStore(TASKS_STORE);
+      const request = store.delete(taskId);
+
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve();
+    });
+  }
+
+  /**
    * 关闭数据库连接
    */
   close(): void {
