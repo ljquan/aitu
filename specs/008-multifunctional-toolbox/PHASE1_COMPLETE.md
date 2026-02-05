@@ -51,7 +51,7 @@
 npm start
 ```
 
-打开浏览器访问 `http://localhost:4200`
+打开浏览器访问 `http://localhost:7200`
 
 ### 方法 2: 在浏览器控制台测试
 
