@@ -17,7 +17,7 @@ import {
   pollVideoUntilComplete,
   fetchImageWithCache,
   parseSize,
-  cropImageToAspectRatio,
+  fitImageToCanvas,
 } from '../utils/media-generation-utils';
 import type { LLMReferenceImage } from '../llm-api-logger';
 
@@ -171,12 +171,12 @@ export class VideoHandler implements TaskHandler {
           // 使用通用函数从缓存获取图片
           let blob = await fetchImageWithCache(url, signal);
           if (blob) {
-            // 如果指定了目标尺寸，裁剪图片到匹配的宽高比
+            // 如果指定了目标尺寸，将图片适配到精确的目标尺寸（居中放置，主色调填充背景）
             if (targetSize) {
-              blob = await cropImageToAspectRatio(blob, targetSize.width, targetSize.height);
+              blob = await fitImageToCanvas(blob, targetSize.width, targetSize.height);
             }
             
-            // 获取裁剪后的图片信息用于日志
+            // 获取处理后的图片信息用于日志
             try {
               const info = await getImageInfo(blob, signal);
               referenceImageInfos.push({
@@ -186,7 +186,7 @@ export class VideoHandler implements TaskHandler {
                 height: info.height,
               });
             } catch (err) {
-              console.warn(`[VideoHandler] Failed to get cropped image info for log`, err);
+              console.warn(`[VideoHandler] Failed to get processed image info for log`, err);
               referenceImageInfos.push({ url, size: blob.size, width: 0, height: 0 });
             }
             
