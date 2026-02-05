@@ -4714,6 +4714,65 @@ window.addEventListener('gemini-settings-changed', () => {
 - 这样可以确保导出/备份时不会泄露敏感信息
 - 用户更新设置后，已打开的工具可以自动刷新使用新的配置
 
+#### 配置对象返回深拷贝防止意外修改
+
+**场景**: 设置管理器返回配置对象后，外部代码（如脱敏函数）修改返回值
+
+❌ **错误示例**:
+```typescript
+// 错误：getSetting 返回直接引用
+class SettingsManager {
+  private settings: Record<string, any> = {};
+  
+  public getSetting<T>(path: string): T {
+    const keys = path.split('.');
+    let value = this.settings;
+    for (const key of keys) {
+      value = value?.[key];
+    }
+    return value as T;  // 返回直接引用！
+  }
+}
+
+// 使用时：外部代码修改了返回值
+const config = settingsManager.getSetting('gemini');
+sanitizeObject(config);  // sanitizeObject 修改了 config.apiKey 为 '[REDACTED]'
+// 现在全局设置中的 apiKey 也变成了 '[REDACTED]'！
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：返回深拷贝
+class SettingsManager {
+  private settings: Record<string, any> = {};
+  
+  public getSetting<T>(path: string): T {
+    const keys = path.split('.');
+    let value = this.settings;
+    for (const key of keys) {
+      value = value?.[key];
+    }
+    
+    // 返回深拷贝，防止外部代码修改返回值影响原始设置
+    if (value && typeof value === 'object') {
+      return JSON.parse(JSON.stringify(value)) as T;
+    }
+    return value as T;
+  }
+}
+
+// 使用时：外部代码修改的是副本，不影响原始设置
+const config = settingsManager.getSetting('gemini');
+sanitizeObject(config);  // 修改的是副本
+// 全局设置中的 apiKey 保持不变
+```
+
+**原因**: 
+- `sanitizeObject` 等脱敏函数会修改传入的对象（如将 `apiKey` 替换为 `[REDACTED]`）
+- 如果返回直接引用，脱敏函数会意外修改全局配置
+- 这会导致后续 API 调用使用被脱敏的值（如 `"[REDACTED]"` 或 `"{key}"`）而失败
+- 返回深拷贝确保全局配置不会被外部代码意外修改
+
 #### 部署脚本安全实践
 
 **场景**: 创建部署脚本（上传文件、执行远程命令等）时
