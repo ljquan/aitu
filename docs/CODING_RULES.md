@@ -4999,6 +4999,72 @@ function precacheManifestPlugin(): Plugin {
 - 占用用户设备存储空间
 - 影响主应用的启动性能和用户体验
 
+#### 统计与监控上报旁路化
+
+**场景**: 使用 PostHog、Sentry、Web Vitals、Page Report 等统计/监控上报时，若在首屏或用户操作路径上同步执行初始化、脱敏、capture，会抢主线程与网络，导致 LCP/INP 变差，甚至触发 413 等错误。
+
+❌ **错误示例**:
+```typescript
+// 错误：首屏 1s 后同步初始化监控，与主流程抢 CPU
+setTimeout(() => {
+  initWebVitals();
+  initPageReport();
+}, 1000);
+
+// 错误：在 track 内同步脱敏 + capture，阻塞调用方
+track(eventName: string, eventData?: Record<string, any>) {
+  const sanitized = sanitizeObject(eventData);
+  window.posthog.capture(eventName, sanitized);
+}
+
+// 错误：在 Web Vitals 回调栈里直接上报，占用性能回调时间
+function reportWebVitals(metric: Metric) {
+  analytics.track('$web_vitals', eventProperties); // 同步
+}
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：用 requestIdleCallback 在空闲时初始化（无则 setTimeout 兜底）
+const scheduleMonitoring = () => {
+  if (typeof window.requestIdleCallback === 'function') {
+    window.requestIdleCallback(initMonitoring, { timeout: 3000 });
+  } else {
+    setTimeout(initMonitoring, 3000);
+  }
+};
+scheduleMonitoring();
+
+// 正确：脱敏与 capture 在 requestIdleCallback/setTimeout 中执行，调用方同步返回
+track(eventName: string, eventData?: Record<string, any>) {
+  const doTrack = () => {
+    try {
+      const sanitized = eventData ? sanitizeObject(eventData) : undefined;
+      window.posthog!.capture(eventName, sanitized);
+    } catch (e) {
+      console.debug('[Analytics] track failed', e);
+    }
+  };
+  if (typeof requestIdleCallback !== 'undefined') {
+    requestIdleCallback(doTrack, { timeout: 2000 });
+  } else {
+    setTimeout(doTrack, 0);
+  }
+}
+
+// 正确：先延后再上报，不阻塞 CWV 回调栈
+function reportWebVitals(metric: Metric) {
+  setTimeout(() => analytics.track('$web_vitals', eventProperties), 0);
+}
+```
+
+**原因**:
+- 统计上报是旁路逻辑，不得影响首屏与交互性能
+- 初始化延后到空闲可避免与主流程争抢；track 内延后执行脱敏与网络请求，调用方不阻塞
+- 失败只 log（如 console.debug），不向上 throw，避免影响主流程
+
+**参考**: `apps/web/src/main.tsx`（统计 init）、`packages/drawnix/src/utils/posthog-analytics.ts`（track 旁路）、`packages/drawnix/src/services/web-vitals-service.ts`（CWV 延后上报）
+
 ### 安全指南
 - 验证和清理所有用户输入
 - 永远不要硬编码敏感信息（API keys 等）
