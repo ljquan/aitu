@@ -857,10 +857,12 @@ class SWTaskQueueService {
   }
 
   private async submitToSW(task: Task): Promise<void> {
+    const t0 = Date.now();
     // 获取当前配置
     const settings = geminiSettings.get();
     if (!settings.apiKey || !settings.baseUrl) {
       // 没有配置，尝试降级模式（降级模式也会检查配置）
+      console.log('[SWTaskQueue] submitToSW: 无 API 配置，尝试降级');
       const canFallback = await this.tryFallbackExecution(task);
       if (!canFallback) {
         this.tasks.delete(task.id);
@@ -888,14 +890,20 @@ class SWTaskQueueService {
       return;
     }
 
+    // 快速检查 SW channel 是否可用，避免 initialize() 长时间阻塞（30s+）
     if (!this.initialized) {
-      const success = await this.initialize();
-      if (!success) {
-        // SW 初始化失败，尝试降级模式
+      // 先检查 channel 是否已经就绪（不触发重新初始化）
+      if (swChannelClient.isInitialized()) {
+        this.initialized = true;
+        this.swAvailable = true;
+        console.log('[SWTaskQueue] submitToSW: channel 已就绪，跳过 initialize');
+      } else {
+        // channel 未就绪，直接降级，不调用 initialize() 避免 30s+ 阻塞
+        console.log('[SWTaskQueue] submitToSW: channel 未就绪，直接降级执行, 耗时:', Date.now() - t0, 'ms');
         const canFallback = await this.tryFallbackExecution(task);
         if (!canFallback) {
           this.tasks.delete(task.id);
-          this.emitEvent('taskRejected', task, 'SW_INIT_FAILED');
+          this.emitEvent('taskRejected', task, 'SW_NOT_READY');
         }
         return;
       }
@@ -903,6 +911,7 @@ class SWTaskQueueService {
 
     // 尝试使用 SW 执行，带上配置
     try {
+      console.log('[SWTaskQueue] submitToSW: 调用 swChannelClient.createTask...');
       const result = await swChannelClient.createTask({
         taskId: task.id,
         taskType: task.type as 'image' | 'video',
@@ -912,6 +921,7 @@ class SWTaskQueueService {
 
       if (result.success) {
         // SW 执行成功，标记为可用
+        console.log('[SWTaskQueue] submitToSW: SW 创建任务成功, 耗时:', Date.now() - t0, 'ms');
         this.markSWAvailable();
       } else {
         if (result.reason === 'duplicate') {
@@ -919,6 +929,7 @@ class SWTaskQueueService {
           this.emitEvent('taskRejected', task, 'DUPLICATE');
         } else {
           // SW 执行失败，记录失败并尝试降级模式
+          console.log('[SWTaskQueue] submitToSW: SW 创建任务失败:', result.reason, ', 尝试降级, 耗时:', Date.now() - t0, 'ms');
           this.markSWUnavailable();
           const canFallback = await this.tryFallbackExecution(task);
           if (!canFallback) {
@@ -929,10 +940,11 @@ class SWTaskQueueService {
       }
     } catch (error) {
       // SW 通信异常，标记为不可用
-      console.error('[SWTaskQueue] SW communication error:', error);
+      console.error('[SWTaskQueue] SW communication error, 耗时:', Date.now() - t0, 'ms, error:', error);
       this.markSWUnavailable();
       
       // 尝试降级模式
+      console.log('[SWTaskQueue] submitToSW: SW 异常后尝试降级执行');
       const canFallback = await this.tryFallbackExecution(task);
       if (!canFallback) {
         this.tasks.delete(task.id);
@@ -946,15 +958,18 @@ class SWTaskQueueService {
    * 当 SW 不可用时调用
    */
   private async tryFallbackExecution(task: Task): Promise<boolean> {
+    console.log('[SWTaskQueue] tryFallbackExecution: 开始, taskId:', task.id, 'type:', task.type);
     try {
       // 检查是否有 API 配置
       const settings = geminiSettings.get();
       if (!settings.apiKey || !settings.baseUrl) {
+        console.log('[SWTaskQueue] tryFallbackExecution: 无 API 配置');
         return false;
       }
 
-      // 使用执行器工厂获取执行器（会自动选择降级执行器）
-      const executor = await executorFactory.getExecutor();
+      // 强制使用降级执行器（不检测 SW 可用性，避免再次卡住）
+      const executor = executorFactory.getFallbackExecutor();
+      console.log('[SWTaskQueue] tryFallbackExecution: 使用降级执行器');
 
       // 先创建任务记录
       await taskStorageWriter.createTask(
@@ -962,6 +977,7 @@ class SWTaskQueueService {
         task.type as 'image' | 'video' | 'character' | 'inspiration_board' | 'chat',
         task.params as { prompt: string; [key: string]: unknown }
       );
+      console.log('[SWTaskQueue] tryFallbackExecution: 任务记录已创建，开始异步执行');
 
       // 异步执行任务（fire-and-forget）
       this.executeWithFallback(task, executor).catch((error) => {
@@ -982,10 +998,12 @@ class SWTaskQueueService {
     task: Task,
     executor: Awaited<ReturnType<typeof executorFactory.getExecutor>>
   ): Promise<void> {
+    console.log('[SWTaskQueue] executeWithFallback: 开始执行, taskId:', task.id, 'type:', task.type);
     try {
       // 根据任务类型执行
       switch (task.type) {
         case TaskType.IMAGE:
+          console.log('[SWTaskQueue] executeWithFallback: 调用 generateImage, model:', task.params.model);
           await executor.generateImage({
             taskId: task.id,
             prompt: task.params.prompt,
