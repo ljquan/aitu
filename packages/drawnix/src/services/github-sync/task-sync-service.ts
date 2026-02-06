@@ -7,7 +7,8 @@ import { Task, TaskStatus, TaskType } from '../../types/task.types';
 import { swTaskQueueService } from '../sw-task-queue-service';
 import { gitHubApiService } from './github-api-service';
 import { cryptoService } from './crypto-service';
-import { logDebug, logInfo, logWarning, logError } from './sync-log-service';
+import { logDebug, logInfo, logWarning } from './sync-log-service';
+import { yieldToMain } from '@aitu/utils';
 import {
   TaskIndex,
   TaskIndexItem,
@@ -18,13 +19,9 @@ import {
   CompactTaskError,
   CompactGenerationParams,
   TaskSyncChanges,
-  TasksData,
   PAGED_SYNC_CONFIG,
   PAGED_SYNC_VERSION,
   SYNC_FILES_PAGED,
-  SYNC_FILES,
-  TaskSyncFormat,
-  detectTaskSyncFormat,
 } from './types';
 
 // ====================================
@@ -218,16 +215,6 @@ export function convertTasksToPagedFormat(
   return { index, pages };
 }
 
-/**
- * 从旧格式 TasksData 迁移到分页格式
- */
-export function migrateFromLegacyFormat(
-  legacyData: TasksData
-): { index: TaskIndex; pages: TaskPage[] } {
-  const tasks = legacyData.completedTasks || [];
-  return convertTasksToPagedFormat(tasks);
-}
-
 // ====================================
 // 增量同步
 // ====================================
@@ -411,23 +398,25 @@ class TaskSyncService {
     gistId: string,
     customPassword?: string
   ): Promise<void> {
-    const files: Record<string, { content: string }> = {};
+    const files: Record<string, string> = {};
 
     // 加密并序列化索引
     const indexJson = JSON.stringify(index, null, 2);
-    files[SYNC_FILES_PAGED.TASK_INDEX] = {
-      content: await cryptoService.encrypt(indexJson, gistId, customPassword),
-    };
+    files[SYNC_FILES_PAGED.TASK_INDEX] = await cryptoService.encrypt(indexJson, gistId, customPassword);
 
     // 加密并序列化需要上传的分页
+    let uploadedPageCount = 0;
     for (const pageId of pagesToUpload) {
       const page = pages.find(p => p.pageId === pageId);
       if (page) {
         const pageJson = JSON.stringify(page, null, 2);
         const filename = SYNC_FILES_PAGED.taskPageFile(pageId);
-        files[filename] = {
-          content: await cryptoService.encrypt(pageJson, gistId, customPassword),
-        };
+        files[filename] = await cryptoService.encrypt(pageJson, gistId, customPassword);
+      }
+      // 每处理 3 个分页让出主线程
+      uploadedPageCount++;
+      if (uploadedPageCount % 3 === 0) {
+        await yieldToMain();
       }
     }
 
@@ -455,21 +444,10 @@ class TaskSyncService {
   }> {
     logDebug('TaskSyncService: Starting task sync');
 
-    // 检测远程格式
-    const format: TaskSyncFormat = remoteFiles
-      ? detectTaskSyncFormat(remoteFiles)
-      : 'legacy';
-
-    logDebug('TaskSyncService: Detected format', { format });
-
-    // 如果是旧格式，需要先迁移
-    if (format === 'legacy' && remoteFiles && remoteFiles[SYNC_FILES.TASKS]) {
-      logInfo('TaskSyncService: Migrating from legacy format');
-      // 迁移逻辑将在 migration 任务中实现
-    }
-
     // 构建本地索引
     const { index: localIndex, pages: localPages } = await this.buildLocalIndex();
+    // 让出主线程，避免 UI 阻塞
+    await yieldToMain();
 
     // 下载远程索引
     const remoteIndex = await this.downloadRemoteIndex(gistId, customPassword);
@@ -487,6 +465,7 @@ class TaskSyncService {
 
     // 下载需要的分页
     let downloaded = 0;
+    let downloadedPageCount = 0;
     for (const pageId of changes.pagesToDownload) {
       const page = await this.downloadRemotePage(pageId, gistId, customPassword);
       if (page) {
@@ -494,6 +473,11 @@ class TaskSyncService {
         const tasksToRestore = page.tasks.map(compact => this.compactToTask(compact));
         await swTaskQueueService.restoreTasks(tasksToRestore);
         downloaded += page.tasks.length;
+      }
+      // 每处理 2 个分页让出主线程
+      downloadedPageCount++;
+      if (downloadedPageCount % 2 === 0) {
+        await yieldToMain();
       }
     }
 
@@ -523,6 +507,7 @@ class TaskSyncService {
 
   /**
    * 将 CompactTask 还原为 Task（用于恢复下载的任务）
+   * 标记 syncedFromRemote = true，避免在 SW 重启时被错误地恢复执行
    */
   private compactToTask(compact: CompactTask): Task {
     return {
@@ -564,6 +549,8 @@ class TaskSyncService {
       executionPhase: compact.executionPhase as any,
       savedToLibrary: compact.savedToLibrary,
       insertedToCanvas: compact.insertedToCanvas,
+      // 标记为远程同步的任务，不会被恢复执行
+      syncedFromRemote: true,
     };
   }
 

@@ -8,19 +8,22 @@
  * 此模块仅用于降级场景。
  */
 
-import type { TaskType, TaskStatus } from '../../types/task.types';
-
 // 与 SW 端 storage.ts 保持一致的数据库配置
 const DB_NAME = 'sw-task-queue';
 const TASKS_STORE = 'tasks';
 
+// 使用与 SW 端一致的字符串字面量类型
+type SWTaskType = 'image' | 'video' | 'character' | 'inspiration_board' | 'chat';
+type SWTaskStatus = 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled';
+
 /**
  * SW 端的任务结构（与 SWTask 保持一致）
+ * 使用字符串字面量类型以确保与 IndexedDB 存储的数据兼容
  */
 export interface SWTask {
   id: string;
-  type: TaskType;
-  status: TaskStatus;
+  type: SWTaskType;
+  status: SWTaskStatus;
   params: {
     prompt: string;
     [key: string]: unknown;
@@ -48,6 +51,15 @@ export interface SWTask {
   executionPhase?: string;
   savedToLibrary?: boolean;
   insertedToCanvas?: boolean;
+  /** 是否从远程同步（不应被恢复执行） */
+  syncedFromRemote?: boolean;
+  /** 任务配置（可选，导入时可能没有） */
+  config?: {
+    apiKey: string;
+    baseUrl: string;
+    modelName?: string;
+    textModelName?: string;
+  };
 }
 
 /**
@@ -135,7 +147,7 @@ class TaskStorageWriter {
    */
   async createTask(
     taskId: string,
-    type: TaskType,
+    type: SWTaskType,
     params: SWTask['params']
   ): Promise<SWTask> {
     const now = Date.now();
@@ -154,7 +166,7 @@ class TaskStorageWriter {
   /**
    * 更新任务状态
    */
-  async updateStatus(taskId: string, status: TaskStatus): Promise<void> {
+  async updateStatus(taskId: string, status: SWTaskStatus): Promise<void> {
     const task = await this.getTask(taskId);
     if (task) {
       task.status = status;
@@ -239,6 +251,85 @@ class TaskStorageWriter {
       request.onerror = () => reject(request.error);
       request.onsuccess = () => resolve();
     });
+  }
+
+  /**
+   * 批量导入任务（用于云同步恢复）
+   * 只导入不存在的任务，已存在的跳过
+   * 
+   * @returns 成功导入的任务数量
+   */
+  async importTasks(tasks: SWTask[]): Promise<{ imported: number; skipped: number }> {
+    if (tasks.length === 0) {
+      return { imported: 0, skipped: 0 };
+    }
+
+    const db = await this.getDB();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(TASKS_STORE, 'readwrite');
+      const store = transaction.objectStore(TASKS_STORE);
+      
+      let imported = 0;
+      let skipped = 0;
+      let completed = 0;
+      
+      // 处理每个任务
+      for (const task of tasks) {
+        // 先检查是否存在
+        const getRequest = store.get(task.id);
+        
+        getRequest.onsuccess = () => {
+          if (getRequest.result) {
+            // 任务已存在，跳过
+            skipped++;
+            completed++;
+            if (completed === tasks.length) {
+              resolve({ imported, skipped });
+            }
+          } else {
+            // 任务不存在，插入
+            const putRequest = store.put(task);
+            putRequest.onsuccess = () => {
+              imported++;
+              completed++;
+              if (completed === tasks.length) {
+                resolve({ imported, skipped });
+              }
+            };
+            putRequest.onerror = () => {
+              // 单个任务失败不影响其他任务
+              skipped++;
+              completed++;
+              if (completed === tasks.length) {
+                resolve({ imported, skipped });
+              }
+            };
+          }
+        };
+        
+        getRequest.onerror = () => {
+          skipped++;
+          completed++;
+          if (completed === tasks.length) {
+            resolve({ imported, skipped });
+          }
+        };
+      }
+
+      transaction.onerror = () => reject(transaction.error);
+    });
+  }
+
+  /**
+   * 标记任务已插入画布
+   */
+  async markInserted(taskId: string): Promise<void> {
+    const task = await this.getTask(taskId);
+    if (task) {
+      task.insertedToCanvas = true;
+      task.updatedAt = Date.now();
+      await this.saveTask(task);
+    }
   }
 
   /**

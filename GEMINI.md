@@ -58,7 +58,7 @@ All commands should be run from the root of the project.
 
 *   **Start Development Server:**
     ```bash
-    # Serves the web app on http://localhost:4200
+    # Serves the web app on http://localhost:7200
     npm start
     ```
 

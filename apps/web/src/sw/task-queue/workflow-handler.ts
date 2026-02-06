@@ -161,6 +161,51 @@ interface PendingChatToolRequest {
 const pendingChatToolRequests = new Map<string, PendingChatToolRequest>();
 
 /**
+ * Ensure workflow handler is initialized
+ * If config is provided, use it. Otherwise, try to load from IndexedDB.
+ * Returns true if initialized successfully.
+ */
+export async function ensureWorkflowHandlerInitialized(
+  sw: ServiceWorkerGlobalScope,
+  providedGeminiConfig?: GeminiConfig,
+  providedVideoConfig?: VideoAPIConfig
+): Promise<boolean> {
+  // Already initialized
+  if (workflowExecutor) {
+    // Update config if provided
+    if (providedGeminiConfig || providedVideoConfig) {
+      updateWorkflowConfig(providedGeminiConfig, providedVideoConfig);
+    }
+    return true;
+  }
+
+  // Use provided config or load from IndexedDB
+  let geminiConfig = providedGeminiConfig;
+  let videoConfig = providedVideoConfig;
+
+  if (!geminiConfig || !videoConfig) {
+    // Try to load from IndexedDB
+    const { geminiConfig: storedGemini, videoConfig: storedVideo } = await taskQueueStorage.loadConfig();
+    
+    if (!geminiConfig && storedGemini) {
+      geminiConfig = storedGemini;
+    }
+    if (!videoConfig && storedVideo) {
+      videoConfig = storedVideo;
+    }
+  }
+
+  // If we have both configs, initialize
+  if (geminiConfig && videoConfig) {
+    initWorkflowHandler(sw, geminiConfig, videoConfig);
+    return true;
+  }
+
+  // Cannot initialize without config
+  return false;
+}
+
+/**
  * Update workflow handler configuration
  */
 export function updateWorkflowConfig(

@@ -93,11 +93,14 @@ export function promptForApiKey(): Promise<string | null> {
     };
 
     // 确认按钮点击
-    confirmBtn.addEventListener('click', () => {
+    confirmBtn.addEventListener('click', async () => {
       const apiKey = input.value.trim();
       if (apiKey) {
-        geminiSettings.update({ apiKey });
+        // 更新本地设置
+        await geminiSettings.update({ apiKey });
         cleanup();
+        
+        // 配置随任务传递，无需同步到 SW
         resolve(apiKey);
       } else {
         input.style.borderColor = '#ff4d4f';
@@ -162,13 +165,33 @@ export async function validateAndEnsureConfig(config: GeminiConfig): Promise<Gem
 }
 
 /**
+ * 检查字符串是否是占位符格式
+ * 如 {key}、${key}、{{key}}、{apiKey} 等
+ */
+function isPlaceholder(value: string | null | undefined): boolean {
+  if (!value || typeof value !== 'string') return false;
+  // 匹配 {xxx}、${xxx}、{{xxx}} 等占位符格式
+  return /^[{$]*\{?\w+\}?\}*$/.test(value) || 
+         value.includes('{key}') || 
+         value.includes('${');
+}
+
+/**
  * 从URL参数中获取apiKey
  */
 function getApiKeyFromUrl(): string | null {
   if (typeof window === 'undefined') return null;
   
   const urlParams = new URLSearchParams(window.location.search);
-  return urlParams.get('apiKey');
+  const apiKey = urlParams.get('apiKey');
+  
+  // 验证 apiKey 不是占位符格式
+  if (isPlaceholder(apiKey)) {
+    console.warn('[Auth] Detected placeholder in URL apiKey, ignoring:', apiKey);
+    return null;
+  }
+  
+  return apiKey;
 }
 
 /**
@@ -185,8 +208,15 @@ function getSettingsFromUrl(): { apiKey?: string; baseUrl?: string } | null {
   try {
     const decoded = decodeURIComponent(settingsParam);
     const settings = JSON.parse(decoded);
+    
+    // 验证 apiKey 不是占位符格式
+    const apiKey = isPlaceholder(settings.key) ? undefined : settings.key;
+    if (settings.key && isPlaceholder(settings.key)) {
+      console.warn('[Auth] Detected placeholder in settings.key, ignoring:', settings.key);
+    }
+    
     return {
-      apiKey: settings.key,
+      apiKey,
       baseUrl: settings.url
     };
   } catch (error) {

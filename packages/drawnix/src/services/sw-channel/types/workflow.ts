@@ -4,6 +4,8 @@
  * 工作流相关类型定义
  */
 
+import type { TaskConfig } from './task';
+
 // ============================================================================
 // 基础类型
 // ============================================================================
@@ -81,6 +83,8 @@ export interface WorkflowDefinition {
  */
 export interface WorkflowSubmitParams {
   workflow: WorkflowDefinition;
+  /** API 配置，随工作流提交传递 */
+  config: TaskConfig;
 }
 
 /**

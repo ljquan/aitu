@@ -8,6 +8,9 @@
 export type VideoModel =
   | 'sora-2'
   | 'sora-2-pro'
+  | 'sora-2-4s'
+  | 'sora-2-8s'
+  | 'sora-2-12s'
   | 'kling-v1-6'
   | 'veo3'
   | 'veo3-pro'
@@ -98,6 +101,8 @@ export interface StoryboardConfig {
 export interface VideoGenerationParams {
   model: VideoModel;
   prompt: string;
+  /** For legacy compatibility; prefer seconds */
+  duration?: string | number;
   seconds?: string;
   size?: string;
   // Support multiple images for different models

@@ -8,6 +8,7 @@
 
 ## 目录
 
+- [架构与重构规范](#架构与重构规范)
 - [文件命名规范](#文件命名规范)
 - [TypeScript 规范](#typescript-规范)
 - [React 组件规范](#react-组件规范)
@@ -18,6 +19,237 @@
 - [UI 交互规范](#ui-交互规范)
 - [E2E 测试规范](#e2e-测试规范)
 - [数据安全规范](#数据安全规范)
+
+---
+
+## 架构与重构规范
+
+### 避免过度设计和不必要的抽象层
+
+**场景**: 在重构或添加新功能时，避免引入不必要的架构模式
+
+**核心原则**:
+- 优先使用简单的 interface + service 模式
+- 只在有明确需求时才添加抽象层
+- 遵循 YAGNI 原则（You Aren't Gonna Need It）
+
+❌ **错误示例 - 过度使用 DDD 模式**:
+```typescript
+// 错误：为简单的任务管理引入过多抽象层
+
+// domain/task/task.ts (487 行)
+export class Task {
+  private constructor(...) {}  // 私有构造函数
+  static create(...) {}         // 工厂方法
+  start() {}                    // 状态转换方法
+  complete() {}
+  fail() {}
+  // ... 50+ 个方法
+}
+
+// domain/task/task-repository.ts
+interface TaskRepository {
+  findById(id: string): Promise<Task | null>;
+  save(task: Task): Promise<void>;
+}
+
+// infrastructure/persistence/indexeddb-task-repository.ts
+class IndexedDBTaskRepository implements TaskRepository {
+  // 只是包装了现有的 taskStorageReader/Writer
+}
+
+// infrastructure/execution/execution-strategy.ts
+interface TaskExecutionStrategy {
+  execute(task: Task): Promise<TaskResult>;
+}
+
+// infrastructure/execution/sw-execution-strategy.ts
+class SWExecutionStrategy implements TaskExecutionStrategy {
+  // 包装了一个简单的条件判断
+}
+
+// 结果：30 个新文件，3000+ 行代码，但没有解决实际问题
+```
+
+✅ **正确示例 - 保持简单**:
+```typescript
+// types/task.types.ts - 简单的接口定义
+export interface Task {
+  id: string;
+  type: TaskType;
+  status: TaskStatus;
+  params: GenerationParams;
+  // ... 其他字段
+}
+
+// services/task-queue-service.ts - 直接的服务实现
+export class TaskQueueService {
+  async createTask(params: GenerationParams): Promise<Task> {
+    const task = { /* ... */ };
+    await taskStorageWriter.saveTask(task);
+    return task;
+  }
+
+  async executeTask(task: Task): Promise<void> {
+    // 简单的条件判断，不需要 Strategy 模式
+    if (shouldUseSWTaskQueue()) {
+      await swTaskQueueService.createTask(task.type, task.params);
+    } else {
+      await taskQueueService.createTask(task.type, task.params);
+    }
+  }
+}
+
+// 结果：清晰、简单、易维护
+```
+
+**判断是否需要抽象层的标准**:
+
+1. **Repository 模式**：
+   - ❌ 不需要：只有一种存储实现（如只用 IndexedDB）
+   - ✅ 需要：需要支持多种存储后端（IndexedDB、LocalStorage、远程 API）
+
+2. **Strategy 模式**：
+   - ❌ 不需要：只是简单的 if/else 判断（如 `if (shouldUseSW)`）
+   - ✅ 需要：有 3+ 种算法需要动态切换，且逻辑复杂
+
+3. **Factory 模式**：
+   - ❌ 不需要：对象创建逻辑简单（如 `{ id, type, status }`）
+   - ✅ 需要：创建逻辑复杂，需要根据类型创建不同的对象
+
+4. **Aggregate Root**：
+   - ❌ 不需要：简单的数据结构，状态转换逻辑简单
+   - ✅ 需要：复杂的业务规则，需要保证不变性约束
+
+**原因**:
+- 过度设计会增加代码量和维护成本
+- 抽象层会增加理解难度和调试复杂度
+- 简单的问题应该用简单的方案解决
+- 只在有明确需求时才引入复杂模式
+
+---
+
+### 删除未使用的"基础设施"代码
+
+**场景**: 创建了"为未来准备"的代码，但实际上没有被使用
+
+**核心原则**:
+- 代码应该解决当前的实际问题
+- 未使用的代码应该删除，不要"为未来预留"
+- 如果未来真的需要，可以从 Git 历史恢复
+
+❌ **错误示例 - 创建未使用的事件系统**:
+```typescript
+// services/app-events.ts - 创建了统一事件总线
+export function publishEvent(event: AppEvent): void { }
+export function subscribeToEventType<T>(type: T, handler: Function) { }
+
+// types/events.types.ts - 定义了完整的事件类型
+export interface TaskCreatedEvent extends BaseEvent { }
+export interface TaskCompletedEvent extends BaseEvent { }
+// ... 10+ 个事件类型
+
+// 问题：没有任何代码使用这些文件
+// grep -r "from.*app-events" 返回 0 个结果
+```
+
+✅ **正确做法 - 删除未使用的代码**:
+```bash
+# 检查是否有代码使用
+grep -r "from.*app-events" packages/drawnix/src
+
+# 如果没有使用，直接删除
+rm src/services/app-events.ts
+rm src/types/shared/events.types.ts
+
+# 如果未来需要，可以从 Git 历史恢复
+git log --all --full-history -- "**/app-events.ts"
+```
+
+**判断是否应该保留代码的标准**:
+
+1. **有实际使用**：
+   - ✅ 保留：至少有 1 处代码导入并使用
+   - ❌ 删除：没有任何地方使用
+
+2. **解决实际问题**：
+   - ✅ 保留：解决了当前存在的问题
+   - ❌ 删除：只是"可能有用"的基础设施
+
+3. **维护成本**：
+   - ✅ 保留：维护成本低，不会成为负担
+   - ❌ 删除：需要持续维护，但没有实际价值
+
+**原因**:
+- 未使用的代码会增加维护负担
+- 会让新开发者困惑（"这个是干什么的？"）
+- Git 历史可以保存所有删除的代码
+- YAGNI 原则：不要为未来可能的需求编写代码
+
+---
+
+### 重构前先问"解决什么问题"
+
+**场景**: 在进行架构重构时，应该先明确要解决的实际问题
+
+**核心原则**:
+- 重构应该解决具体的痛点，而不是追求"更好的架构"
+- 先列出当前的实际问题，再设计解决方案
+- 验证重构是否真的解决了问题
+
+❌ **错误示例 - 为了架构而重构**:
+```typescript
+// 问题描述："代码不够优雅，需要引入 DDD"
+// 实际情况：代码工作正常，没有明确的痛点
+
+// 重构方案：
+// - 添加 domain 层（18 个文件）
+// - 添加 application 层（3 个文件）
+// - 添加 infrastructure 层（9 个文件）
+
+// 结果：
+// - 新增 30 个文件，3000+ 行代码
+// - 原有问题没有解决
+// - 引入了新的复杂度
+```
+
+✅ **正确示例 - 针对问题重构**:
+```typescript
+// 问题 1：类型定义在 3 处重复，需要手动同步
+// 解决方案：创建共享类型文件
+// 结果：删除 2 处重复定义，统一到 1 个文件
+
+// 问题 2：DDD 层增加了 30 个文件但没有解决实际问题
+// 解决方案：删除 DDD 层，回归简单的 interface + service
+// 结果：删除 30 个文件，减少 3000 行代码
+
+// 验证：
+// - 类型定义只有 1 处 ✓
+// - 代码量减少 ✓
+// - 构建和测试通过 ✓
+```
+
+**重构前的检查清单**:
+
+1. **明确问题**：
+   - [ ] 列出当前存在的具体问题
+   - [ ] 问题是否真的影响开发效率或代码质量
+   - [ ] 问题是否频繁出现
+
+2. **评估方案**：
+   - [ ] 方案是否直接解决问题
+   - [ ] 方案是否引入新的复杂度
+   - [ ] 方案的成本是否合理
+
+3. **验证结果**：
+   - [ ] 原有问题是否解决
+   - [ ] 是否引入新问题
+   - [ ] 代码是否更简单（文件数、行数）
+
+**原因**:
+- 架构模式不是目的，解决问题才是
+- 好的架构应该让代码更简单，而不是更复杂
+- 重构应该有明确的收益，而不是"看起来更好"
 
 ---
 
@@ -192,6 +424,80 @@ private config: Config | null = null;
 ```
 
 **原因**: ESLint 规则 `@typescript-eslint/no-inferrable-types` 要求移除可从初始值推断的冗余类型注解，保持代码简洁。当变量赋值为 `false`、`true`、数字或字符串字面量时，TypeScript 能自动推断类型。
+
+#### 枚举（enum）不能使用 import type 导入
+
+**场景**: 当枚举既作为类型又作为运行时值使用时
+
+❌ **错误示例**:
+```typescript
+// 错误：使用 type-only import 导入枚举
+import type { TaskType, TaskStatus } from './types';
+
+// 运行时错误：TaskType is not defined
+const config = {
+  [TaskType.IMAGE]: 10000,  // ❌ TaskType 在运行时不存在
+  [TaskType.VIDEO]: 20000,
+};
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：枚举作为值使用时，必须使用普通 import
+import { TaskType } from './types';
+
+// 纯类型可以继续使用 import type
+import type { TaskStatus, TaskError } from './types';
+
+const config = {
+  [TaskType.IMAGE]: 10000,  // ✅ TaskType 在运行时可用
+  [TaskType.VIDEO]: 20000,
+};
+```
+
+**原因**: TypeScript 的 `import type` 在编译时会被完全移除，不会产生任何运行时代码。而 `enum` 在 TypeScript 中既是类型也是值（会编译为 JavaScript 对象），当代码中使用枚举成员作为对象键或进行比较时，需要运行时存在该值。如果使用 `import type` 导入枚举，运行时会抛出 `ReferenceError: xxx is not defined`。
+
+#### 禁止空 catch 块（必须有日志）
+
+**场景**: 捕获异常后需要记录或处理
+
+❌ **错误示例**:
+```typescript
+// 错误：静默吞掉错误，调试困难
+try {
+  await swChannelClient.getTask(taskId);
+} catch {
+  return;  // 什么都不做
+}
+
+// 错误：catch 块为空
+try {
+  await someOperation();
+} catch {
+  // 静默忽略错误
+}
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：至少记录 debug 级别日志
+try {
+  await swChannelClient.getTask(taskId);
+} catch (error) {
+  console.debug('[SWTaskQueue] getTask failed for', taskId, error);
+  return;
+}
+
+// 正确：预期的错误用 warn，严重错误用 error
+try {
+  await criticalOperation();
+} catch (error) {
+  console.warn('[ModuleName] Operation failed:', error);
+  return fallbackValue;
+}
+```
+
+**原因**: 空 catch 块会静默吞掉错误，导致问题难以排查。即使是预期的错误（如网络超时），也应记录 debug 级别日志，便于调试。使用 `console.debug` 可在生产环境中隐藏，但开发时能看到。
 
 #### Service Worker 与主线程模块不共享
 
@@ -1587,6 +1893,66 @@ class SWTaskQueue {
 
 **现象**: 页面刷新后，任务列表显示不完整（如 67 条任务只显示 2 条），因为 RPC 响应在数据恢复完成前就返回了。
 
+### 配置同步到 IndexedDB 供 SW 读取
+
+**场景**: Service Worker 需要读取用户配置（如 API Key、baseUrl），但 SW 无法访问 localStorage
+
+**问题**: 之前的架构依赖 postMessage 传递配置给 SW，当通信不畅时 SW 可能拿不到配置导致任务失败。
+
+❌ **错误示例**:
+```typescript
+// 错误：SW 依赖 postMessage 获取配置
+// 主线程
+await swChannelClient.init({
+  geminiConfig: { apiKey, baseUrl },
+  videoConfig: { baseUrl },
+});
+
+// SW 中
+private async handleInit(data: { geminiConfig; videoConfig }) {
+  this.geminiConfig = data.geminiConfig;
+  // 如果 postMessage 失败，SW 就没有配置
+}
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：配置同步到 IndexedDB，SW 直接读取
+
+// 1. 主线程 SettingsManager 自动同步配置到 IndexedDB
+private async saveToStorage(): Promise<void> {
+  localStorage.setItem(DRAWNIX_SETTINGS_KEY, settingsJson);
+  
+  // 同步到 IndexedDB，供 SW 读取
+  this.syncToIndexedDB().catch(console.warn);
+}
+
+private async syncToIndexedDB(): Promise<void> {
+  const geminiConfig = {
+    apiKey: this.settings.gemini.apiKey,
+    baseUrl: this.settings.gemini.baseUrl,
+    // ...
+  };
+  await configIndexedDBWriter.saveConfig(geminiConfig, videoConfig);
+}
+
+// 2. SW 从 IndexedDB 读取配置
+const geminiConfig = await taskQueueStorage.getConfig<GeminiConfig>('gemini');
+const videoConfig = await taskQueueStorage.getConfig<VideoAPIConfig>('video');
+```
+
+**数据流**:
+```
+用户修改设置 → localStorage + IndexedDB（同时写入）
+SW 需要配置 → 直接读取 IndexedDB → 始终可用
+```
+
+**关键点**:
+- `configIndexedDBWriter` 使用与 SW 相同的数据库名 (`sw-task-queue`) 和存储名 (`config`)
+- 初始化时自动同步，老用户的 localStorage 配置会自动迁移到 IndexedDB
+- RPC `init()` 不再需要传递配置参数（可选，用于兼容旧版本）
+- 任务/工作流仍保留配置快照，用于恢复场景
+
 **原因**: Service Worker 启动后会异步从 IndexedDB 恢复数据（`restoreFromStorage()`），这个过程可能需要一定时间。如果 RPC handler 在恢复完成前被调用，访问的数据是不完整的。需要通过 Promise 机制确保数据恢复完成后再返回响应。
 
 ### 主线程任务数据必须通过 RPC 持久化到 SW
@@ -1635,6 +2001,53 @@ async restoreTasks(tasks: Task[]): Promise<void> {
 - 主线程：`packages/drawnix/src/services/sw-task-queue-service.ts`
 - SW 端：`apps/web/src/sw/task-queue/channel-manager.ts` (`TASK_IMPORT` RPC)
 - SW 存储：`apps/web/src/sw/task-queue/storage.ts`
+
+### 远程同步的任务不应恢复执行
+
+**场景**: 多设备同步场景下，避免远程同步过来的任务被错误地恢复执行
+
+❌ **错误示例**:
+```typescript
+// 错误：SW 重启后会恢复所有 PROCESSING/PENDING 状态的任务，包括远程同步的
+private shouldResumeTask(task: SWTask): boolean {
+  if (task.status === TaskStatus.PROCESSING) {
+    return true; // 会恢复远程同步的任务，导致重复调用大模型接口
+  }
+  return false;
+}
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：检查 syncedFromRemote 标记，跳过远程同步的任务
+private shouldResumeTask(task: SWTask): boolean {
+  // 远程同步的任务不应恢复执行（避免多设备重复执行）
+  if (task.syncedFromRemote) {
+    return false;
+  }
+  
+  if (task.status === TaskStatus.PROCESSING) {
+    return true;
+  }
+  return false;
+}
+```
+
+**现象**: 用户在设备 A 创建任务并同步到云端，设备 B 同步后页面刷新，任务被重新执行，导致重复调用大模型接口（产生额外费用）。
+
+**原因**: SW 重启后会调用 `restoreFromStorage()` 恢复任务，并对 `PROCESSING`/`PENDING` 状态的任务调用 `resumeTaskExecution()`。远程同步的任务虽然通常是 `COMPLETED` 状态，但为了防止边界情况，需要通过 `syncedFromRemote` 标记明确区分本地创建和远程同步的任务。
+
+**实现要点**:
+1. `Task` 和 `SWTask` 接口添加 `syncedFromRemote?: boolean` 字段
+2. `task-sync-service.ts` 的 `compactToTask()` 设置 `syncedFromRemote: true`
+3. SW 的 `shouldResumeTask()` 检查此标记并返回 `false`
+4. 数据转换函数（`convertTaskToStorageFormat`、`convertTaskToSWTask`）传递此字段
+
+**相关文件**:
+- 主线程类型：`packages/drawnix/src/types/shared/core.types.ts`
+- SW 类型：`apps/web/src/sw/task-queue/types.ts`
+- 任务恢复：`apps/web/src/sw/task-queue/queue.ts` (`shouldResumeTask`)
+- 同步服务：`packages/drawnix/src/services/github-sync/task-sync-service.ts`
 
 ### PostMessage 日志由调试模式完全控制
 
@@ -4470,6 +4883,69 @@ const handleSortClick = () => {
 - 避免在 render 中创建新对象/函数
 - 对长列表考虑使用虚拟化
 
+#### CPU 密集型循环需要 yield 让出主线程
+
+**场景**: 在异步函数中执行大量同步操作（JSON.stringify、加密、checksum 计算等）时，即使函数是 async 的，循环内部如果没有 await 点，仍然会连续占用主线程，导致页面卡顿。
+
+❌ **错误示例**:
+```typescript
+// 错误：虽然是 async 函数，但循环内部没有 yield 点
+async function pushToRemote() {
+  // 收集数据
+  const localData = await collectSyncData();
+  
+  // 这个循环会连续执行，阻塞主线程
+  for (const [boardId, board] of localData.boards) {
+    const boardJson = JSON.stringify(board); // 同步操作
+    const encrypted = await cryptoService.encrypt(boardJson); // 虽然有 await，但每次 await 之间的 JSON.stringify 会累积
+    filesToUpdate[boardId] = encrypted;
+  }
+  // 用户可能看到页面卡顿、事件处理器超时警告
+}
+```
+
+✅ **正确示例**:
+```typescript
+import { yieldToMain } from '@aitu/utils';
+
+async function pushToRemote() {
+  const localData = await collectSyncData();
+  
+  let processedCount = 0;
+  for (const [boardId, board] of localData.boards) {
+    const boardJson = JSON.stringify(board);
+    const encrypted = await cryptoService.encrypt(boardJson);
+    filesToUpdate[boardId] = encrypted;
+    
+    // 每处理 3 个画板让出主线程，避免 UI 阻塞
+    processedCount++;
+    if (processedCount % 3 === 0) {
+      await yieldToMain();
+    }
+  }
+}
+
+// yieldToMain 的实现：
+export const yieldToMain = (): Promise<void> => {
+  return new Promise((resolve) => setTimeout(resolve, 0));
+};
+```
+
+**原因**:
+- JavaScript 是单线程的，async/await 只是让代码看起来同步，但仍然在主线程执行
+- 大量 `JSON.stringify()`、加密计算等同步操作会连续占用主线程
+- 浏览器无法处理用户输入、渲染更新，导致 `[Violation] 'mouseup' handler took 606ms` 等警告
+- `yieldToMain()` 通过 `setTimeout(0)` 将后续执行推迟到下一个事件循环，让浏览器有机会处理待处理事件
+
+**最佳实践**:
+- 每 3-5 个耗时操作后调用一次 `await yieldToMain()`
+- 可以使用 `@aitu/utils` 中的 `processBatched()` 函数自动处理分批
+- 适用场景：同步、备份、批量导入导出、大量数据处理
+
+**参考文件**:
+- `packages/utils/src/async/index.ts` - `yieldToMain` 和 `processBatched` 工具函数
+- `packages/drawnix/src/services/github-sync/sync-engine.ts` - 同步引擎中的使用示例
+
 #### 预缓存配置规范
 
 **场景**: 使用 Service Worker 预缓存静态资源时，需要合理配置排除列表
@@ -4650,6 +5126,65 @@ window.addEventListener('gemini-settings-changed', () => {
 - 只在渲染时动态替换为实际值
 - 这样可以确保导出/备份时不会泄露敏感信息
 - 用户更新设置后，已打开的工具可以自动刷新使用新的配置
+
+#### 配置对象返回深拷贝防止意外修改
+
+**场景**: 设置管理器返回配置对象后，外部代码（如脱敏函数）修改返回值
+
+❌ **错误示例**:
+```typescript
+// 错误：getSetting 返回直接引用
+class SettingsManager {
+  private settings: Record<string, any> = {};
+  
+  public getSetting<T>(path: string): T {
+    const keys = path.split('.');
+    let value = this.settings;
+    for (const key of keys) {
+      value = value?.[key];
+    }
+    return value as T;  // 返回直接引用！
+  }
+}
+
+// 使用时：外部代码修改了返回值
+const config = settingsManager.getSetting('gemini');
+sanitizeObject(config);  // sanitizeObject 修改了 config.apiKey 为 '[REDACTED]'
+// 现在全局设置中的 apiKey 也变成了 '[REDACTED]'！
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：返回深拷贝
+class SettingsManager {
+  private settings: Record<string, any> = {};
+  
+  public getSetting<T>(path: string): T {
+    const keys = path.split('.');
+    let value = this.settings;
+    for (const key of keys) {
+      value = value?.[key];
+    }
+    
+    // 返回深拷贝，防止外部代码修改返回值影响原始设置
+    if (value && typeof value === 'object') {
+      return JSON.parse(JSON.stringify(value)) as T;
+    }
+    return value as T;
+  }
+}
+
+// 使用时：外部代码修改的是副本，不影响原始设置
+const config = settingsManager.getSetting('gemini');
+sanitizeObject(config);  // 修改的是副本
+// 全局设置中的 apiKey 保持不变
+```
+
+**原因**: 
+- `sanitizeObject` 等脱敏函数会修改传入的对象（如将 `apiKey` 替换为 `[REDACTED]`）
+- 如果返回直接引用，脱敏函数会意外修改全局配置
+- 这会导致后续 API 调用使用被脱敏的值（如 `"[REDACTED]"` 或 `"{key}"`）而失败
+- 返回深拷贝确保全局配置不会被外部代码意外修改
 
 #### 部署脚本安全实践
 

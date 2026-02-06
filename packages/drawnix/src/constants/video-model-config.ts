@@ -90,6 +90,60 @@ export const VIDEO_MODEL_CONFIGS: Record<VideoModel, VideoModelConfig> = {
       minSceneDuration: 0.1,
     },
   },
+  'sora-2-4s': {
+    id: 'sora-2-4s',
+    label: 'Sora 2 · 4s',
+    provider: 'sora',
+    description: '4秒固定时长，模型名已包含时长，无需 seconds 参数',
+    durationOptions: [{ label: '4秒（固定）', value: '4' }],
+    defaultDuration: '4',
+    sizeOptions: [
+      { label: '横屏 16:9', value: '1280x720', aspectRatio: '16:9' },
+      { label: '竖屏 9:16', value: '720x1280', aspectRatio: '9:16' },
+    ],
+    defaultSize: '1280x720',
+    imageUpload: {
+      maxCount: 1,
+      mode: 'reference',
+      labels: ['参考图'],
+    },
+  },
+  'sora-2-8s': {
+    id: 'sora-2-8s',
+    label: 'Sora 2 · 8s',
+    provider: 'sora',
+    description: '8秒固定时长，模型名已包含时长，无需 seconds 参数',
+    durationOptions: [{ label: '8秒（固定）', value: '8' }],
+    defaultDuration: '8',
+    sizeOptions: [
+      { label: '横屏 16:9', value: '1280x720', aspectRatio: '16:9' },
+      { label: '竖屏 9:16', value: '720x1280', aspectRatio: '9:16' },
+    ],
+    defaultSize: '1280x720',
+    imageUpload: {
+      maxCount: 1,
+      mode: 'reference',
+      labels: ['参考图'],
+    },
+  },
+  'sora-2-12s': {
+    id: 'sora-2-12s',
+    label: 'Sora 2 · 12s',
+    provider: 'sora',
+    description: '12秒固定时长，模型名已包含时长，无需 seconds 参数',
+    durationOptions: [{ label: '12秒（固定）', value: '12' }],
+    defaultDuration: '12',
+    sizeOptions: [
+      { label: '横屏 16:9', value: '1280x720', aspectRatio: '16:9' },
+      { label: '竖屏 9:16', value: '720x1280', aspectRatio: '9:16' },
+    ],
+    defaultSize: '1280x720',
+    imageUpload: {
+      maxCount: 1,
+      mode: 'reference',
+      labels: ['参考图'],
+    },
+  },
 
   // Veo models
   veo3: {

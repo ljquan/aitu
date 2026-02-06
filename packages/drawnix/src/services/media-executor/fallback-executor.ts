@@ -24,6 +24,7 @@ import {
   updateLLMApiLogMetadata,
 } from './llm-api-logger';
 import { parseToolCalls, extractTextContent } from '@aitu/utils';
+import { isAuthError, dispatchApiAuthError } from '../../utils/api-auth-error-event';
 import { unifiedCacheService } from '../unified-cache-service';
 import {
   extractPromptFromMessages,
@@ -158,14 +159,21 @@ export class FallbackMediaExecutor implements IMediaExecutor {
       });
     } catch (error: any) {
       const duration = Date.now() - startTime;
+      const errorMessage = error.message || 'Image generation failed';
+      
+      // 检测认证错误，触发设置弹窗
+      if (isAuthError(errorMessage)) {
+        dispatchApiAuthError({ message: errorMessage, source: 'image' });
+      }
+      
       // 如果日志还未更新为失败，更新它
       failLLMApiLog(logId, {
         duration,
-        errorMessage: error.message || 'Image generation failed',
+        errorMessage,
       });
       await taskStorageWriter.failTask(taskId, {
         code: 'IMAGE_GENERATION_ERROR',
-        message: error.message || 'Image generation failed',
+        message: errorMessage,
       });
       throw error;
     }
@@ -253,13 +261,20 @@ export class FallbackMediaExecutor implements IMediaExecutor {
       });
     } catch (error: any) {
       const duration = Date.now() - logStartTime;
+      const errorMessage = error.message || 'Async image generation failed';
+      
+      // 检测认证错误，触发设置弹窗
+      if (isAuthError(errorMessage)) {
+        dispatchApiAuthError({ message: errorMessage, source: 'async-image' });
+      }
+      
       failLLMApiLog(logId, {
         duration,
-        errorMessage: error.message || 'Async image generation failed',
+        errorMessage,
       });
       await taskStorageWriter.failTask(taskId, {
         code: 'ASYNC_IMAGE_GENERATION_ERROR',
-        message: error.message || 'Async image generation failed',
+        message: errorMessage,
       });
       throw error;
     }
@@ -272,9 +287,13 @@ export class FallbackMediaExecutor implements IMediaExecutor {
     params: VideoGenerationParams,
     options?: ExecutionOptions
   ): Promise<void> {
-    const { taskId, prompt, model = 'veo3', duration = '8', size = '1280x720' } = params;
+    const { taskId, prompt, model = 'veo3', duration, size = '1280x720' } = params;
     const config = this.getConfig();
     const startTime = Date.now();
+    // 部分模型（sora-2-4s/8s/12s）在模型名中已经包含时长，API 不需要 seconds
+    const durationEncodedInModel = (m?: string | null) => Boolean(m && m.startsWith('sora-2-'));
+    const shouldSkipSeconds = durationEncodedInModel(model);
+    const secondsToSend = shouldSkipSeconds ? undefined : (duration ?? '8');
 
     // 更新任务状态为 processing
     await taskStorageWriter.updateStatus(taskId, 'processing');
@@ -291,18 +310,22 @@ export class FallbackMediaExecutor implements IMediaExecutor {
 
     try {
       // 提交视频生成请求
+      const submitBody: Record<string, unknown> = {
+        prompt,
+        model,
+        size,
+      };
+      if (secondsToSend) {
+        submitBody.seconds = secondsToSend;
+      }
+
       const submitResponse = await fetch(`${config.videoConfig.baseUrl}/v1/videos`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${config.videoConfig.apiKey}`,
         },
-        body: JSON.stringify({
-          prompt,
-          model,
-          duration,
-          size,
-        }),
+        body: JSON.stringify(submitBody),
         signal: options?.signal,
       });
 
@@ -371,13 +394,20 @@ export class FallbackMediaExecutor implements IMediaExecutor {
       });
     } catch (error: any) {
       const elapsedTime = Date.now() - startTime;
+      const errorMessage = error.message || 'Video generation failed';
+      
+      // 检测认证错误，触发设置弹窗
+      if (isAuthError(errorMessage)) {
+        dispatchApiAuthError({ message: errorMessage, source: 'video' });
+      }
+      
       failLLMApiLog(logId, {
         duration: elapsedTime,
-        errorMessage: error.message || 'Video generation failed',
+        errorMessage,
       });
       await taskStorageWriter.failTask(taskId, {
         code: 'VIDEO_GENERATION_ERROR',
-        message: error.message || 'Video generation failed',
+        message: errorMessage,
       });
       throw error;
     }
@@ -527,9 +557,16 @@ export class FallbackMediaExecutor implements IMediaExecutor {
       };
     } catch (error: any) {
       const elapsedTime = Date.now() - startTime;
+      const errorMessage = error.message || 'AI analyze failed';
+      
+      // 检测认证错误，触发设置弹窗
+      if (isAuthError(errorMessage)) {
+        dispatchApiAuthError({ message: errorMessage, source: 'ai-analyze' });
+      }
+      
       failLLMApiLog(logId, {
         duration: elapsedTime,
-        errorMessage: error.message || 'AI analyze failed',
+        errorMessage,
       });
       throw error;
     }

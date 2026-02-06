@@ -36,6 +36,7 @@ import { swCapabilitiesHandler } from './sw-capabilities';
 import { workflowStorageReader } from './workflow-storage-reader';
 import { WorkflowEngine as MainThreadWorkflowEngine } from './workflow-engine';
 import { executorFactory } from './media-executor';
+import { geminiSettings } from '../utils/settings-manager';
 import type { Workflow as EngineWorkflow, WorkflowEvent as EngineWorkflowEvent } from './workflow-engine/types';
 
 // ============================================================================
@@ -549,20 +550,33 @@ class WorkflowSubmissionService {
     if (isSWAvailable) {
       // SW 可用，尝试提交
       try {
-        const result = await Promise.race([
-          swChannelClient.submitWorkflow(workflow as unknown as ChannelWorkflowDefinition),
-          new Promise<{ success: boolean; error: string }>((_, reject) =>
-            setTimeout(() => reject(new Error('timeout')), quickTimeout)
-          ),
-        ]);
+        // 获取当前配置
+        const settings = geminiSettings.get();
+        if (!settings.apiKey || !settings.baseUrl) {
+          console.warn('[WorkflowSubmissionService] API key not configured, using fallback');
+        } else {
+          const taskConfig = {
+            apiKey: settings.apiKey,
+            baseUrl: settings.baseUrl,
+            modelName: settings.imageModelName,
+            textModelName: settings.textModelName,
+          };
 
-        if (result.success) {
-          return; // 成功
+          const result = await Promise.race([
+            swChannelClient.submitWorkflow(workflow as unknown as ChannelWorkflowDefinition, taskConfig),
+            new Promise<{ success: boolean; error: string }>((_, reject) =>
+              setTimeout(() => reject(new Error('timeout')), quickTimeout)
+            ),
+          ]);
+
+          if (result.success) {
+            return; // 成功
+          }
+
+          // SW 返回错误，降级
+          lastError = new Error(result.error || 'SW submission failed');
+          console.warn('[WorkflowSubmissionService] SW submission failed, using fallback:', result.error);
         }
-
-        // SW 返回错误，降级
-        lastError = new Error(result.error || 'SW submission failed');
-        console.warn('[WorkflowSubmissionService] SW submission failed, using fallback:', result.error);
       } catch (error) {
         lastError = error instanceof Error ? error : new Error(String(error));
         console.warn('[WorkflowSubmissionService] SW submission error, using fallback:', error);

@@ -298,9 +298,22 @@ export const Drawnix: React.FC<DrawnixProps> = ({
         const { WorkZoneTransforms } = await import('./plugins/with-workzone');
         const { TaskStatus } = await import('./types/task.types');
 
-        // Initialize SW service (内部会检查 shouldUseSWTaskQueue 并使用 swChannelClient.ensureReady)
+        // Initialize SW service (fire-and-forget, 不阻塞应用启动)
+        // SW 可用性由服务内部管理，即使 SW 不可用也能正常工作
         const { swTaskQueueService } = await import('./services/sw-task-queue-service');
-        const swInitialized = await swTaskQueueService.initialize();
+        
+        // 使用 Promise.race 设置超时，避免 SW 初始化阻塞应用启动
+        const SW_INIT_TIMEOUT = 5000; // 5秒超时
+        let swInitialized = false;
+        try {
+          swInitialized = await Promise.race([
+            swTaskQueueService.initialize(),
+            new Promise<boolean>((resolve) => setTimeout(() => resolve(false), SW_INIT_TIMEOUT))
+          ]);
+        } catch {
+          // SW 初始化失败，继续使用降级模式
+          console.warn('[Drawnix] SW initialization failed, using fallback mode');
+        }
 
         // Query all chat workflows from SW (only if SW is initialized)
         // Now returns ALL workflows including completed ones for proper state sync
@@ -321,6 +334,9 @@ export const Drawnix: React.FC<DrawnixProps> = ({
           // Also query regular workflows
           const { workflowSubmissionService } = await import('./services/workflow-submission-service');
           activeWorkflows = await workflowSubmissionService.queryAllWorkflows();
+        } else {
+          // SW 不可用时，从 IndexedDB 直接同步任务状态
+          await swTaskQueueService.syncFromIndexedDB();
         }
         
         const activeWorkflowIds = new Set(activeWorkflows.map(w => w.id));

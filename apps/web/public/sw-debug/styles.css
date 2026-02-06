@@ -4549,3 +4549,66 @@ body.analysis-mode .log-entry {
     width: 100%;
   }
 }
+
+/* ==================== Base64 Image Preview ==================== */
+
+.base64-image-preview {
+  display: inline;
+}
+
+.base64-preview-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  font-size: 11px;
+  color: var(--primary-color);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.base64-preview-toggle:hover {
+  background: var(--primary-color);
+  color: #fff;
+  border-color: var(--primary-color);
+}
+
+.base64-preview-toggle.expanded {
+  background: var(--primary-color);
+  color: #fff;
+  border-color: var(--primary-color);
+}
+
+.base64-preview-toggle::before {
+  content: '▶';
+  font-size: 8px;
+  transition: transform 0.15s ease;
+}
+
+.base64-preview-toggle.expanded::before {
+  transform: rotate(90deg);
+}
+
+.base64-preview-image {
+  display: block;
+  margin: 8px 0;
+  padding: 8px;
+  background: #1a1a1a;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+}
+
+.base64-preview-image img {
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.base64-preview-image img:hover {
+  transform: scale(1.02);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}

@@ -35,7 +35,6 @@ const CONFIG = {
     'versions.html',
     'iframe-test.html',
     // 配置文件也留在服务器
-    'init.json',
   ],
   // 不上传到 CDN 的文件模式
   excludeFromCDN: [

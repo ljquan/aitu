@@ -3,7 +3,7 @@
  * 负责执行实际的同步操作
  */
 
-import { maskId } from '@aitu/utils';
+import { maskId, yieldToMain } from '@aitu/utils';
 import { gitHubApiService, GitHubApiError } from './github-api-service';
 import { tokenService } from './token-service';
 import { dataSerializer } from './data-serializer';
@@ -49,6 +49,7 @@ import {
 } from './types';
 import { taskSyncService } from './task-sync-service';
 import { workflowSyncService } from './workflow-sync-service';
+import { toolSyncService } from './tool-sync-service';
 
 /** 同步配置存储键 */
 const SYNC_CONFIG_KEY = 'github_sync_config';
@@ -373,9 +374,17 @@ class SyncEngine {
         logInfo('Decryption failed, overwriting remote with local data...');
         const customPassword = await syncPasswordService.getPassword();
         
-        // 加密并上传本地数据
+        // 加密并上传本地数据（不包含 tasks.json，使用分页格式）
         const encryptedFiles = await dataSerializer.serializeToGistFilesEncrypted(localData, config.gistId, customPassword || undefined);
         await gitHubApiService.updateGistFiles(encryptedFiles);
+        
+        // 使用分页格式同步任务
+        try {
+          const taskResult = await taskSyncService.syncTasks(config.gistId, customPassword || undefined);
+          result.uploaded.tasks = taskResult.uploaded;
+        } catch (taskError) {
+          logWarning('Tasks paged sync failed during overwrite', taskError);
+        }
         
         await this.saveConfig({
           lastSyncTime: Date.now(),
@@ -385,7 +394,6 @@ class SyncEngine {
         result.uploaded.prompts = localData.prompts.promptHistory.length +
           localData.prompts.videoPromptHistory.length +
           localData.prompts.imagePromptHistory.length;
-        result.uploaded.tasks = localData.tasks.completedTasks.length;
         result.success = true;
         logSuccess('Remote overwritten with local data');
       } else if (!config.gistId) {
@@ -449,6 +457,14 @@ class SyncEngine {
             const encryptedFiles = await dataSerializer.serializeToGistFilesEncrypted(localData, existingGist.id, customPassword || undefined);
             await gitHubApiService.updateGistFiles(encryptedFiles);
             
+            // 使用分页格式同步任务
+            try {
+              const taskResult = await taskSyncService.syncTasks(existingGist.id, customPassword || undefined);
+              result.uploaded.tasks = taskResult.uploaded;
+            } catch (taskError) {
+              logWarning('Tasks paged sync failed during overwrite', taskError);
+            }
+            
             await this.saveConfig({
               gistId: existingGist.id,
               lastSyncTime: Date.now(),
@@ -459,7 +475,6 @@ class SyncEngine {
             result.uploaded.prompts = localData.prompts.promptHistory.length +
               localData.prompts.videoPromptHistory.length +
               localData.prompts.imagePromptHistory.length;
-            result.uploaded.tasks = localData.tasks.completedTasks.length;
             result.success = true;
             logSuccess('Existing gist overwritten with local data');
           }
@@ -476,12 +491,20 @@ class SyncEngine {
           const customPassword = await syncPasswordService.getPassword();
           logDebug('Creating new gist', { hasCustomPassword: !!customPassword });
           
-          // 3. 使用 gist id 加密数据
+          // 3. 使用 gist id 加密数据（不包含 tasks.json，使用分页格式）
           const encryptedFiles = await dataSerializer.serializeToGistFilesEncrypted(localData, gistId, customPassword || undefined);
           
           // 4. 更新 Gist 内容
           gitHubApiService.setGistId(gistId);
           await gitHubApiService.updateGistFiles(encryptedFiles);
+          
+          // 5. 使用分页格式同步任务
+          try {
+            const taskResult = await taskSyncService.syncTasks(gistId, customPassword || undefined);
+            result.uploaded.tasks = taskResult.uploaded;
+          } catch (taskError) {
+            logWarning('Tasks paged sync failed during new gist creation', taskError);
+          }
           
           const gist = emptyGist;
           
@@ -495,7 +518,6 @@ class SyncEngine {
           result.uploaded.prompts = localData.prompts.promptHistory.length +
             localData.prompts.videoPromptHistory.length +
             localData.prompts.imagePromptHistory.length;
-          result.uploaded.tasks = localData.tasks.completedTasks.length;
           result.success = true;
         }
       } else if (config.gistId) {
@@ -534,11 +556,19 @@ class SyncEngine {
           const promptsJson = JSON.stringify(localData.prompts);
           filesToUpdate[SYNC_FILES.PROMPTS] = await cryptoService.encrypt(promptsJson, config.gistId, customPassword || undefined);
           
-          const tasksJson = JSON.stringify(localData.tasks);
-          filesToUpdate[SYNC_FILES.TASKS] = await cryptoService.encrypt(tasksJson, config.gistId, customPassword || undefined);
+          // 注意：不再上传 tasks.json，改用分页格式同步
           
           await gitHubApiService.updateGistFiles(filesToUpdate);
           result.uploaded.boards = localData.boards.size;
+          
+          // 使用分页格式同步任务
+          try {
+            const taskResult = await taskSyncService.syncTasks(config.gistId, customPassword || undefined);
+            result.uploaded.tasks = taskResult.uploaded;
+          } catch (taskError) {
+            logWarning('Tasks paged sync failed during initial sync', taskError);
+          }
+          
           result.success = true;
           
           await this.saveConfig({
@@ -830,15 +860,20 @@ class SyncEngine {
           const workspaceJson = JSON.stringify(localData.workspace);
           filesToUpdate[SYNC_FILES.WORKSPACE] = await cryptoService.encrypt(workspaceJson, config.gistId!, customPassword || undefined);
 
-          // 加密提示词和任务
+          // 加密提示词（注意：不再上传 tasks.json，改用分页格式）
           const promptsJson = JSON.stringify(localData.prompts);
           filesToUpdate[SYNC_FILES.PROMPTS] = await cryptoService.encrypt(promptsJson, config.gistId!, customPassword || undefined);
-          
-          const tasksJson = JSON.stringify(localData.tasks);
-          filesToUpdate[SYNC_FILES.TASKS] = await cryptoService.encrypt(tasksJson, config.gistId!, customPassword || undefined);
 
           await gitHubApiService.updateGistFiles(filesToUpdate);
           result.uploaded.boards = changes.toUpload.length;
+          
+          // 使用分页格式同步任务
+          try {
+            const taskResult = await taskSyncService.syncTasks(config.gistId!, customPassword || undefined);
+            result.uploaded.tasks = taskResult.uploaded;
+          } catch (taskError) {
+            logWarning('Tasks paged sync failed during incremental sync', taskError);
+          }
           
           // Log upload success
           logSuccess('本地变更上传完成', {
@@ -899,7 +934,7 @@ class SyncEngine {
       result.duration = Date.now() - startTime;
       
       // End sync session and log duration
-      logSync('info', 'sync', '同步会话结束', { duration: result.duration, success: result.success }, { duration: result.duration });
+      logInfo('同步会话结束', { duration: result.duration, success: result.success });
       endSyncSession();
       
       // Cleanup old logs periodically
@@ -925,7 +960,7 @@ class SyncEngine {
   }
 
   /**
-   * 上传合并后的任务数据到远程
+   * 上传合并后的任务数据到远程（使用分页格式）
    * 在 pullFromRemote 合并完成后调用，确保本地有但远程没有的任务也能同步到远程
    */
   private async uploadMergedTasksToRemote(
@@ -934,34 +969,19 @@ class SyncEngine {
     remoteManifest?: SyncManifest
   ): Promise<void> {
     try {
-      logDebug('uploadMergedTasksToRemote: Starting...');
+      logDebug('uploadMergedTasksToRemote: Starting with paged format...');
       
-      // 收集本地所有已完成的任务
-      const localData = await dataSerializer.collectSyncData();
-      const localCompletedTasks = localData.tasks.completedTasks;
+      // 使用分页同步服务进行增量同步，避免生成大文件
+      const result = await taskSyncService.syncTasks(gistId, customPassword);
       
-      if (localCompletedTasks.length === 0) {
-        logDebug('uploadMergedTasksToRemote: No tasks to upload');
-        return;
-      }
-      
-      logDebug('uploadMergedTasksToRemote: Local tasks', { count: localCompletedTasks.length });
-      
-      // 加密任务数据并上传
-      const { cryptoService } = await import('./crypto-service');
-      const tasksData: TasksData = { completedTasks: localCompletedTasks };
-      const tasksJson = JSON.stringify(tasksData);
-      const encryptedTasks = await cryptoService.encrypt(tasksJson, gistId, customPassword);
-      
-      // 更新远程任务文件
-      await gitHubApiService.updateGistFiles({
-        [SYNC_FILES.TASKS]: encryptedTasks,
+      logSuccess('uploadMergedTasksToRemote: Tasks synced', {
+        uploaded: result.uploaded,
+        downloaded: result.downloaded,
+        skipped: result.skipped,
       });
-      
-      logSuccess('uploadMergedTasksToRemote: Tasks uploaded successfully');
     } catch (error) {
       // 上传任务失败不应阻塞主流程，只记录日志
-      logError('uploadMergedTasksToRemote: Failed to upload tasks', error instanceof Error ? error : new Error(String(error)));
+      logError('uploadMergedTasksToRemote: Failed to sync tasks', error instanceof Error ? error : new Error(String(error)));
     }
   }
 
@@ -1041,6 +1061,14 @@ class SyncEngine {
         gitHubApiService.setGistId(gistId);
         await gitHubApiService.updateGistFiles(encryptedFiles);
         
+        // 使用分页格式同步任务
+        try {
+          const taskResult = await taskSyncService.syncTasks(gistId, customPassword || undefined);
+          result.uploaded.tasks = taskResult.uploaded;
+        } catch (taskError) {
+          logWarning('pushToRemote: Tasks paged sync failed during new gist creation', taskError);
+        }
+        
         await this.saveConfig({
           gistId,
           lastSyncTime: Date.now(),
@@ -1071,6 +1099,7 @@ class SyncEngine {
         
         if (remoteManifest) {
           // 增量比较：只上传有变化的画板
+          let processedCount = 0;
           for (const [boardId, board] of localData.boards) {
             const localChecksum = dataSerializer.calculateBoardChecksum(board);
             const remoteInfo = remoteManifest.boards[boardId];
@@ -1081,6 +1110,11 @@ class SyncEngine {
               filesToUpdate[SYNC_FILES.boardFile(boardId)] = await cryptoService.encrypt(boardJson, config.gistId, customPassword || undefined);
               boardsUploaded++;
               logDebug('pushToRemote: 画板需要上传 (checksum 变化)', { boardId });
+            }
+            // 每处理 3 个画板让出主线程，避免 UI 阻塞
+            processedCount++;
+            if (processedCount % 3 === 0) {
+              await yieldToMain();
             }
           }
           
@@ -1101,10 +1135,16 @@ class SyncEngine {
           }
         } else {
           // 没有远程 manifest，上传所有画板
+          let processedCount = 0;
           for (const [boardId, board] of localData.boards) {
             const boardJson = JSON.stringify(board);
             filesToUpdate[SYNC_FILES.boardFile(boardId)] = await cryptoService.encrypt(boardJson, config.gistId, customPassword || undefined);
             boardsUploaded++;
+            // 每处理 3 个画板让出主线程，避免 UI 阻塞
+            processedCount++;
+            if (processedCount % 3 === 0) {
+              await yieldToMain();
+            }
           }
         }
         
@@ -1118,8 +1158,7 @@ class SyncEngine {
         const promptsJson = JSON.stringify(localData.prompts);
         filesToUpdate[SYNC_FILES.PROMPTS] = await cryptoService.encrypt(promptsJson, config.gistId, customPassword || undefined);
         
-        const tasksJson = JSON.stringify(localData.tasks);
-        filesToUpdate[SYNC_FILES.TASKS] = await cryptoService.encrypt(tasksJson, config.gistId, customPassword || undefined);
+        // 注意：不再上传 tasks.json，改用分页格式
         
         // 只有有变化时才更新
         if (Object.keys(filesToUpdate).length > 0) {
@@ -1129,6 +1168,14 @@ class SyncEngine {
         
         result.uploaded.boards = boardsUploaded;
         
+        // 使用分页格式同步任务
+        try {
+          const taskResult = await taskSyncService.syncTasks(config.gistId, customPassword || undefined);
+          result.uploaded.tasks = taskResult.uploaded;
+        } catch (taskError) {
+          logWarning('pushToRemote: Tasks paged sync failed', taskError);
+        }
+        
         await this.saveConfig({
           lastSyncTime: Date.now(),
         });
@@ -1137,7 +1184,6 @@ class SyncEngine {
       result.uploaded.prompts = localData.prompts.promptHistory.length +
         localData.prompts.videoPromptHistory.length +
         localData.prompts.imagePromptHistory.length;
-      result.uploaded.tasks = localData.tasks.completedTasks.length;
       result.success = true;
 
       logSuccess('pushToRemote: 上传成功', result.uploaded);
@@ -1378,14 +1424,7 @@ class SyncEngine {
         logWarning('pullFromRemote: prompts.json 未找到或为空');
       }
       
-      logDebug('pullFromRemote: 下载 tasks 文件');
-      const tasksContent = await gitHubApiService.getGistFileContent(SYNC_FILES.TASKS);
-      if (tasksContent) {
-        remoteFiles[SYNC_FILES.TASKS] = tasksContent;
-        logDebug('pullFromRemote: tasks.json 已下载', { length: tasksContent.length });
-      } else {
-        logWarning('pullFromRemote: tasks.json 未找到或为空');
-      }
+      // 注意：tasks 使用分页格式同步，由 taskSyncService 单独处理
       
       // 只下载需要更新的画板
       logDebug('pullFromRemote: 下载画板文件', { count: boardsToDownload.length });
@@ -2263,12 +2302,20 @@ class SyncEngine {
       const customPassword = await syncPasswordService.getPassword();
       logDebug('使用自定义密码创建 Gist', { hasPassword: !!customPassword });
       
-      // 使用 gist id 加密数据
+      // 使用 gist id 加密数据（不包含 tasks.json，使用分页格式）
       const encryptedFiles = await dataSerializer.serializeToGistFilesEncrypted(localData, gistId, customPassword || undefined);
       
       // 更新 Gist 内容
       gitHubApiService.setGistId(gistId);
       await gitHubApiService.updateGistFiles(encryptedFiles);
+      
+      // 使用分页格式同步任务
+      try {
+        const taskResult = await taskSyncService.syncTasks(gistId, customPassword || undefined);
+        result.uploaded.tasks = taskResult.uploaded;
+      } catch (taskError) {
+        logWarning('创建新 Gist: Tasks paged sync failed', taskError);
+      }
       
       await this.saveConfig({
         gistId: gistId,
@@ -2280,7 +2327,6 @@ class SyncEngine {
       result.uploaded.prompts = localData.prompts.promptHistory.length +
         localData.prompts.videoPromptHistory.length +
         localData.prompts.imagePromptHistory.length;
-      result.uploaded.tasks = localData.tasks.completedTasks.length;
       result.success = true;
       
       this.setStatus('synced');
@@ -2384,6 +2430,17 @@ class SyncEngine {
         logWarning('工作流同步失败', error);
       }
 
+      // 同步自定义工具
+      try {
+        const toolResult = await toolSyncService.syncTools(
+          config.gistId,
+          customPassword || undefined
+        );
+        logDebug('自定义工具同步结果', toolResult);
+      } catch (error) {
+        logWarning('自定义工具同步失败', error);
+      }
+
       result.success = true;
       logSuccess('分页同步完成', {
         tasksUploaded: result.tasksUploaded,
@@ -2421,14 +2478,11 @@ class SyncEngine {
         return 'paged';
       }
 
-      // 检查是否有旧格式文件
-      if (files[SYNC_FILES.TASKS]) {
-        return 'legacy';
-      }
-
       return 'none';
     } catch (error) {
-      logWarning('检测远程格式失败', error);
+      logWarning('检测远程格式失败', {
+        error: error instanceof Error ? error.message : String(error),
+      });
       return 'none';
     }
   }

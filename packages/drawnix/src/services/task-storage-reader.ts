@@ -106,7 +106,9 @@ class TaskStorageReader extends BaseStorageReader<TaskCache> {
       // 仅类型过滤：返回类型缓存
       if (hasTypeFilter && !hasStatusFilter) {
         const cached = this.cache.byType.get(options!.type!);
-        if (cached) return cached;
+        if (cached) {
+          return cached;
+        }
       }
     }
 
@@ -178,8 +180,7 @@ class TaskStorageReader extends BaseStorageReader<TaskCache> {
       const hasMore = offset + limit < total;
       
       return { tasks: paginatedTasks, total, hasMore };
-    } catch (error) {
-      console.error('[TaskStorageReader] Error getting tasks by type:', error);
+    } catch {
       return { tasks: [], total: 0, hasMore: false };
     }
   }
@@ -191,8 +192,7 @@ class TaskStorageReader extends BaseStorageReader<TaskCache> {
     try {
       const swTask = await this.getById<SWTask>(TASKS_STORE, taskId);
       return swTask ? convertSWTaskToTask(swTask) : null;
-    } catch (error) {
-      console.error('[TaskStorageReader] Error getting task:', error);
+    } catch {
       return null;
     }
   }

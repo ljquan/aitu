@@ -48,7 +48,6 @@ const CONFIG = {
     'cdn-debug.html',
     'versions.html',
     'iframe-test.html',
-    'init.json',
   ],
   // 不上传到 CDN 的模式
   excludeFromCDN: [

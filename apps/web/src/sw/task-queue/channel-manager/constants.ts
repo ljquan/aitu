@@ -11,7 +11,6 @@
 export const RPC_METHODS = {
   // 初始化
   INIT: 'init',
-  UPDATE_CONFIG: 'updateConfig',
 
   // 任务操作
   TASK_CREATE: 'task:create',
@@ -19,7 +18,6 @@ export const RPC_METHODS = {
   TASK_RETRY: 'task:retry',
   TASK_DELETE: 'task:delete',
   TASK_MARK_INSERTED: 'task:markInserted',
-  TASK_IMPORT: 'task:import', // 导入已完成的任务（用于云同步恢复）
 
   // 任务查询
   TASK_GET: 'task:get',
@@ -124,7 +122,7 @@ export const SW_EVENTS = {
   SW_NEW_VERSION_READY: 'sw:newVersionReady',
   SW_ACTIVATED: 'sw:activated',
   SW_UPDATED: 'sw:updated',
-  SW_REQUEST_CONFIG: 'sw:requestConfig',
+  // Note: SW_REQUEST_CONFIG 已移除 - 配置现在同步到 IndexedDB，SW 直接读取
 
   // MCP events
   MCP_TOOL_RESULT: 'mcp:toolResult',

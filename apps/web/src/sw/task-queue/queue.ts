@@ -46,13 +46,13 @@ interface ChatResultCache {
 
 /**
  * Task Queue Manager for Service Worker
+ * 
+ * 设计原则：SW 不维护配置状态，配置随任务传递
  */
 export class SWTaskQueue {
   private tasks: Map<string, SWTask> = new Map();
   private runningTasks: Set<string> = new Set();
   private config: TaskQueueConfig;
-  private geminiConfig: GeminiConfig | null = null;
-  private videoConfig: VideoAPIConfig | null = null;
   private initialized = false;
 
   // Chat result cache - stores recent chat results for recovery after page refresh
@@ -75,9 +75,6 @@ export class SWTaskQueue {
 
   // Track storage restoration completion
   private storageRestorePromise: Promise<void>;
-
-  // Flag to indicate if config was restored from storage (not first-time setup)
-  private hadSavedConfig = false;
 
   constructor(sw: ServiceWorkerGlobalScope, config?: Partial<TaskQueueConfig>) {
     this.sw = sw;
@@ -109,17 +106,11 @@ export class SWTaskQueue {
   }
 
   /**
-   * Get Gemini config for MCP tool execution
+   * 检查 SW 是否已初始化（通道已建立）
+   * 配置不再由 SW 维护，而是随任务传递
    */
-  getGeminiConfig(): GeminiConfig | null {
-    return this.geminiConfig;
-  }
-
-  /**
-   * Get Video config for MCP tool execution
-   */
-  getVideoConfig(): VideoAPIConfig | null {
-    return this.videoConfig;
+  isReady(): boolean {
+    return this.initialized;
   }
 
   /**
@@ -138,19 +129,13 @@ export class SWTaskQueue {
   }
 
   /**
-   * Restore tasks and config from IndexedDB on SW startup
+   * Restore tasks from IndexedDB on SW startup
+   * 配置不再恢复，而是随任务传递
    */
   private async restoreFromStorage(): Promise<void> {
     try {
-      // Load saved config
-      const { geminiConfig, videoConfig } = await taskQueueStorage.loadConfig();
-      
-      if (geminiConfig && videoConfig) {
-        this.geminiConfig = geminiConfig;
-        this.videoConfig = videoConfig;
-        this.initialized = true;
-        this.hadSavedConfig = true; // Mark that we had valid config
-      }
+      // SW 启动时标记为已初始化（不再依赖配置）
+      this.initialized = true;
 
       // Load all tasks
       const tasks = await taskQueueStorage.getAllTasks();
@@ -206,6 +191,11 @@ export class SWTaskQueue {
    * Check if a task should be resumed
    */
   private shouldResumeTask(task: SWTask): boolean {
+    // Never resume tasks synced from remote (avoid duplicate execution across devices)
+    if (task.syncedFromRemote) {
+      return false;
+    }
+
     // Chat tasks cannot be resumed if they were processing (streaming is stateless)
     // Mark them as failed instead
     if (task.type === TaskType.CHAT && task.status === TaskStatus.PROCESSING) {
@@ -483,70 +473,46 @@ export class SWTaskQueue {
   }
 
   /**
-   * Initialize with API configurations
+   * Initialize the task queue
    * 
-   * 设计原则：init RPC 应该立即返回，不阻塞客户端
-   * - 配置立即保存到内存，RPC 立即返回
-   * - IndexedDB 操作（保存配置、清理孤儿任务）在后台进行
-   * - 后台操作完成后广播状态并恢复任务
+   * 简化版：SW 不再维护配置状态，配置随任务传递
+   * init RPC 只用于建立通道连接
    */
-  async initialize(geminiConfig: GeminiConfig, videoConfig: VideoAPIConfig): Promise<void> {
-    // 立即保存配置到内存，不等待 IndexedDB
-    this.geminiConfig = geminiConfig;
-    this.videoConfig = videoConfig;
+  async initialize(): Promise<void> {
     this.initialized = true;
-    
-    // 记录是否是首次初始化（在后台任务中使用）
-    const isFirstTimeInit = !this.hadSavedConfig;
-    this.hadSavedConfig = true;
 
-    // 立即广播初始化成功（让客户端可以继续操作）
+    // 立即广播初始化成功
     this.broadcastToClients({ type: 'TASK_QUEUE_INITIALIZED', success: true });
 
-    // 后台执行 IndexedDB 操作（不阻塞 RPC 返回）
-    this.performBackgroundInitialization(geminiConfig, videoConfig, isFirstTimeInit);
+    // 后台清理孤儿任务
+    this.performBackgroundInitialization();
   }
 
   /**
    * 后台执行初始化相关的 IndexedDB 操作
-   * 不阻塞 init RPC 返回
    */
-  private async performBackgroundInitialization(
-    geminiConfig: GeminiConfig, 
-    videoConfig: VideoAPIConfig,
-    isFirstTimeInit: boolean
-  ): Promise<void> {
+  private async performBackgroundInitialization(): Promise<void> {
     try {
       // 等待存储恢复完成
       await this.storageRestorePromise;
 
-      // 首次初始化时清理孤儿任务
-      if (isFirstTimeInit) {
-        const orphanTasksToRemove: string[] = [];
-        for (const task of this.tasks.values()) {
-          const isOrphan = 
-            task.status === TaskStatus.PENDING ||
-            (task.status === TaskStatus.PROCESSING && !task.remoteId && !this.runningTasks.has(task.id));
-          if (isOrphan) {
-            orphanTasksToRemove.push(task.id);
-          }
-        }
-        
-        if (orphanTasksToRemove.length > 0) {
-          for (const taskId of orphanTasksToRemove) {
-            this.tasks.delete(taskId);
-            await taskQueueStorage.deleteTask(taskId);
-          }
+      // 清理孤儿任务（无配置的 pending 任务或无 remoteId 的 processing 任务）
+      const orphanTasksToRemove: string[] = [];
+      for (const task of this.tasks.values()) {
+        // 没有 config 的任务无法执行，标记为孤儿
+        const hasConfig = task.config && task.config.apiKey && task.config.baseUrl;
+        const isOrphan = 
+          task.status === TaskStatus.PENDING ||
+          (task.status === TaskStatus.PROCESSING && !task.remoteId && !this.runningTasks.has(task.id) && !hasConfig);
+        if (isOrphan) {
+          orphanTasksToRemove.push(task.id);
         }
       }
-
-      // 保存配置到 IndexedDB
-      await taskQueueStorage.saveConfig(geminiConfig, videoConfig);
-
-      // 恢复需要处理的任务
-      for (const task of this.tasks.values()) {
-        if (this.shouldResumeTask(task) && !this.runningTasks.has(task.id)) {
-          this.resumeTaskExecution(task);
+      
+      if (orphanTasksToRemove.length > 0) {
+        for (const taskId of orphanTasksToRemove) {
+          this.tasks.delete(taskId);
+          await taskQueueStorage.deleteTask(taskId);
         }
       }
 
@@ -558,35 +524,18 @@ export class SWTaskQueue {
   }
 
   /**
-   * Update API configurations
-   */
-  async updateConfig(
-    geminiConfig?: Partial<GeminiConfig>,
-    videoConfig?: Partial<VideoAPIConfig>
-  ): Promise<void> {
-    if (geminiConfig && this.geminiConfig) {
-      this.geminiConfig = { ...this.geminiConfig, ...geminiConfig };
-    }
-    if (videoConfig && this.videoConfig) {
-      this.videoConfig = { ...this.videoConfig, ...videoConfig };
-    }
-
-    // Save updated config
-    await taskQueueStorage.saveConfig(this.geminiConfig, this.videoConfig);
-  }
-
-  /**
    * Submit a new task
-   * Note: Will reject if queue is not initialized (no API key configured)
+   * 配置随任务传递，不再依赖预先初始化的配置
    */
   async submitTask(
     taskId: string,
     taskType: TaskType,
     params: SWTask['params'],
+    config: SWTask['config'],
     _clientId: string // clientId is no longer used for targeting
   ): Promise<void> {
-    // Reject task if not initialized (no API key)
-    if (!this.initialized) {
+    // 验证配置
+    if (!config || !config.apiKey || !config.baseUrl) {
       this.broadcastToClients({
         type: 'TASK_REJECTED',
         taskId,
@@ -641,6 +590,7 @@ export class SWTaskQueue {
       type: taskType,
       status: TaskStatus.PROCESSING,
       params,
+      config, // 配置保存在任务中
       createdAt: now,
       updatedAt: now,
       startedAt: now,
@@ -767,6 +717,13 @@ export class SWTaskQueue {
     let task = this.tasks.get(taskId);
 
     if (!task) {
+      // 从 IndexedDB 获取配置
+      const { geminiConfig } = await taskQueueStorage.loadConfig();
+      if (!geminiConfig) {
+        console.warn('[SWTaskQueue] resumeTask: config not available, skipping');
+        return;
+      }
+
       // Create a placeholder task for resumption
       const now = Date.now();
       task = {
@@ -774,6 +731,12 @@ export class SWTaskQueue {
         type: taskType,
         status: TaskStatus.PROCESSING,
         params: { prompt: '' },
+        config: {
+          apiKey: geminiConfig.apiKey,
+          baseUrl: geminiConfig.baseUrl,
+          modelName: geminiConfig.modelName,
+          textModelName: geminiConfig.textModelName,
+        },
         createdAt: now,
         updatedAt: now,
         remoteId,
@@ -865,14 +828,6 @@ export class SWTaskQueue {
   }
 
   /**
-   * Import a task (for cloud sync restore)
-   * Unlike restoreTasks, this accepts all tasks including completed ones
-   */
-  importTask(task: SWTask): void {
-    this.tasks.set(task.id, task);
-  }
-
-  /**
    * Handle chat start
    */
   async startChat(
@@ -880,7 +835,9 @@ export class SWTaskQueue {
     params: import('./types').ChatParams,
     _clientId: string
   ): Promise<void> {
-    if (!this.geminiConfig) {
+    // 从 IndexedDB 读取配置（SW 不维护配置状态）
+    const geminiConfig = await taskQueueStorage.getConfig<GeminiConfig>('gemini');
+    if (!geminiConfig) {
       this.broadcastToClients({
         type: 'CHAT_ERROR',
         chatId,
@@ -893,7 +850,7 @@ export class SWTaskQueue {
       const fullContent = await this.chatHandler.stream(
         chatId,
         params,
-        this.geminiConfig,
+        geminiConfig,
         (content) => {
           this.broadcastToClients({
             type: 'CHAT_CHUNK',
@@ -1012,13 +969,10 @@ export class SWTaskQueue {
   /**
    * Execute a single task (called from processQueue for legacy PENDING tasks)
    * For new tasks, use executeTaskInternal directly after setting up status
+   * 
+   * Note: 配置随任务传递（task.config），在 executeTaskInternal 中验证
    */
   private async executeTask(task: SWTask): Promise<void> {
-    if (!this.geminiConfig || !this.videoConfig) {
-      console.warn('[SWTaskQueue] Config not set, cannot execute task:', task.id);
-      return;
-    }
-
     // Prevent duplicate execution - check if already running
     if (this.runningTasks.has(task.id)) {
       console.warn(`[SWTaskQueue] Task ${task.id} is already running, skipping duplicate execution`);
@@ -1069,13 +1023,27 @@ export class SWTaskQueue {
    */
   private async executeTaskInternal(task: SWTask): Promise<void> {
     console.log('[SW executeTaskInternal] Starting task:', task.id, 'type:', task.type, 'remoteId:', task.remoteId);
-    console.log('[SW executeTaskInternal] geminiConfig:', this.geminiConfig ? 'set' : 'null', 'videoConfig:', this.videoConfig ? `baseUrl=${this.videoConfig.baseUrl}` : 'null');
+    // 从任务获取配置
+    const { config } = task;
+    console.log('[SW executeTaskInternal] config:', config ? `apiKey=${config.apiKey ? 'set' : 'null'}, baseUrl=${config.baseUrl}` : 'null');
     
-    if (!this.geminiConfig || !this.videoConfig) {
-      console.error('[SW executeTaskInternal] Config not set, failing task');
-      await this.handleTaskError(task.id, new Error('API configuration not initialized. Please check your API key settings.'));
+    if (!config || !config.apiKey || !config.baseUrl) {
+      console.error('[SW executeTaskInternal] Config not set in task, failing task');
+      await this.handleTaskError(task.id, new Error('API configuration not provided with task. Please check your API key settings.'));
       return;
     }
+
+    // 构建 GeminiConfig 和 VideoAPIConfig
+    const geminiConfig: GeminiConfig = {
+      apiKey: config.apiKey,
+      baseUrl: config.baseUrl,
+      modelName: config.modelName,
+      textModelName: config.textModelName,
+    };
+    const videoConfig: VideoAPIConfig = {
+      baseUrl: config.baseUrl,
+      apiKey: config.apiKey,
+    };
 
     // 如果任务已经有 remoteId（视频/角色），则直接进入恢复流程，跳过提交阶段，只重试获取进度的接口
     if (task.remoteId && (task.type === TaskType.VIDEO || task.type === TaskType.CHARACTER)) {
@@ -1097,8 +1065,8 @@ export class SWTaskQueue {
     }
 
     const handlerConfig: HandlerConfig = {
-      geminiConfig: this.geminiConfig,
-      videoConfig: this.videoConfig,
+      geminiConfig,
+      videoConfig,
       onProgress: async (taskId, progress, phase) => {
         const t = this.tasks.get(taskId);
         // Only send progress updates for non-terminal states
@@ -1182,18 +1150,32 @@ export class SWTaskQueue {
 
   /**
    * Execute task resumption
+   * 从任务获取配置
    */
   private async executeResume(task: SWTask, remoteId: string): Promise<void> {
-    if (!this.geminiConfig || !this.videoConfig) {
+    const { config } = task;
+    if (!config || !config.apiKey || !config.baseUrl) {
       // 配置不存在时，清理 runningTasks 避免任务被"锁定"
       this.runningTasks.delete(task.id);
       console.warn(`[SWTaskQueue] executeResume: config not set for task ${task.id}, skipping`);
       return;
     }
 
+    // 从任务配置构建 HandlerConfig
+    const geminiConfig: GeminiConfig = {
+      apiKey: config.apiKey,
+      baseUrl: config.baseUrl,
+      modelName: config.modelName,
+      textModelName: config.textModelName,
+    };
+    const videoConfig: VideoAPIConfig = {
+      baseUrl: config.baseUrl,
+      apiKey: config.apiKey,
+    };
+
     const handlerConfig: HandlerConfig = {
-      geminiConfig: this.geminiConfig,
-      videoConfig: this.videoConfig,
+      geminiConfig,
+      videoConfig,
       onProgress: async (taskId, progress, phase) => {
         const t = this.tasks.get(taskId);
         // Only send progress updates for non-terminal states

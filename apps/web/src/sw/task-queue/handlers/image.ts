@@ -256,21 +256,58 @@ export class ImageHandler implements TaskHandler {
     const { startLLMApiLog, completeLLMApiLog, failLLMApiLog } = await import(
       '../llm-api-logger'
     );
+    const { getImageInfo } = await import('../utils/media-generation-utils');
 
     const startTime = Date.now();
     const modelName =
       params.model || geminiConfig.modelName || 'gemini-3-pro-image-preview-async';
 
-    // 开始记录 LLM API 日志
+    // 处理参考图：支持多图，按接口字段重复 append input_reference
+    const refImages =
+      (params.referenceImages as string[] | undefined) ||
+      extractUrlsFromUploadedImages(params.uploadedImages);
+    const refBlobs: Blob[] = [];
+    const referenceImageInfos: LLMReferenceImage[] = [];
+    
+    if (refImages && refImages.length > 0) {
+      console.log(
+        `[ImageHandler] 处理 ${refImages.length} 张参考图片`
+      );
+      for (let i = 0; i < refImages.length; i++) {
+        const blob = await this.toBlob(refImages[i], signal);
+        if (blob) {
+          refBlobs.push(blob);
+          // 获取图片信息用于日志
+          try {
+            const info = await getImageInfo(blob, signal);
+            referenceImageInfos.push({
+              url: info.url,
+              size: info.size,
+              width: info.width,
+              height: info.height,
+            });
+          } catch (err) {
+            console.warn(`[ImageHandler] Failed to get image info for log:`, err);
+            referenceImageInfos.push({
+              url: refImages[i],
+              size: blob.size,
+              width: 0,
+              height: 0,
+            });
+          }
+        }
+      }
+    }
+
+    // 开始记录 LLM API 日志（在获取参考图信息后）
     const logId = startLLMApiLog({
       endpoint: '/v1/videos (async image)',
       model: modelName,
       taskType: 'image',
       prompt: params.prompt as string,
-      hasReferenceImages: !!(params.referenceImages || params.uploadedImages),
-      referenceImageCount:
-        (params.referenceImages as string[] | undefined)?.length ||
-        (params.uploadedImages as unknown[] | undefined)?.length,
+      hasReferenceImages: refBlobs.length > 0,
+      referenceImageCount: refBlobs.length,
+      referenceImages: referenceImageInfos.length > 0 ? referenceImageInfos : undefined,
       taskId: task.id,
     });
 
@@ -290,23 +327,6 @@ export class ImageHandler implements TaskHandler {
       console.log(
         `[ImageHandler] 配置: baseUrl=${baseUrl}, aspectRatio=${sizeParam}`
       );
-
-      // 处理参考图：支持多图，按接口字段重复 append input_reference
-      const refImages =
-        (params.referenceImages as string[] | undefined) ||
-        extractUrlsFromUploadedImages(params.uploadedImages);
-      const refBlobs: Blob[] = [];
-      if (refImages && refImages.length > 0) {
-        console.log(
-          `[ImageHandler] 处理 ${refImages.length} 张参考图片`
-        );
-        for (let i = 0; i < refImages.length; i++) {
-          const blob = await this.toBlob(refImages[i], signal);
-          if (blob) {
-            refBlobs.push(blob);
-          }
-        }
-      }
 
       const formData = new FormData();
       formData.append('model', modelName);
