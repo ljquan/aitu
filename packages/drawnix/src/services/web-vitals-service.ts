@@ -28,7 +28,8 @@ function reportWebVitals(metric: Metric): void {
 
   const rating = getMetricRating(metric.name, metric.value);
 
-  // Format properties according to PostHog's expected structure
+  // 精简 metadata 减小 payload（只传 pathname，referrer 截断）
+  const ref = document.referrer;
   const eventProperties: Record<string, any> = {
     [`$web_vitals_${metric.name}_value`]: metric.value,
     [`$web_vitals_${metric.name}_event`]: {
@@ -37,17 +38,15 @@ function reportWebVitals(metric: Metric): void {
       rating: rating,
       navigationType: metric.navigationType,
     },
-    // Additional metadata
-    page_url: window.location.href,
     page_path: window.location.pathname,
-    referrer: document.referrer,
+    referrer: ref.length > 200 ? ref.slice(0, 200) : ref,
     timestamp: Date.now(),
   };
 
-  // Report to PostHog with $web_vitals event name
-  analytics.track('$web_vitals', eventProperties);
-
-  // console.log(`[Web Vitals] ${metric.name}: ${metric.value.toFixed(2)} (${rating})`);
+  // 延后上报，不阻塞 CWV 回调栈（analytics.track 内部也会在空闲时执行）
+  setTimeout(() => {
+    analytics.track('$web_vitals', eventProperties);
+  }, 0);
 }
 
 /**

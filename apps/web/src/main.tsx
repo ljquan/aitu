@@ -125,20 +125,24 @@ if (typeof window !== 'undefined') {
     memoryMonitorService.logMemoryStatus();
   }, 5000);
 
-  // 等待 PostHog 加载完成后初始化监控
+  // 统计上报为旁路逻辑：在空闲时初始化，不占首屏主流程
   const initMonitoring = () => {
     if (window.posthog) {
-      // console.log('[Monitoring] PostHog loaded, initializing Web Vitals and Page Report');
       initWebVitals();
       initPageReport();
     } else {
-      // console.log('[Monitoring] Waiting for PostHog to load...');
       setTimeout(initMonitoring, 500);
     }
   };
 
-  // 延迟初始化，确保 PostHog 已加载
-  setTimeout(initMonitoring, 1000);
+  const scheduleMonitoring = () => {
+    if (typeof (window as Window & { requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number }).requestIdleCallback === 'function') {
+      (window as Window & { requestIdleCallback: (cb: () => void, opts?: { timeout: number }) => number }).requestIdleCallback(initMonitoring, { timeout: 3000 });
+    } else {
+      setTimeout(initMonitoring, 3000);
+    }
+  };
+  scheduleMonitoring();
 }
 
 // 注册Service Worker来处理CORS问题和PWA功能
