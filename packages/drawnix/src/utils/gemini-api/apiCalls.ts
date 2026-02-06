@@ -155,6 +155,9 @@ export async function callApiRaw(
 /**
  * 流式API调用函数
  * 优先使用 Service Worker 发送请求，降级时使用直接 fetch
+ *
+ * 重要：当 SW channel 已初始化但 ping 超时时（如工作流主线程 fallback 场景），
+ * 仍需验证 channel 可用性，否则 startChat 会卡住且不发起任何网络请求。
  */
 export async function callApiStreamRaw(
   config: GeminiConfig,
@@ -163,15 +166,21 @@ export async function callApiStreamRaw(
   signal?: AbortSignal
 ): Promise<GeminiResponse> {
   // 尝试使用 SW 模式
-  const useSW = await swChannelClient.initializeChannel();
-  
-  if (useSW) {
-    // console.log('[ApiCalls] Using SW mode for streaming API call');
-    return callApiStreamViaSW(config, messages, onChunk, signal);
+  const channelReady = await swChannelClient.initializeChannel();
+  if (!channelReady) {
+    return callApiStreamDirect(config, messages, onChunk, signal);
   }
-  
-  // console.log('[ApiCalls] Using direct fetch for streaming API call');
-  return callApiStreamDirect(config, messages, onChunk, signal);
+
+  // 验证 channel 真正可用（ping 超时说明 channel 已断，避免 startChat 卡住）
+  const pingOk = await Promise.race([
+    swChannelClient.ping(),
+    new Promise<boolean>((r) => setTimeout(() => r(false), 800)),
+  ]);
+  if (!pingOk) {
+    return callApiStreamDirect(config, messages, onChunk, signal);
+  }
+
+  return callApiStreamViaSW(config, messages, onChunk, signal);
 }
 
 /**
