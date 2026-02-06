@@ -175,7 +175,7 @@
         gap: 0;
         width: fit-content;
         max-width: 80px;
-        overflow: hidden;
+        overflow: visible; // 允许 Badge 角标溢出显示，滚动由 __scrollable 处理
         border-radius: $border-radius-lg; // 更加圆润
         box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08); // 更加柔和的阴影
         background: rgba(var(--island-bg-color-rgb, 255, 255, 255), 0.95); // 稍微透明感
@@ -234,6 +234,7 @@
                 justify-content: center;
                 align-items: center;
                 background: inherit;
+                overflow: visible; // 允许 Badge 角标溢出显示
             }
 
             // 固定在顶部的section (菜单)

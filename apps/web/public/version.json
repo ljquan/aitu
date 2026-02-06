@@ -1,6 +1,6 @@
 {
   "version": "0.5.78",
-  "buildTime": "2026-02-06T02:05:51.830Z",
+  "buildTime": "2026-02-06T02:05:52.658Z",
   "gitCommit": "unknown",
   "changelog": [
     "enhance SW task queue service with fallback mechanisms and canvas operation handling",
