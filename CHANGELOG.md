@@ -1,3 +1,19 @@
+## 0.5.81 (2026-02-07)
+
+### 🚀 Features
+
+- unify Service Worker availability checks and enforce main thread executor in fallback scenarios ([e27d14e0](https://github.com/ljquan/aitu/commit/e27d14e0))
+- enhance workflow submission and error handling ([3365fdfc](https://github.com/ljquan/aitu/commit/3365fdfc))
+
+### 🔧 Chores
+
+- update app version to 0.5.80 and adjust build time ([dbdb729b](https://github.com/ljquan/aitu/commit/dbdb729b))
+
+### ❤️  Thank You
+
+- liquidliang <ljquan@qq.com>
+- liquid <ljquan@qq.com>
+
 ## 0.5.79 (2026-02-06)
 
 ### 🚀 Features
