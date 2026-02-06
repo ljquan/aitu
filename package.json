@@ -94,7 +94,7 @@
     "mermaid": "^11.12.2",
     "mobile-detect": "^1.4.5",
     "open-color": "^1.9.1",
-    "postmessage-duplex": "^1.1.1",
+    "postmessage-duplex": "^1.2.0",
     "react": "18.3.1",
     "react-dom": "18.3.1",
     "roughjs": "^4.6.6",
