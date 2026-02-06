@@ -309,23 +309,22 @@ export class FallbackMediaExecutor implements IMediaExecutor {
     });
 
     try {
-      // 提交视频生成请求
-      const submitBody: Record<string, unknown> = {
-        prompt,
-        model,
-        size,
-      };
+      // 提交视频生成请求 (Video API requires multipart/form-data, not JSON)
+      const formData = new FormData();
+      formData.append('model', model);
+      formData.append('prompt', prompt);
+      formData.append('size', size);
       if (secondsToSend) {
-        submitBody.seconds = secondsToSend;
+        formData.append('seconds', String(secondsToSend));
       }
 
       const submitResponse = await fetch(`${config.videoConfig.baseUrl}/v1/videos`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
+          // Don't set Content-Type - browser will auto-set multipart/form-data with boundary
           Authorization: `Bearer ${config.videoConfig.apiKey}`,
         },
-        body: JSON.stringify(submitBody),
+        body: formData,
         signal: options?.signal,
       });
 
