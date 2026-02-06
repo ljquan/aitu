@@ -33,6 +33,7 @@ import type {
   MainThreadToolResponse,
 } from './sw-channel/types/';
 import { swCapabilitiesHandler } from './sw-capabilities';
+import type { DelegatedOperation } from './sw-capabilities';
 import { workflowStorageReader } from './workflow-storage-reader';
 import { WorkflowEngine as MainThreadWorkflowEngine } from './workflow-engine';
 import { executorFactory } from './media-executor';
@@ -236,7 +237,7 @@ class WorkflowSubmissionService {
           const result = await swCapabilitiesHandler.execute({
             operation: request.toolName,
             args: request.args,
-          });
+          } as DelegatedOperation);
 
           // Convert CapabilityResult to MainThreadToolResponse format
           return {
@@ -445,10 +446,9 @@ class WorkflowSubmissionService {
             const result = await swCapabilitiesHandler.execute({
               operation: toolName,
               args,
-            });
+            } as DelegatedOperation);
             return {
               success: result.success,
-              result: result.result,
               error: result.error,
             };
           } catch (error: any) {
@@ -653,10 +653,10 @@ class WorkflowSubmissionService {
               const result = await swCapabilitiesHandler.execute({
                 operation: toolName,
                 args,
-              });
+              } as DelegatedOperation);
               return {
                 success: result.success,
-                result: result.result,
+                result: result.data,
                 error: result.error,
               };
             } catch (error: any) {
