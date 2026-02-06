@@ -26,10 +26,10 @@ pnpm run build          # 构建所有包
 pnpm run build:web      # 仅构建 Web 应用
 
 # 测试与检查
+pnpm check              # 类型检查 + ESLint（推荐）
+pnpm typecheck          # 仅类型检查
+pnpm lint               # 仅 ESLint
 pnpm test               # 运行所有测试
-pnpm nx test <项目名>    # 运行特定项目的测试
-pnpm nx lint <项目名>    # 检查代码规范
-cd packages/drawnix && npx tsc --noEmit  # 类型检查
 
 # 版本发布
 pnpm run version:patch  # 升级补丁版本 (0.0.x)
@@ -127,6 +127,16 @@ Service Worker (后台执行)
 
 > 详细规则和错误示例请参考 `docs/CODING_RULES.md`
 
+### 断舍离原则（最高优先级）
+
+> **极简主义是本项目的核心哲学。代码越少，Bug 越少，维护成本越低。**
+
+1. **坚决删除冗余代码**：发现无用代码立即删除，不犹豫、不"留着以后可能用到"
+2. **拒绝重复实现**：主线程已实现的功能，SW 不要再实现一遍；一处写入成功，不需要另一处"同步通知"
+3. **质疑每一行代码**：新增代码前问"这真的需要吗？"；能用 10 行解决的不写 100 行
+4. **历史包袱及时清理**：架构演进后的遗留代码、废弃的 RPC 调用、不再使用的 Handler 都要删除
+5. **YAGNI 原则**：You Aren't Gonna Need It —— 不为假想的未来需求预留代码
+
 ### 必须遵守
 
 1. **文件大小限制**：单个文件不超过 500 行
@@ -148,8 +158,7 @@ Service Worker (后台执行)
 17. **模块循环依赖**：将共享函数（如 `shouldUseSWTaskQueue`）提取到独立模块打破循环；单例构造函数用 `queueMicrotask` 延迟访问其他模块导出
 18. **配置对象深拷贝**：`getSetting()` 等返回配置对象的方法需返回深拷贝，防止脱敏函数等外部操作修改全局状态
 19. **避免过度设计**：优先使用简单的 interface + service 模式；只在有明确需求时才添加 Repository、Strategy 等抽象层
-20. **删除未使用代码**：未使用的"基础设施"代码应删除，不要"为未来预留"；遵循 YAGNI 原则
-21. **重构先问问题**：重构前明确要解决的实际问题；验证方案是否真的解决问题而非增加复杂度
+20. **重构先问问题**：重构前明确要解决的实际问题；验证方案是否真的解决问题而非增加复杂度
 
 ### Service Worker 规则
 
@@ -166,7 +175,7 @@ Service Worker (后台执行)
 11. **postmessage-duplex 客户端初始化**：`createFromPage()` 设置 `autoReconnect: true` 处理 SW 更新；禁用日志需 `log: {...}` 配合 `as any`（类型定义不含 log）
 12. **postmessage-duplex 消息大小限制**：单次 RPC 响应不超过 1MB，大数据查询需后端分页+精简数据（去掉 requestBody/responseBody 等大字段）
 13. **主线程直接读取 IndexedDB**：只读数据直接用 `taskStorageReader.getAllTasks()` 读取，避免 postMessage 限制；写操作通过 SW 或 `taskStorageWriter` 保持一致性
-14. **任务数据持久化**：主线程的 `tasks` Map 只是内存状态，恢复任务必须通过 `importTasks` RPC 持久化到 SW 的 IndexedDB
+14. **任务数据持久化**：主线程直接通过 `taskStorageWriter` 写入 IndexedDB，无需通过 RPC 通知 SW（断舍离：避免重复写入）
 15. **降级模式任务执行**：`?sw=0` 降级模式下，`createTask` 后必须自动触发 `executeTask`，否则任务只会被创建但不会执行
 16. **工作流恢复状态不一致**：UI 与 SW 状态不一致时（如终态但有运行中步骤），必须先从 SW 获取真实状态，不能直接标记为失败
 17. **错误处理链保持完整**：需要传递特殊错误属性（如 `isAwaitingClient`）时，必须重新抛出原始错误，不能创建新 Error 对象
@@ -269,8 +278,7 @@ Service Worker (后台执行)
 修改代码后执行：
 
 ```bash
-cd packages/drawnix && npx tsc --noEmit  # 类型检查
-pnpm nx lint drawnix                      # 代码规范
-pnpm nx test drawnix                      # 单元测试
-pnpm run build                            # 构建验证
+pnpm check              # 类型检查 + ESLint（推荐）
+pnpm test               # 单元测试
+pnpm run build          # 构建验证
 ```

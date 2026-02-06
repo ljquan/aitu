@@ -252,6 +252,15 @@ export interface TaskDeletedMessage {
 }
 
 /**
+ * Task rejected (before creation, e.g., missing config)
+ */
+export interface TaskRejectedMessage {
+  type: 'TASK_REJECTED';
+  taskId: string;
+  reason: string;
+}
+
+/**
  * Chat stream chunk
  */
 export interface ChatChunkMessage {
@@ -313,6 +322,7 @@ export type SWToMainMessage =
   | TaskCreatedMessage
   | TaskCancelledMessage
   | TaskDeletedMessage
+  | TaskRejectedMessage
   | ChatChunkMessage
   | ChatDoneMessage
   | ChatErrorMessage

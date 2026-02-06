@@ -717,6 +717,13 @@ export class SWTaskQueue {
     let task = this.tasks.get(taskId);
 
     if (!task) {
+      // 从 IndexedDB 获取配置
+      const { geminiConfig } = await taskQueueStorage.loadConfig();
+      if (!geminiConfig) {
+        console.warn('[SWTaskQueue] resumeTask: config not available, skipping');
+        return;
+      }
+
       // Create a placeholder task for resumption
       const now = Date.now();
       task = {
@@ -724,6 +731,12 @@ export class SWTaskQueue {
         type: taskType,
         status: TaskStatus.PROCESSING,
         params: { prompt: '' },
+        config: {
+          apiKey: geminiConfig.apiKey,
+          baseUrl: geminiConfig.baseUrl,
+          modelName: geminiConfig.modelName,
+          textModelName: geminiConfig.textModelName,
+        },
         createdAt: now,
         updatedAt: now,
         remoteId,
@@ -815,14 +828,6 @@ export class SWTaskQueue {
   }
 
   /**
-   * Import a task (for cloud sync restore)
-   * Unlike restoreTasks, this accepts all tasks including completed ones
-   */
-  importTask(task: SWTask): void {
-    this.tasks.set(task.id, task);
-  }
-
-  /**
    * Handle chat start
    */
   async startChat(
@@ -830,7 +835,9 @@ export class SWTaskQueue {
     params: import('./types').ChatParams,
     _clientId: string
   ): Promise<void> {
-    if (!this.geminiConfig) {
+    // 从 IndexedDB 读取配置（SW 不维护配置状态）
+    const geminiConfig = await taskQueueStorage.getConfig<GeminiConfig>('gemini');
+    if (!geminiConfig) {
       this.broadcastToClients({
         type: 'CHAT_ERROR',
         chatId,
@@ -843,7 +850,7 @@ export class SWTaskQueue {
       const fullContent = await this.chatHandler.stream(
         chatId,
         params,
-        this.geminiConfig,
+        geminiConfig,
         (content) => {
           this.broadcastToClients({
             type: 'CHAT_CHUNK',
@@ -962,13 +969,10 @@ export class SWTaskQueue {
   /**
    * Execute a single task (called from processQueue for legacy PENDING tasks)
    * For new tasks, use executeTaskInternal directly after setting up status
+   * 
+   * Note: 配置随任务传递（task.config），在 executeTaskInternal 中验证
    */
   private async executeTask(task: SWTask): Promise<void> {
-    if (!this.geminiConfig || !this.videoConfig) {
-      console.warn('[SWTaskQueue] Config not set, cannot execute task:', task.id);
-      return;
-    }
-
     // Prevent duplicate execution - check if already running
     if (this.runningTasks.has(task.id)) {
       console.warn(`[SWTaskQueue] Task ${task.id} is already running, skipping duplicate execution`);

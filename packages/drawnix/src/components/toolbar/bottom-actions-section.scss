@@ -38,7 +38,10 @@
       color: var(--brand-primary);
       // border: 1px solid var(--brand-primary);
     }
-
+    .t-badge--circle {
+      transform: translate(16px, -6px); // 缩小到75%，往左上挪
+      transform-origin: center;
+    }
     // 移动端 Badge 样式调整 - 更小、更靠里
     @media (max-width: 768px) {
       .t-badge--circle {

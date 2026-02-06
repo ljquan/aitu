@@ -443,9 +443,8 @@ class SWTaskQueueService {
    * Restore tasks from storage (for cloud sync or migration)
    * 恢复任务到本地状态、持久化到 IndexedDB 并通知 UI 更新
    * 
-   * 设计原则：优先直接写入 IndexedDB，不依赖 SW 连接
-   * - 先写入 IndexedDB 确保数据持久化
-   * - 然后异步通知 SW（如果可用）以保持同步
+   * 设计原则：直接写入 IndexedDB，不依赖 SW
+   * SW 通过 IndexedDB 读取数据，无需额外同步通知
    */
   async restoreTasks(tasks: Task[]): Promise<void> {
     // 过滤出本地不存在的任务
@@ -458,37 +457,22 @@ class SWTaskQueueService {
     // 转换为存储格式（用于 IndexedDB）
     const storageTasks: StorageSWTask[] = tasksToRestore.map(task => this.convertTaskToStorageFormat(task));
 
-    // 直接写入 IndexedDB，不依赖 SW
-    try {
-      const result = await taskStorageWriter.importTasks(storageTasks);
-      console.log(`[SWTaskQueue] Imported ${result.imported} tasks, skipped ${result.skipped}`);
-      
-      // 添加到本地内存
-      for (const task of tasksToRestore) {
-        this.tasks.set(task.id, task);
-        this.emitEvent('taskCreated', task);
-      }
-      
-      // 更新分页状态
-      this.paginationState.total = this.tasks.size;
-      this.paginationState.loadedCount = this.tasks.size;
-      
-      // 清除读取缓存，确保下次读取时获取最新数据
-      taskStorageReader.invalidateCache();
-      
-      // 异步通知 SW（如果可用），fire-and-forget
-      // 这样 SW 可以更新其内部状态（如任务计数等）
-      if (swChannelClient.isInitialized()) {
-        const swTasks: SWTask[] = tasksToRestore.map(task => this.convertTaskToSWTask(task));
-        swChannelClient.importTasks(swTasks).catch((error) => {
-          // SW 同步失败不影响主流程，数据已持久化到 IndexedDB
-          console.warn('[SWTaskQueue] SW sync failed (data already persisted):', error);
-        });
-      }
-    } catch (error) {
-      console.error('[SWTaskQueue] Failed to import tasks to IndexedDB:', error);
-      throw error;
+    // 直接写入 IndexedDB
+    const result = await taskStorageWriter.importTasks(storageTasks);
+    console.log(`[SWTaskQueue] Imported ${result.imported} tasks, skipped ${result.skipped}`);
+    
+    // 添加到本地内存
+    for (const task of tasksToRestore) {
+      this.tasks.set(task.id, task);
+      this.emitEvent('taskCreated', task);
     }
+    
+    // 更新分页状态
+    this.paginationState.total = this.tasks.size;
+    this.paginationState.loadedCount = this.tasks.size;
+    
+    // 清除读取缓存，确保下次读取时获取最新数据
+    taskStorageReader.invalidateCache();
   }
   
   /**

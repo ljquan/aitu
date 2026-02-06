@@ -476,15 +476,7 @@ export class TaskQueueStorage {
         const store = transaction.objectStore(TASKS_STORE);
         const index = store.index('createdAt');
 
-        // First, get total count with filters
-        const countRequest = store.count();
-        let total = 0;
-
-        countRequest.onsuccess = () => {
-          total = countRequest.result;
-        };
-
-        // Use cursor to iterate with pagination
+        // Use cursor to iterate with pagination (filteredTotal is calculated during iteration)
         const direction: IDBCursorDirection = sortOrder === 'desc' ? 'prev' : 'next';
         const cursorRequest = index.openCursor(null, direction);
 
@@ -586,7 +578,7 @@ export class TaskQueueStorage {
    * Save a configuration by key
    * 持久化配置到 IndexedDB，确保 SW 重启后可恢复
    */
-  async saveConfig<T extends Record<string, unknown>>(key: 'gemini' | 'video', config: T): Promise<void> {
+  async saveConfig<T extends object>(key: 'gemini' | 'video', config: T): Promise<void> {
     try {
       const db = await this.getDB();
       return new Promise((resolve, reject) => {
@@ -1009,7 +1001,7 @@ export class TaskQueueStorage {
    * @param maxAgeMs Maximum age in milliseconds (default: 1 hour)
    * @returns Number of requests deleted
    */
-  async cleanupStalePendingToolRequests(maxAgeMs: number = 3600000): Promise<number> {
+  async cleanupStalePendingToolRequests(maxAgeMs = 3600000): Promise<number> {
     try {
       const requests = await this.getAllPendingToolRequests();
       const now = Date.now();
