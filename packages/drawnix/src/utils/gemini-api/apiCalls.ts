@@ -156,8 +156,9 @@ export async function callApiRaw(
  * 流式API调用函数
  * 优先使用 Service Worker 发送请求，降级时使用直接 fetch
  *
- * 重要：当 SW channel 已初始化但 ping 超时时（如工作流主线程 fallback 场景），
- * 仍需验证 channel 可用性，否则 startChat 会卡住且不发起任何网络请求。
+ * 重要：不再调用 initializeChannel()（其内部 doInitialize 会重试 3×10s = 30s+），
+ * 改为只检查 isInitialized() + ping 快速验证 channel 可用性。
+ * 当 SW 不可用时立即 fallback 到 direct fetch，避免长时间阻塞。
  */
 export async function callApiStreamRaw(
   config: GeminiConfig,
@@ -165,22 +166,23 @@ export async function callApiStreamRaw(
   onChunk?: (content: string) => void,
   signal?: AbortSignal
 ): Promise<GeminiResponse> {
-  // 尝试使用 SW 模式
-  const channelReady = await swChannelClient.initializeChannel();
-  if (!channelReady) {
-    return callApiStreamDirect(config, messages, onChunk, signal);
+  // 快速检查：只用已初始化好的 SW channel，不触发重新初始化
+  if (swChannelClient.isInitialized()) {
+    // 验证 channel 真正可用（ping 超时说明 channel 已断，避免 startChat 卡住）
+    const pingOk = await Promise.race([
+      swChannelClient.ping(),
+      new Promise<boolean>((r) => setTimeout(() => r(false), 800)),
+    ]);
+    if (pingOk) {
+      console.log('[callApiStreamRaw] 使用 SW 模式');
+      return callApiStreamViaSW(config, messages, onChunk, signal);
+    }
+    console.log('[callApiStreamRaw] SW channel 已初始化但 ping 失败，降级到 direct fetch');
+  } else {
+    console.log('[callApiStreamRaw] SW channel 未初始化，使用 direct fetch');
   }
 
-  // 验证 channel 真正可用（ping 超时说明 channel 已断，避免 startChat 卡住）
-  const pingOk = await Promise.race([
-    swChannelClient.ping(),
-    new Promise<boolean>((r) => setTimeout(() => r(false), 800)),
-  ]);
-  if (!pingOk) {
-    return callApiStreamDirect(config, messages, onChunk, signal);
-  }
-
-  return callApiStreamViaSW(config, messages, onChunk, signal);
+  return callApiStreamDirect(config, messages, onChunk, signal);
 }
 
 /**
@@ -313,6 +315,13 @@ async function callApiStreamDirect(
   const startTime = Date.now();
   const model = config.modelName || 'gemini-3-pro-image-preview-vip';
   const endpoint = '/chat/completions';
+
+  console.log('[callApiStreamDirect] 发起 direct fetch 请求:', {
+    model,
+    baseUrl: config.baseUrl,
+    hasApiKey: !!config.apiKey,
+    messageCount: messages.length,
+  });
 
   // Track API call start
   analytics.trackAPICallStart({

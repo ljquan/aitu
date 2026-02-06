@@ -417,8 +417,12 @@ export async function sendChatWithGemini(
   signal?: AbortSignal,
   temporaryModel?: string
 ): Promise<GeminiResponse> {
+  console.log('[sendChatWithGemini] 开始, temporaryModel:', temporaryModel);
+
   // 等待设置管理器初始化完成
+  const t0 = Date.now();
   await settingsManager.waitForInitialization();
+  console.log('[sendChatWithGemini] settingsManager 初始化完成, 耗时:', Date.now() - t0, 'ms');
   
   // 直接从设置中获取配置
   const globalSettings = geminiSettings.get();
@@ -428,12 +432,18 @@ export async function sendChatWithGemini(
     // 优先使用临时模型，其次使用全局 chatModel 设置
     modelName: temporaryModel || globalSettings.chatModel || 'gpt-4o-mini',
   };
+  console.log('[sendChatWithGemini] 配置:', { modelName: config.modelName, hasApiKey: !!config.apiKey, baseUrl: config.baseUrl });
+
+  const t1 = Date.now();
   const validatedConfig = await validateAndEnsureConfig(config);
+  console.log('[sendChatWithGemini] validateAndEnsureConfig 完成, 耗时:', Date.now() - t1, 'ms');
 
   // Use stream if callback provided
   if (onChunk) {
+    console.log('[sendChatWithGemini] 使用流式调用 callApiStreamRaw');
     return await callApiStreamRaw(validatedConfig, messages, onChunk, signal);
   } else {
+    console.log('[sendChatWithGemini] 使用非流式调用 callApiWithRetry');
     // Note: callApiWithRetry doesn't support signal yet, but for now ChatService uses onChunk
     return await callApiWithRetry(validatedConfig, messages);
   }
