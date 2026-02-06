@@ -130,8 +130,9 @@ class SWTaskQueueService {
         // 停止轮询（SW 已恢复）
         this.stopPolling();
       }
-    } catch {
-      // 恢复失败，保持降级模式
+    } catch (error) {
+      // 恢复失败，保持降级模式，只记录 debug 信息
+      console.debug('[SWTaskQueue] SW restore attempt failed:', error);
     }
   }
 
@@ -180,8 +181,9 @@ class SWTaskQueueService {
       }
       
       return this.initialized;
-    } catch {
+    } catch (error) {
       // SW 初始化失败，但 visibility 监听器已设置，可以使用轮询作为后备
+      console.warn('[SWTaskQueue] Initialization failed, using fallback mode:', error);
       this.swAvailable = false;
       return false;
     }
@@ -508,6 +510,7 @@ class SWTaskQueueService {
       remoteId: task.remoteId,
       executionPhase: task.executionPhase,
       insertedToCanvas: task.insertedToCanvas,
+      syncedFromRemote: task.syncedFromRemote,
     };
   }
   
@@ -531,6 +534,7 @@ class SWTaskQueueService {
       remoteId: task.remoteId,
       executionPhase: task.executionPhase as SWTask['executionPhase'],
       insertedToCanvas: task.insertedToCanvas,
+      syncedFromRemote: task.syncedFromRemote,
     };
   }
 
@@ -575,8 +579,8 @@ class SWTaskQueueService {
 
         return this.paginationState.hasMore;
       }
-    } catch {
-      // 静默忽略错误
+    } catch (error) {
+      console.warn('[SWTaskQueue] loadMoreTasks failed:', error);
     }
     
     return false;
@@ -648,7 +652,8 @@ class SWTaskQueueService {
   }
 
   /**
-   * Marks a task as inserted to canvas (local-only flag, persisted to SW)
+   * Marks a task as inserted to canvas
+   * 直接写入 IndexedDB，不依赖 SW RPC
    */
   markAsInserted(taskId: string): void {
     const task = this.tasks.get(taskId);
@@ -660,7 +665,11 @@ class SWTaskQueueService {
       updatedAt: Date.now(),
     };
     this.tasks.set(taskId, updatedTask);
-    swChannelClient.markTaskInserted(taskId);
+    
+    // 直接写入 IndexedDB，避免 RPC 超时问题
+    taskStorageWriter.markInserted(taskId).catch((error) => {
+      console.warn('[SWTaskQueue] Failed to persist insertedToCanvas flag:', error);
+    });
   }
 
   observeTaskUpdates(): Observable<TaskEvent> {
@@ -1081,7 +1090,8 @@ class SWTaskQueueService {
         } else {
           return;
         }
-      } catch {
+      } catch (error) {
+        console.debug('[SWTaskQueue] handleSWStatus: getTask failed for', taskId, error);
         return;
       }
     }
@@ -1106,7 +1116,8 @@ class SWTaskQueueService {
         } else {
           return;
         }
-      } catch {
+      } catch (error) {
+        console.debug('[SWTaskQueue] handleSWCompleted: getTask failed for', taskId, error);
         return;
       }
     }
@@ -1133,7 +1144,8 @@ class SWTaskQueueService {
         } else {
           return;
         }
-      } catch {
+      } catch (error) {
+        console.debug('[SWTaskQueue] handleSWFailed: getTask failed for', taskId, error);
         return;
       }
     }
@@ -1159,7 +1171,8 @@ class SWTaskQueueService {
         } else {
           return;
         }
-      } catch {
+      } catch (error) {
+        console.debug('[SWTaskQueue] handleSWCancelled: getTask failed for', taskId, error);
         return;
       }
     }
@@ -1175,8 +1188,8 @@ class SWTaskQueueService {
         if (swTask) {
           task = this.convertSWTaskToTask(swTask);
         }
-      } catch {
-        // 忽略错误
+      } catch (error) {
+        console.debug('[SWTaskQueue] handleSWDeleted: getTask failed for', taskId, error);
       }
     }
     if (task) {

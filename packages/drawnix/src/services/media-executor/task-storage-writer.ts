@@ -51,6 +51,8 @@ export interface SWTask {
   executionPhase?: string;
   savedToLibrary?: boolean;
   insertedToCanvas?: boolean;
+  /** 是否从远程同步（不应被恢复执行） */
+  syncedFromRemote?: boolean;
   /** 任务配置（可选，导入时可能没有） */
   config?: {
     apiKey: string;
@@ -316,6 +318,18 @@ class TaskStorageWriter {
 
       transaction.onerror = () => reject(transaction.error);
     });
+  }
+
+  /**
+   * 标记任务已插入画布
+   */
+  async markInserted(taskId: string): Promise<void> {
+    const task = await this.getTask(taskId);
+    if (task) {
+      task.insertedToCanvas = true;
+      task.updatedAt = Date.now();
+      await this.saveTask(task);
+    }
   }
 
   /**

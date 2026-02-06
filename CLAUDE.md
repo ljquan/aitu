@@ -134,7 +134,7 @@ Service Worker (后台执行)
 3. **组件规范**：函数组件 + Hooks，事件处理器用 `useCallback`
 4. **定时器清理**：`setInterval` 必须保存 ID，提供 `destroy()` 方法
 5. **API 请求**：禁止重试，区分业务失败和网络错误
-6. **调试日志**：提交前必须清理 `console.log`；同步模块（`github-sync/*`）使用 `logDebug/logInfo/logSuccess/logWarning/logError` 而非 `console.log`
+6. **调试日志**：提交前必须清理 `console.log`；同步模块（`github-sync/*`）使用 `logDebug/logInfo/logSuccess/logWarning/logError` 而非 `console.log`；**禁止空 catch 块**，至少记录 `console.debug`
 7. **敏感信息**：永不硬编码 API Key，使用 `sanitizeObject` 过滤日志，敏感 ID 用 `maskId` 脱敏
 8. **布局抖动**：`Suspense` 的 fallback 应撑满容器或固定高度，防止加载时跳动
 9. **结构化数据**：复杂消息展示应优先使用 `aiContext` 等结构化数据而非字符串解析
@@ -176,6 +176,8 @@ Service Worker (后台执行)
 21. **RPC 超时与重连**：关键 RPC 调用（如工作流提交）需设置合理超时（15-30秒），超时时主动重新初始化 SW 连接并重试
 22. **降级路径功能一致性**：降级到主线程直接调用 API 时，必须保持与 SW 模式相同的功能行为（如 LLM API 日志记录），否则调试工具会漏掉这些调用
 23. **SW 初始化统一入口**：使用 `swChannelClient.ensureReady()` 作为统一入口，避免在各处重复初始化逻辑；任务队列用 `swTaskQueueService.initialize()`
+24. **配置同步到 IndexedDB**：SW 无法访问 localStorage，`SettingsManager` 自动将配置同步到 IndexedDB（同一数据库 `sw-task-queue`），SW 直接从 IndexedDB 读取，避免依赖 postMessage
+25. **远程同步任务不恢复执行**：通过 `syncedFromRemote` 标记区分本地和远程任务，SW 的 `shouldResumeTask()` 跳过远程任务，避免多设备重复调用大模型接口
 
 ### React 规则
 

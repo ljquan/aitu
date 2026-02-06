@@ -236,6 +236,8 @@ export interface Task {
   savedToLibrary?: boolean;
   /** Whether the task result has been inserted to canvas */
   insertedToCanvas?: boolean;
+  /** Whether the task was synced from remote (should not be resumed) */
+  syncedFromRemote?: boolean;
 }
 
 // ============================================================================

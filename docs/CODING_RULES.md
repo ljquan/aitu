@@ -457,6 +457,48 @@ const config = {
 
 **原因**: TypeScript 的 `import type` 在编译时会被完全移除，不会产生任何运行时代码。而 `enum` 在 TypeScript 中既是类型也是值（会编译为 JavaScript 对象），当代码中使用枚举成员作为对象键或进行比较时，需要运行时存在该值。如果使用 `import type` 导入枚举，运行时会抛出 `ReferenceError: xxx is not defined`。
 
+#### 禁止空 catch 块（必须有日志）
+
+**场景**: 捕获异常后需要记录或处理
+
+❌ **错误示例**:
+```typescript
+// 错误：静默吞掉错误，调试困难
+try {
+  await swChannelClient.getTask(taskId);
+} catch {
+  return;  // 什么都不做
+}
+
+// 错误：catch 块为空
+try {
+  await someOperation();
+} catch {
+  // 静默忽略错误
+}
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：至少记录 debug 级别日志
+try {
+  await swChannelClient.getTask(taskId);
+} catch (error) {
+  console.debug('[SWTaskQueue] getTask failed for', taskId, error);
+  return;
+}
+
+// 正确：预期的错误用 warn，严重错误用 error
+try {
+  await criticalOperation();
+} catch (error) {
+  console.warn('[ModuleName] Operation failed:', error);
+  return fallbackValue;
+}
+```
+
+**原因**: 空 catch 块会静默吞掉错误，导致问题难以排查。即使是预期的错误（如网络超时），也应记录 debug 级别日志，便于调试。使用 `console.debug` 可在生产环境中隐藏，但开发时能看到。
+
 #### Service Worker 与主线程模块不共享
 
 **场景**: 需要在 Service Worker 和主线程中使用相同逻辑时
@@ -1851,6 +1893,66 @@ class SWTaskQueue {
 
 **现象**: 页面刷新后，任务列表显示不完整（如 67 条任务只显示 2 条），因为 RPC 响应在数据恢复完成前就返回了。
 
+### 配置同步到 IndexedDB 供 SW 读取
+
+**场景**: Service Worker 需要读取用户配置（如 API Key、baseUrl），但 SW 无法访问 localStorage
+
+**问题**: 之前的架构依赖 postMessage 传递配置给 SW，当通信不畅时 SW 可能拿不到配置导致任务失败。
+
+❌ **错误示例**:
+```typescript
+// 错误：SW 依赖 postMessage 获取配置
+// 主线程
+await swChannelClient.init({
+  geminiConfig: { apiKey, baseUrl },
+  videoConfig: { baseUrl },
+});
+
+// SW 中
+private async handleInit(data: { geminiConfig; videoConfig }) {
+  this.geminiConfig = data.geminiConfig;
+  // 如果 postMessage 失败，SW 就没有配置
+}
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：配置同步到 IndexedDB，SW 直接读取
+
+// 1. 主线程 SettingsManager 自动同步配置到 IndexedDB
+private async saveToStorage(): Promise<void> {
+  localStorage.setItem(DRAWNIX_SETTINGS_KEY, settingsJson);
+  
+  // 同步到 IndexedDB，供 SW 读取
+  this.syncToIndexedDB().catch(console.warn);
+}
+
+private async syncToIndexedDB(): Promise<void> {
+  const geminiConfig = {
+    apiKey: this.settings.gemini.apiKey,
+    baseUrl: this.settings.gemini.baseUrl,
+    // ...
+  };
+  await configIndexedDBWriter.saveConfig(geminiConfig, videoConfig);
+}
+
+// 2. SW 从 IndexedDB 读取配置
+const geminiConfig = await taskQueueStorage.getConfig<GeminiConfig>('gemini');
+const videoConfig = await taskQueueStorage.getConfig<VideoAPIConfig>('video');
+```
+
+**数据流**:
+```
+用户修改设置 → localStorage + IndexedDB（同时写入）
+SW 需要配置 → 直接读取 IndexedDB → 始终可用
+```
+
+**关键点**:
+- `configIndexedDBWriter` 使用与 SW 相同的数据库名 (`sw-task-queue`) 和存储名 (`config`)
+- 初始化时自动同步，老用户的 localStorage 配置会自动迁移到 IndexedDB
+- RPC `init()` 不再需要传递配置参数（可选，用于兼容旧版本）
+- 任务/工作流仍保留配置快照，用于恢复场景
+
 **原因**: Service Worker 启动后会异步从 IndexedDB 恢复数据（`restoreFromStorage()`），这个过程可能需要一定时间。如果 RPC handler 在恢复完成前被调用，访问的数据是不完整的。需要通过 Promise 机制确保数据恢复完成后再返回响应。
 
 ### 主线程任务数据必须通过 RPC 持久化到 SW
@@ -1899,6 +2001,53 @@ async restoreTasks(tasks: Task[]): Promise<void> {
 - 主线程：`packages/drawnix/src/services/sw-task-queue-service.ts`
 - SW 端：`apps/web/src/sw/task-queue/channel-manager.ts` (`TASK_IMPORT` RPC)
 - SW 存储：`apps/web/src/sw/task-queue/storage.ts`
+
+### 远程同步的任务不应恢复执行
+
+**场景**: 多设备同步场景下，避免远程同步过来的任务被错误地恢复执行
+
+❌ **错误示例**:
+```typescript
+// 错误：SW 重启后会恢复所有 PROCESSING/PENDING 状态的任务，包括远程同步的
+private shouldResumeTask(task: SWTask): boolean {
+  if (task.status === TaskStatus.PROCESSING) {
+    return true; // 会恢复远程同步的任务，导致重复调用大模型接口
+  }
+  return false;
+}
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：检查 syncedFromRemote 标记，跳过远程同步的任务
+private shouldResumeTask(task: SWTask): boolean {
+  // 远程同步的任务不应恢复执行（避免多设备重复执行）
+  if (task.syncedFromRemote) {
+    return false;
+  }
+  
+  if (task.status === TaskStatus.PROCESSING) {
+    return true;
+  }
+  return false;
+}
+```
+
+**现象**: 用户在设备 A 创建任务并同步到云端，设备 B 同步后页面刷新，任务被重新执行，导致重复调用大模型接口（产生额外费用）。
+
+**原因**: SW 重启后会调用 `restoreFromStorage()` 恢复任务，并对 `PROCESSING`/`PENDING` 状态的任务调用 `resumeTaskExecution()`。远程同步的任务虽然通常是 `COMPLETED` 状态，但为了防止边界情况，需要通过 `syncedFromRemote` 标记明确区分本地创建和远程同步的任务。
+
+**实现要点**:
+1. `Task` 和 `SWTask` 接口添加 `syncedFromRemote?: boolean` 字段
+2. `task-sync-service.ts` 的 `compactToTask()` 设置 `syncedFromRemote: true`
+3. SW 的 `shouldResumeTask()` 检查此标记并返回 `false`
+4. 数据转换函数（`convertTaskToStorageFormat`、`convertTaskToSWTask`）传递此字段
+
+**相关文件**:
+- 主线程类型：`packages/drawnix/src/types/shared/core.types.ts`
+- SW 类型：`apps/web/src/sw/task-queue/types.ts`
+- 任务恢复：`apps/web/src/sw/task-queue/queue.ts` (`shouldResumeTask`)
+- 同步服务：`packages/drawnix/src/services/github-sync/task-sync-service.ts`
 
 ### PostMessage 日志由调试模式完全控制
 

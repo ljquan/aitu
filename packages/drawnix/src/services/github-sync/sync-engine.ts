@@ -49,6 +49,7 @@ import {
 } from './types';
 import { taskSyncService } from './task-sync-service';
 import { workflowSyncService } from './workflow-sync-service';
+import { toolSyncService } from './tool-sync-service';
 
 /** 同步配置存储键 */
 const SYNC_CONFIG_KEY = 'github_sync_config';
@@ -2429,6 +2430,17 @@ class SyncEngine {
         logWarning('工作流同步失败', error);
       }
 
+      // 同步自定义工具
+      try {
+        const toolResult = await toolSyncService.syncTools(
+          config.gistId,
+          customPassword || undefined
+        );
+        logDebug('自定义工具同步结果', toolResult);
+      } catch (error) {
+        logWarning('自定义工具同步失败', error);
+      }
+
       result.success = true;
       logSuccess('分页同步完成', {
         tasksUploaded: result.tasksUploaded,
@@ -2468,7 +2480,9 @@ class SyncEngine {
 
       return 'none';
     } catch (error) {
-      logWarning('检测远程格式失败', error);
+      logWarning('检测远程格式失败', {
+        error: error instanceof Error ? error.message : String(error),
+      });
       return 'none';
     }
   }

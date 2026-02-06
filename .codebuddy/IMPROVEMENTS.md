@@ -142,7 +142,7 @@ npm run build:web
 
 ### 步骤 2：验证调试模式启用时的功能
 ```
-1. 打开 http://localhost:4200/sw-debug.html
+1. 打开 http://localhost:7200/sw-debug.html
 2. 点击"启用调试"
 3. 切换到"PostMessage 日志"标签
 4. 执行应用操作
@@ -185,5 +185,5 @@ npm run build:web
 
 打开调试面板：
 ```
-http://localhost:4200/sw-debug.html
+http://localhost:7200/sw-debug.html
 ```

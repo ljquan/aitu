@@ -28,7 +28,7 @@ Opentu (开图) is an open-source whiteboard application built on the Plait fram
 ## Development Commands
 
 **Essential Commands:**
-- `npm start` - Start development server (serves web app at localhost:4200)
+- `npm start` - Start development server (serves web app at localhost:7200)
 - `npm run build` - Build all packages
 - `npm run build:web` - Build only the web application
 - `npm test` - Run all tests

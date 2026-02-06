@@ -191,6 +191,11 @@ export class SWTaskQueue {
    * Check if a task should be resumed
    */
   private shouldResumeTask(task: SWTask): boolean {
+    // Never resume tasks synced from remote (avoid duplicate execution across devices)
+    if (task.syncedFromRemote) {
+      return false;
+    }
+
     // Chat tasks cannot be resumed if they were processing (streaming is stateless)
     // Mark them as failed instead
     if (task.type === TaskType.CHAT && task.status === TaskStatus.PROCESSING) {

@@ -7,7 +7,7 @@ import { Task, TaskStatus, TaskType } from '../../types/task.types';
 import { swTaskQueueService } from '../sw-task-queue-service';
 import { gitHubApiService } from './github-api-service';
 import { cryptoService } from './crypto-service';
-import { logDebug, logInfo, logWarning, logError } from './sync-log-service';
+import { logDebug, logInfo, logWarning } from './sync-log-service';
 import { yieldToMain } from '@aitu/utils';
 import {
   TaskIndex,
@@ -507,6 +507,7 @@ class TaskSyncService {
 
   /**
    * 将 CompactTask 还原为 Task（用于恢复下载的任务）
+   * 标记 syncedFromRemote = true，避免在 SW 重启时被错误地恢复执行
    */
   private compactToTask(compact: CompactTask): Task {
     return {
@@ -548,6 +549,8 @@ class TaskSyncService {
       executionPhase: compact.executionPhase as any,
       savedToLibrary: compact.savedToLibrary,
       insertedToCanvas: compact.insertedToCanvas,
+      // 标记为远程同步的任务，不会被恢复执行
+      syncedFromRemote: true,
     };
   }
 

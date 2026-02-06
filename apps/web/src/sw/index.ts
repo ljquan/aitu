@@ -14,6 +14,7 @@ import {
   taskQueueStorage,
   initChannelManager,
   getChannelManager,
+  ensureWorkflowHandlerInitialized,
   type WorkflowMainToSWMessage,
   type MainThreadToolResponseMessage,
 } from './task-queue';
@@ -1368,19 +1369,18 @@ sw.addEventListener('message', (event: ExtendableMessageEvent) => {
       workflowHandlerInitialized = true;
     }
 
-    // If still not initialized, try to load config from storage
+    // If still not initialized, try to load config from IndexedDB
+    // 主线程会自动同步配置到 IndexedDB，SW 可以直接读取
     if (!workflowHandlerInitialized) {
       // Use async IIFE to handle the async operation
       (async () => {
         try {
-          const { geminiConfig, videoConfig } =
-            await taskQueueStorage.loadConfig();
-          if (geminiConfig && videoConfig) {
-            storedGeminiConfig = geminiConfig;
-            storedVideoConfig = videoConfig;
-            initWorkflowHandler(sw, geminiConfig, videoConfig);
+          // 使用 ensureWorkflowHandlerInitialized 从 IndexedDB 加载配置
+          const initialized = await ensureWorkflowHandlerInitialized(sw);
+          
+          if (initialized) {
             workflowHandlerInitialized = true;
-            // console.log('Service Worker: Workflow handler initialized from storage');
+            // console.log('Service Worker: Workflow handler initialized from IndexedDB');
 
             // Now handle the message (use wfClientId from outer scope)
             handleWorkflowMessage(
@@ -1388,19 +1388,9 @@ sw.addEventListener('message', (event: ExtendableMessageEvent) => {
               wfClientId
             );
           } else {
-            // 配置不存在时，通知主线程需要重新发送配置
-            // 广播请求配置消息给所有客户端
-            const clients = await sw.clients.matchAll({ type: 'window' });
-            for (const client of clients) {
-              client.postMessage({
-                type: 'SW_REQUEST_CONFIG',
-                reason: 'workflow_handler_not_initialized',
-                pendingMessageType: (event.data as WorkflowMainToSWMessage)
-                  .type,
-              });
-            }
-
-            // 将消息暂存，等配置到达后再处理
+            // 配置不存在时，将消息暂存
+            // 注意：配置应由主线程同步到 IndexedDB，不再请求主线程发送
+            console.warn('[SW] No config in IndexedDB, queueing workflow message');
             pendingWorkflowMessages.push({
               message: event.data as WorkflowMainToSWMessage,
               clientId: wfClientId,
