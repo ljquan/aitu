@@ -20,6 +20,8 @@ export interface ImageGenerationParams {
   size?: string;
   /** 参考图片 URL 列表 */
   referenceImages?: string[];
+  /** 上传图片列表（与 SW 一致，fallback 会从中提取 URL） */
+  uploadedImages?: Array<{ url?: string }>;
   /** 生成质量 */
   quality?: '1k' | '2k' | '4k';
   /** 生成数量 (1-10) */

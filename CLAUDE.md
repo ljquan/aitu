@@ -188,6 +188,7 @@ Service Worker (后台执行)
 23. **SW 初始化统一入口**：使用 `swChannelClient.ensureReady()` 作为统一入口，避免在各处重复初始化逻辑；任务队列用 `swTaskQueueService.initialize()`
 24. **配置同步到 IndexedDB**：SW 无法访问 localStorage，`SettingsManager` 自动将配置同步到 IndexedDB（同一数据库 `sw-task-queue`），SW 直接从 IndexedDB 读取，避免依赖 postMessage
 25. **远程同步任务不恢复执行**：通过 `syncedFromRemote` 标记区分本地和远程任务，SW 的 `shouldResumeTask()` 跳过远程任务，避免多设备重复调用大模型接口
+26. **任务参考图传递**：创建图片/视频任务时 `createTask` 的 params 须包含 `referenceImages`（与 `uploadedImages` 一并）；执行时 `executor.generateImage/generateVideo` 须传入 `referenceImages`（或 video 的 `inputReference`），否则 sw=0 降级请求不会带参考图
 
 ### React 规则
 

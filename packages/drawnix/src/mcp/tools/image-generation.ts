@@ -186,6 +186,7 @@ function executeQueue(params: ImageGenerationParams, options: MCPExecuteOptions)
           prompt,
           size: size || '1x1',
           uploadedImages: uploadedImages && uploadedImages.length > 0 ? uploadedImages : undefined,
+          referenceImages: referenceImages && referenceImages.length > 0 ? referenceImages : undefined,
           model: model || getCurrentImageModel(),
           // 使用工作流传入的批量参数
           batchId,
@@ -206,6 +207,7 @@ function executeQueue(params: ImageGenerationParams, options: MCPExecuteOptions)
             prompt,
             size: size || '1x1',
             uploadedImages: uploadedImages && uploadedImages.length > 0 ? uploadedImages : undefined,
+            referenceImages: referenceImages && referenceImages.length > 0 ? referenceImages : undefined,
             model: model || getCurrentImageModel(),
             // 批量参数
             batchId: batchId,

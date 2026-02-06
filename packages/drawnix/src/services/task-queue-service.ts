@@ -97,8 +97,6 @@ class TaskQueueService {
       const executor = await executorFactory.getExecutor();
 
       // Execute based on task type
-      console.log(`[TaskQueueService] Executing task ${task.id} (${task.type})`);
-      
       switch (task.type) {
         case TaskType.IMAGE:
           await executor.generateImage({
@@ -108,17 +106,27 @@ class TaskQueueService {
             size: task.params.size,
             referenceImages: task.params.referenceImages as string[] | undefined,
             count: task.params.count as number | undefined,
+            uploadedImages: task.params.uploadedImages as Array<{ url?: string }> | undefined,
           });
           break;
-        case TaskType.VIDEO:
+        case TaskType.VIDEO: {
+          const refImages = task.params.referenceImages as string[] | undefined;
+          const inputRef = (task.params as { inputReference?: string }).inputReference;
           await executor.generateVideo({
             taskId: task.id,
             prompt: task.params.prompt,
             model: task.params.model,
             duration: task.params.duration?.toString(),
             size: task.params.size,
+            referenceImages:
+              refImages && refImages.length > 0
+                ? refImages
+                : inputRef
+                  ? [inputRef]
+                  : undefined,
           });
           break;
+        }
         default:
           throw new Error(`Unsupported task type: ${task.type}`);
       }
@@ -160,14 +168,21 @@ class TaskQueueService {
       console.error('[TaskQueueService] Task execution failed:', error);
       const localTask = this.tasks.get(task.id);
       if (localTask) {
-        localTask.status = TaskStatus.FAILED;
-        localTask.error = {
-          code: 'EXECUTION_ERROR',
-          message: error.message || 'Task execution failed',
+        const now = Date.now();
+        const failedTask: Task = {
+          ...localTask,
+          status: TaskStatus.FAILED,
+          error: {
+            code: 'EXECUTION_ERROR',
+            message: error.message || 'Task execution failed',
+          },
+          updatedAt: now,
+          completedAt: now,
+          progress: undefined, // 清除进行中进度，避免仍显示百分比
         };
-        localTask.updatedAt = Date.now();
-        this.persistTask(localTask);
-        this.emitEvent('taskUpdated', localTask);
+        this.tasks.set(task.id, failedTask);
+        this.persistTask(failedTask);
+        this.emitEvent('taskUpdated', failedTask);
       }
     }
   }

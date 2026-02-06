@@ -3372,6 +3372,69 @@ class TaskQueueService {
 - `packages/drawnix/src/services/media-executor/factory.ts` - 执行器工厂
 - `packages/drawnix/src/services/media-executor/fallback-executor.ts` - 降级执行器
 
+### 创建图片/视频任务及执行时须传递 referenceImages
+
+**场景**: MCP 工具（如 `image-generation.ts`、`video-generation.ts`）通过 `taskQueueService.createTask` 创建任务，降级模式下由 `executeTask` 调用 `executor.generateImage` / `generateVideo` 发起请求
+
+❌ **错误示例**:
+```typescript
+// 错误：createTask 只传 uploadedImages，不传 referenceImages
+const task = taskQueueService.createTask(
+  {
+    prompt,
+    size: size || '1x1',
+    uploadedImages: uploadedImages?.length ? uploadedImages : undefined,
+    model,
+    // 缺少 referenceImages → task.params.referenceImages 为空
+  },
+  TaskType.IMAGE
+);
+
+// 错误：executeTask 调用 executor 时不传 referenceImages
+await executor.generateImage({
+  taskId: task.id,
+  prompt: task.params.prompt,
+  model: task.params.model,
+  size: task.params.size,
+  // 缺少 referenceImages → 请求体不带参考图
+});
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：createTask 同时传入 referenceImages 与 uploadedImages
+const task = taskQueueService.createTask(
+  {
+    prompt,
+    size: size || '1x1',
+    uploadedImages: uploadedImages?.length ? uploadedImages : undefined,
+    referenceImages: referenceImages?.length ? referenceImages : undefined,
+    model,
+  },
+  TaskType.IMAGE
+);
+
+// 正确：executeTask 从 task.params 取出 referenceImages 传给 executor
+await executor.generateImage({
+  taskId: task.id,
+  prompt: task.params.prompt,
+  model: task.params.model,
+  size: task.params.size,
+  referenceImages: task.params.referenceImages as string[] | undefined,
+  uploadedImages: task.params.uploadedImages as Array<{ url?: string }> | undefined,
+});
+```
+
+**原因**:
+- 执行器（含 fallback）依赖 `params.referenceImages` 或 `params.inputReference` 构建请求体；仅传 `uploadedImages` 时，executor 可从 `uploadedImages` 提取 URL，但 `task.params` 中必须至少有一种来源（referenceImages 或 uploadedImages），且 createTask 与 executeTask 两处都要一致传递
+- 视频任务同理：createTask 传 `referenceImages`，executeTask 传 `referenceImages` 或 `inputReference`，否则 sw=0 下 Form Data 不会包含 `input_reference`
+
+**相关文件**:
+- `packages/drawnix/src/mcp/tools/image-generation.ts` - 图片任务 createTask
+- `packages/drawnix/src/mcp/tools/video-generation.ts` - 视频任务 createTask
+- `packages/drawnix/src/services/task-queue-service.ts` - 降级 executeTask 调用 executor
+- `packages/drawnix/src/services/sw-task-queue-service.ts` - SW 降级 executeWithFallback
+
 ### 设置保存后需要主动更新 Service Worker 配置
 
 **场景**: 用户在设置面板修改配置（如 API Key、流式请求开关）并保存后

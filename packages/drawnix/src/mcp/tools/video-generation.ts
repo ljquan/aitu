@@ -226,6 +226,7 @@ function executeQueue(params: VideoGenerationParams, options: MCPExecuteOptions)
           duration: parseInt(seconds || modelConfig.defaultDuration, 10),
           model,
           uploadedImages: uploadedImages && uploadedImages.length > 0 ? uploadedImages : undefined,
+          referenceImages: referenceImages && referenceImages.length > 0 ? referenceImages : undefined,
           // 使用工作流传入的批量参数
           batchId,
           batchIndex,
@@ -247,6 +248,7 @@ function executeQueue(params: VideoGenerationParams, options: MCPExecuteOptions)
             duration: parseInt(seconds || modelConfig.defaultDuration, 10),
             model,
             uploadedImages: uploadedImages && uploadedImages.length > 0 ? uploadedImages : undefined,
+            referenceImages: referenceImages && referenceImages.length > 0 ? referenceImages : undefined,
             // 批量参数
             batchId: batchId,
             batchIndex: i + 1,
