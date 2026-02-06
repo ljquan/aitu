@@ -1,3 +1,38 @@
+## 0.5.78 (2026-02-06)
+
+### 🚀 Features
+
+- add custom tools sync and prevent remote task resumption ([f296875](https://github.com/ljquan/aitu/commit/f296875))
+- implement workflow handler initialization from IndexedDB ([943419e](https://github.com/ljquan/aitu/commit/943419e))
+- enhance error handling and logging in Service Worker and task management ([167a559](https://github.com/ljquan/aitu/commit/167a559))
+- implement video model adapters and enhance video generation ([982313f](https://github.com/ljquan/aitu/commit/982313f))
+- enhance SW task queue service with fallback mechanisms and canvas operation handling ([390bb15](https://github.com/ljquan/aitu/commit/390bb15))
+- add base64 image preview functionality ([fba4fe7](https://github.com/ljquan/aitu/commit/fba4fe7))
+
+### 🩹 Fixes
+
+- add missing apiKey to videoConfig in SW initialization ([a1971c4](https://github.com/ljquan/aitu/commit/a1971c4))
+
+### 🔧 Chores
+
+- update version to 0.5.77 and adjust build time ([f11329f](https://github.com/ljquan/aitu/commit/f11329f))
+- bump version to 0.5.77 ([e158b45](https://github.com/ljquan/aitu/commit/e158b45))
+- bump version to 0.5.76 ([22ef45a](https://github.com/ljquan/aitu/commit/22ef45a))
+- bump version to 0.5.75 ([4a0e912](https://github.com/ljquan/aitu/commit/4a0e912))
+- update version to 0.5.74 and adjust build time ([c7eb797](https://github.com/ljquan/aitu/commit/c7eb797))
+- docs: update localhost port references from 4200 to 7200 ([5a10c4c](https://github.com/ljquan/aitu/commit/5a10c4c))
+- docs: 添加编码规则 - 配置同步到 IndexedDB 供 SW 读取 ([db99fb6](https://github.com/ljquan/aitu/commit/db99fb6))
+- docs: 添加编码规则 - 枚举不能使用 import type 导入 ([26360e8](https://github.com/ljquan/aitu/commit/26360e8))
+- 简化方案 ([1252509](https://github.com/ljquan/aitu/commit/1252509))
+- refactor: simplify architecture by removing DDD layers and unifying types ([ad341a4](https://github.com/ljquan/aitu/commit/ad341a4))
+- docs: 添加配置对象深拷贝规则 ([0002654](https://github.com/ljquan/aitu/commit/0002654))
+
+### ❤️  Thank You
+
+- liquid <ljquan@qq.com>
+- gongchengtu <1817063960@qq.com>
+- liquidliang <ljquan@qq.com>
+
 ## 0.5.76 (2026-02-05)
 
 ### 🚀 Features

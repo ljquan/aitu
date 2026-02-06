@@ -1,6 +1,10 @@
 {
-  "version": "0.5.77",
-  "buildTime": "2026-02-05T16:32:23.845Z",
+  "version": "0.5.78",
+  "buildTime": "2026-02-06T02:05:51.830Z",
   "gitCommit": "unknown",
-  "changelog": []
+  "changelog": [
+    "enhance SW task queue service with fallback mechanisms and canvas operation handling",
+    "implement workflow handler initialization from IndexedDB",
+    "add missing apiKey to videoConfig in SW initialization"
+  ]
 }
