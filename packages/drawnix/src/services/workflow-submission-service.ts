@@ -635,11 +635,13 @@ class WorkflowSubmissionService {
    */
   private async tryFallbackEngine(workflow: WorkflowDefinition): Promise<boolean> {
     try {
-      // 检查执行器是否可用
-      const executor = await executorFactory.getExecutor();
+      // 降级路径：直接使用 fallback 执行器，不检测 SW 可用性（避免 30s+ 阻塞）
+      const executor = executorFactory.getFallbackExecutor();
       if (!executor) {
+        console.warn('[WorkflowSubmissionService] tryFallbackEngine: fallback executor 不可用');
         return false;
       }
+      console.log('[WorkflowSubmissionService] tryFallbackEngine: 使用降级执行器');
 
       // 创建或获取主线程工作流引擎
       if (!this.fallbackEngine) {
@@ -691,7 +693,9 @@ class WorkflowSubmissionService {
       };
 
       // 提交到主线程引擎
+      console.log('[WorkflowSubmissionService] tryFallbackEngine: 提交到主线程引擎, steps:', engineWorkflow.steps.length);
       await this.fallbackEngine.submitWorkflow(engineWorkflow);
+      console.log('[WorkflowSubmissionService] tryFallbackEngine: 引擎已启动');
 
       return true;
     } catch (error) {
