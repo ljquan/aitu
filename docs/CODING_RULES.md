@@ -2002,6 +2002,53 @@ async restoreTasks(tasks: Task[]): Promise<void> {
 - SW 端：`apps/web/src/sw/task-queue/channel-manager.ts` (`TASK_IMPORT` RPC)
 - SW 存储：`apps/web/src/sw/task-queue/storage.ts`
 
+### 远程同步的任务不应恢复执行
+
+**场景**: 多设备同步场景下，避免远程同步过来的任务被错误地恢复执行
+
+❌ **错误示例**:
+```typescript
+// 错误：SW 重启后会恢复所有 PROCESSING/PENDING 状态的任务，包括远程同步的
+private shouldResumeTask(task: SWTask): boolean {
+  if (task.status === TaskStatus.PROCESSING) {
+    return true; // 会恢复远程同步的任务，导致重复调用大模型接口
+  }
+  return false;
+}
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：检查 syncedFromRemote 标记，跳过远程同步的任务
+private shouldResumeTask(task: SWTask): boolean {
+  // 远程同步的任务不应恢复执行（避免多设备重复执行）
+  if (task.syncedFromRemote) {
+    return false;
+  }
+  
+  if (task.status === TaskStatus.PROCESSING) {
+    return true;
+  }
+  return false;
+}
+```
+
+**现象**: 用户在设备 A 创建任务并同步到云端，设备 B 同步后页面刷新，任务被重新执行，导致重复调用大模型接口（产生额外费用）。
+
+**原因**: SW 重启后会调用 `restoreFromStorage()` 恢复任务，并对 `PROCESSING`/`PENDING` 状态的任务调用 `resumeTaskExecution()`。远程同步的任务虽然通常是 `COMPLETED` 状态，但为了防止边界情况，需要通过 `syncedFromRemote` 标记明确区分本地创建和远程同步的任务。
+
+**实现要点**:
+1. `Task` 和 `SWTask` 接口添加 `syncedFromRemote?: boolean` 字段
+2. `task-sync-service.ts` 的 `compactToTask()` 设置 `syncedFromRemote: true`
+3. SW 的 `shouldResumeTask()` 检查此标记并返回 `false`
+4. 数据转换函数（`convertTaskToStorageFormat`、`convertTaskToSWTask`）传递此字段
+
+**相关文件**:
+- 主线程类型：`packages/drawnix/src/types/shared/core.types.ts`
+- SW 类型：`apps/web/src/sw/task-queue/types.ts`
+- 任务恢复：`apps/web/src/sw/task-queue/queue.ts` (`shouldResumeTask`)
+- 同步服务：`packages/drawnix/src/services/github-sync/task-sync-service.ts`
+
 ### PostMessage 日志由调试模式完全控制
 
 **场景**: Service Worker 与主线程之间的通讯日志记录

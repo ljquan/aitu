@@ -865,6 +865,7 @@ export const SYNC_FILES = {
   PROMPTS: 'prompts.json',
   // 注意：tasks.json 已废弃，改用分页格式 (task-index.json + tasks_p{n}.json)
   SETTINGS: 'settings.json',
+  CUSTOM_TOOLS: 'custom-tools.json',
   boardFile: (id: string) => `board_${id}.json`,
   /** 基于 URL 的媒体文件名（使用 hash 编码，固定长度） */
   mediaFile: (url: string) => `media_${encodeUrlToFilename(url)}.json`,

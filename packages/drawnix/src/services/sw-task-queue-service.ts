@@ -510,6 +510,7 @@ class SWTaskQueueService {
       remoteId: task.remoteId,
       executionPhase: task.executionPhase,
       insertedToCanvas: task.insertedToCanvas,
+      syncedFromRemote: task.syncedFromRemote,
     };
   }
   
@@ -533,6 +534,7 @@ class SWTaskQueueService {
       remoteId: task.remoteId,
       executionPhase: task.executionPhase as SWTask['executionPhase'],
       insertedToCanvas: task.insertedToCanvas,
+      syncedFromRemote: task.syncedFromRemote,
     };
   }
 

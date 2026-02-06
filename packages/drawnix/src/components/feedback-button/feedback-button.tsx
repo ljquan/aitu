@@ -59,14 +59,14 @@ export const FeedbackButton: React.FC = () => {
               />
               <div className="feedback-qrcode-text">用户反馈群</div>
             </div>
-            <div className="feedback-qrcode-item">
+            {/* <div className="feedback-qrcode-item">
               <img
                 src={SERVICE_QR_CODE_URL}
                 alt="客服二维码"
                 className="feedback-qrcode-image"
               />
               <div className="feedback-qrcode-text">客服</div>
-            </div>
+            </div> */}
           </div>
         </div>
       </PopoverContent>

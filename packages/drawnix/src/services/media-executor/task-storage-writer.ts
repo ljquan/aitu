@@ -51,6 +51,8 @@ export interface SWTask {
   executionPhase?: string;
   savedToLibrary?: boolean;
   insertedToCanvas?: boolean;
+  /** 是否从远程同步（不应被恢复执行） */
+  syncedFromRemote?: boolean;
   /** 任务配置（可选，导入时可能没有） */
   config?: {
     apiKey: string;

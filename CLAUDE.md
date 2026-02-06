@@ -177,6 +177,7 @@ Service Worker (后台执行)
 22. **降级路径功能一致性**：降级到主线程直接调用 API 时，必须保持与 SW 模式相同的功能行为（如 LLM API 日志记录），否则调试工具会漏掉这些调用
 23. **SW 初始化统一入口**：使用 `swChannelClient.ensureReady()` 作为统一入口，避免在各处重复初始化逻辑；任务队列用 `swTaskQueueService.initialize()`
 24. **配置同步到 IndexedDB**：SW 无法访问 localStorage，`SettingsManager` 自动将配置同步到 IndexedDB（同一数据库 `sw-task-queue`），SW 直接从 IndexedDB 读取，避免依赖 postMessage
+25. **远程同步任务不恢复执行**：通过 `syncedFromRemote` 标记区分本地和远程任务，SW 的 `shouldResumeTask()` 跳过远程任务，避免多设备重复调用大模型接口
 
 ### React 规则
 
