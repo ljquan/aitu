@@ -287,9 +287,13 @@ export class FallbackMediaExecutor implements IMediaExecutor {
     params: VideoGenerationParams,
     options?: ExecutionOptions
   ): Promise<void> {
-    const { taskId, prompt, model = 'veo3', duration = '8', size = '1280x720' } = params;
+    const { taskId, prompt, model = 'veo3', duration, size = '1280x720' } = params;
     const config = this.getConfig();
     const startTime = Date.now();
+    // 部分模型（sora-2-4s/8s/12s）在模型名中已经包含时长，API 不需要 seconds
+    const durationEncodedInModel = (m?: string | null) => Boolean(m && m.startsWith('sora-2-'));
+    const shouldSkipSeconds = durationEncodedInModel(model);
+    const secondsToSend = shouldSkipSeconds ? undefined : (duration ?? '8');
 
     // 更新任务状态为 processing
     await taskStorageWriter.updateStatus(taskId, 'processing');
@@ -306,18 +310,22 @@ export class FallbackMediaExecutor implements IMediaExecutor {
 
     try {
       // 提交视频生成请求
+      const submitBody: Record<string, unknown> = {
+        prompt,
+        model,
+        size,
+      };
+      if (secondsToSend) {
+        submitBody.seconds = secondsToSend;
+      }
+
       const submitResponse = await fetch(`${config.videoConfig.baseUrl}/v1/videos`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${config.videoConfig.apiKey}`,
         },
-        body: JSON.stringify({
-          prompt,
-          model,
-          duration,
-          size,
-        }),
+        body: JSON.stringify(submitBody),
         signal: options?.signal,
       });
 

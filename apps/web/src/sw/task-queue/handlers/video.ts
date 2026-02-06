@@ -21,6 +21,10 @@ import {
 } from '../utils/media-generation-utils';
 import type { LLMReferenceImage } from '../llm-api-logger';
 
+const DURATION_IN_MODEL_PREFIX = 'sora-2-';
+const durationEncodedInModel = (model?: string | null) =>
+  Boolean(model && model.startsWith(DURATION_IN_MODEL_PREFIX));
+
 /**
  * Video generation response types
  */
@@ -137,11 +141,14 @@ export class VideoHandler implements TaskHandler {
 
     // Build form data
     const formData = new FormData();
-    formData.append('model', params.model || 'veo3');
+    const model = (params.model as string) || 'veo3';
+    const durationParam = (params as any).seconds ?? params.duration;
+
+    formData.append('model', model);
     formData.append('prompt', params.prompt);
 
-    if (params.duration) {
-      formData.append('seconds', String(params.duration));
+    if (durationParam && !durationEncodedInModel(model)) {
+      formData.append('seconds', String(durationParam));
     }
 
     if (params.size) {
@@ -210,13 +217,12 @@ export class VideoHandler implements TaskHandler {
     const { startLLMApiLog, completeLLMApiLog, failLLMApiLog } = await import('../llm-api-logger');
     
     const startTime = Date.now();
-    const model = (params.model as string) || 'veo3';
     
     // 构建请求参数的日志表示（FormData 无法直接序列化）
     const requestParamsForLog = {
       model,
       prompt: params.prompt,
-      ...(params.duration && { seconds: params.duration }),
+      ...(durationParam && !durationEncodedInModel(model) && { seconds: durationParam }),
       ...(params.size && { size: params.size }),
       ...(refUrls.length > 0 && { input_reference: `[${refUrls.length} images]` }),
     };
