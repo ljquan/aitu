@@ -932,12 +932,17 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
     try {
       // 检查 API key，如果没有配置则弹窗获取
       const globalSettings = geminiSettings.get();
+      console.log('[AIInputBar][handleGenerate] API Key 检查:', { hasApiKey: !!globalSettings?.apiKey });
       if (!globalSettings.apiKey) {
+        console.log('[AIInputBar][handleGenerate] 弹窗获取 API Key...');
         const newApiKey = await promptForApiKey();
+        console.log('[AIInputBar][handleGenerate] API Key 输入完成:', { hasNewKey: !!newApiKey });
         if (!newApiKey) {
           setIsSubmitting(false);
           return;
         }
+        const settingsAfter = geminiSettings.get();
+        console.log('[AIInputBar][handleGenerate] API Key 输入后设置状态:', { hasApiKey: !!settingsAfter?.apiKey });
       }
 
       // 构建选中元素的分类信息（使用合并后的 allContent）
@@ -981,6 +986,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
       const workflow = convertToWorkflow(parsedParams, referenceImages);
 
       // 在画布上创建 WorkZone 显示工作流进度
+      console.log('[AIInputBar][handleGenerate] 即将创建 WorkZone, workflow.steps:', workflow.steps.length);
       const board = SelectionWatcherBoardRef.current;
       if (board) {
         // WorkZone 固定尺寸
@@ -1060,6 +1066,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
         });
 
         currentWorkZoneIdRef.current = workzoneElement.id;
+        console.log('[AIInputBar][handleGenerate] WorkZone 已创建:', workzoneElement.id);
 
         setTimeout(() => {
           const workzoneCenterX = workzoneX + WORKZONE_WIDTH / 2;
@@ -1099,9 +1106,10 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
       currentRetryContextRef.current = retryContext;
 
       try {
-        console.log('[AIInputBar] Submitting workflow...');
+        console.log('[AIInputBar][handleGenerate] 开始提交工作流 submitWorkflowToSW...');
+        const t0 = Date.now();
         const { usedSW } = await submitWorkflowToSW(parsedParams, referenceImages, retryContext, workflow);
-        console.log('[AIInputBar] submitWorkflowToSW returned:', { usedSW });
+        console.log('[AIInputBar][handleGenerate] submitWorkflowToSW 返回:', { usedSW, 耗时ms: Date.now() - t0 });
         if (usedSW) {
           if (prompt.trim()) {
             const hasSelection = allContent.length > 0;

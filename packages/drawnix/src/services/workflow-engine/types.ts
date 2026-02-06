@@ -164,6 +164,11 @@ export interface WorkflowEngineOptions {
   /** 事件回调 */
   onEvent?: (event: WorkflowEvent) => void;
   /**
+   * 强制使用主线程降级执行器（不依赖 SW）
+   * 用于 workflow 提交超时后的降级路径，确保立即调用 API 而不受 SW/IndexedDB 影响
+   */
+  forceFallbackExecutor?: boolean;
+  /**
    * 主线程工具执行回调
    * 用于执行需要访问 Board/Canvas 的工具（如 insert_mermaid, insert_mindmap）
    */

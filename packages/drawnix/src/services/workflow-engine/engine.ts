@@ -27,7 +27,12 @@ export class WorkflowEngine {
   private workflows: Map<string, Workflow> = new Map();
   private abortControllers: Map<string, AbortController> = new Map();
   private events$ = new Subject<WorkflowEvent>();
-  private options: Required<WorkflowEngineOptions>;
+  private options: Omit<WorkflowEngineOptions, 'forceFallbackExecutor'> & {
+    stepTimeout: number;
+    continueOnError: boolean;
+    onEvent: (event: WorkflowEvent) => void;
+    forceFallbackExecutor: boolean;
+  };
 
   constructor(options: WorkflowEngineOptions = {}) {
     this.options = {
@@ -35,6 +40,7 @@ export class WorkflowEngine {
       continueOnError: options.continueOnError ?? false,
       onEvent: options.onEvent ?? (() => {}),
       executeMainThreadTool: options.executeMainThreadTool,
+      forceFallbackExecutor: options.forceFallbackExecutor ?? false,
     };
 
     // 订阅事件并调用回调
@@ -307,7 +313,9 @@ export class WorkflowEngine {
     step: WorkflowStep,
     signal?: AbortSignal
   ): Promise<void> {
-    const executor = await executorFactory.getExecutor();
+    const executor = this.options.forceFallbackExecutor
+      ? executorFactory.getFallbackExecutor()
+      : await executorFactory.getExecutor();
     const taskId = step.id; // 使用步骤 ID 作为任务 ID
 
     // 根据工具类型执行

@@ -108,27 +108,34 @@ export function toWorkflowMessageData(
 }
 
 /**
- * Check if Service Worker is available and ready
+ * 同步检查：SW controller 是否存在（用于快速预检）
  */
-function checkSWAvailable(): boolean {
-  // URL 参数检查：?sw=0 禁用 SW
+function checkSWControllerAvailable(): boolean {
   const swEnabled = shouldUseSWTaskQueue();
-  if (!swEnabled) {
-    console.log('[checkSWAvailable] SW disabled via URL parameter');
-    return false;
-  }
-  const hasController = !!(navigator.serviceWorker && navigator.serviceWorker.controller);
-  console.log('[checkSWAvailable] SW controller available:', hasController);
-  return hasController;
+  if (!swEnabled) return false;
+  return !!(navigator.serviceWorker && navigator.serviceWorker.controller);
 }
 
 /**
- * Determine if workflow should use SW execution
- * Now all workflows use SW execution - SW will delegate to main thread when needed
+ * 异步检查：SW duplex 通道是否真正可用（与 WorkflowSubmissionService 逻辑一致）
+ * 避免 controller 存在但 channel 未就绪时，走 SW 路径后降级导致 WorkZone 卡在「待开始」
  */
-function shouldUseSWExecution(parsedInput: ParsedGenerationParams): boolean {
-  // Check if SW is available
-  return checkSWAvailable();
+async function checkSWChannelAvailable(): Promise<boolean> {
+  const { swChannelClient } = await import('../services/sw-channel/client');
+  if (!swChannelClient.isInitialized()) {
+    console.log('[checkSWChannelAvailable] swChannelClient 未初始化');
+    return false;
+  }
+  try {
+    const ok = await Promise.race([
+      swChannelClient.ping(),
+      new Promise<boolean>((r) => setTimeout(() => r(false), 1500)),
+    ]);
+    if (!ok) console.log('[checkSWChannelAvailable] ping 超时或失败');
+    return ok;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -548,7 +555,9 @@ export function useWorkflowSubmission(
     // Ensure SW task queue is initialized before submitting workflow
     // This sends TASK_QUEUE_INIT to SW which initializes the workflowHandler
     const { swTaskQueueService } = await import('../services/sw-task-queue-service');
+    const initT0 = Date.now();
     await swTaskQueueService.initialize();
+    console.log('[useWorkflowSubmission][submitToSW] swTaskQueueService.initialize 完成, 耗时ms:', Date.now() - initT0);
 
     // 获取当前画布 ID，用于多画布场景下隔离工作流执行
     const board = boardRef.current;
@@ -670,18 +679,22 @@ export function useWorkflowSubmission(
       autoOpen: false,
     });
 
-    // Determine execution mode
-    const shouldUseSW = useSWExecution && shouldUseSWExecution(parsedInput);
-    console.log('[useWorkflowSubmission] Execution mode check:', { useSWExecution, shouldUseSW });
+    // Determine execution mode（与 WorkflowSubmissionService 使用相同的通道检测，避免走 SW 后又降级导致卡住）
+    const controllerOk = checkSWControllerAvailable();
+    const channelOk = controllerOk ? await checkSWChannelAvailable() : false;
+    const shouldUseSW = useSWExecution && channelOk;
+    console.log('[useWorkflowSubmission][submitWorkflow] 执行模式:', { useSWExecution, controllerOk, channelOk, shouldUseSW });
 
     if (shouldUseSW) {
       // Execute in Service Worker
-      console.log('[useWorkflowSubmission] Using SW execution');
+      console.log('[useWorkflowSubmission][submitWorkflow] 使用 SW 执行, 调用 submitToSW...');
+      const t0 = Date.now();
       await submitToSW(legacyWorkflow, parsedInput, referenceImages, finalRetryContext);
+      console.log('[useWorkflowSubmission][submitWorkflow] submitToSW 完成, 耗时ms:', Date.now() - t0);
       return { workflowId: legacyWorkflow.id, usedSW: true };
     } else {
-      // Return workflow ID - caller (AIInputBar) will handle legacy execution
-      console.log('[useWorkflowSubmission] Using fallback execution (SW disabled)');
+      // Return workflow ID - caller (AIInputBar) will handle main-thread execution
+      console.log('[useWorkflowSubmission][submitWorkflow] 使用主线程执行 (SW channel 未就绪)');
       return { workflowId: legacyWorkflow.id, usedSW: false };
     }
   }, [workflowControl, useSWExecution, submitToSW]);
@@ -731,10 +744,10 @@ export function useWorkflowSubmission(
   }, [submitWorkflow]);
 
   /**
-   * Check if SW execution is available
+   * Check if SW execution is available（同步预检，仅检查 controller）
    */
   const isSWAvailable = useCallback((): boolean => {
-    return checkSWAvailable();
+    return checkSWControllerAvailable();
   }, []);
 
   /**

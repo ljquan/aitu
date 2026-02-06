@@ -79,6 +79,7 @@ class WorkflowStorageWriter {
 
   /**
    * 保存工作流
+   * 降级模式下 IndexedDB 可能不可用，失败时静默跳过，不阻塞工作流执行
    */
   async saveWorkflow(workflow: Workflow): Promise<void> {
     try {
@@ -86,25 +87,21 @@ class WorkflowStorageWriter {
       
       // 检查 store 是否存在
       if (!db.objectStoreNames.contains(WORKFLOWS_STORE)) {
-        console.error('[WorkflowStorageWriter] Cannot save: workflows store does not exist');
         return;
       }
       
-      return new Promise((resolve, reject) => {
+      await new Promise<void>((resolve, reject) => {
         const transaction = db.transaction(WORKFLOWS_STORE, 'readwrite');
         const store = transaction.objectStore(WORKFLOWS_STORE);
         const request = store.put(workflow);
 
         request.onerror = () => {
-          console.error('[WorkflowStorageWriter] Failed to save workflow:', request.error);
-          reject(request.error);
+          resolve(); // 不阻塞：降级模式优先保证执行
         };
-        request.onsuccess = () => {
-          resolve();
-        };
+        request.onsuccess = () => resolve();
       });
-    } catch (error) {
-      console.error('[WorkflowStorageWriter] saveWorkflow error:', error);
+    } catch {
+      // 静默跳过：降级模式不依赖持久化
     }
   }
 

@@ -166,10 +166,14 @@ class WorkflowStorageReader extends BaseStorageReader<WorkflowCache> {
     }
 
     try {
+      const db = await this.getDB();
+      if (!db.objectStoreNames.contains(WORKFLOWS_STORE)) {
+        return null;
+      }
       const swWorkflow = await this.getById<SWWorkflow>(WORKFLOWS_STORE, workflowId);
       return swWorkflow ? convertSWWorkflowToDefinition(swWorkflow) : null;
     } catch (error) {
-      console.error('[WorkflowStorageReader] Error getting workflow:', error);
+      console.warn('[WorkflowStorageReader] Error getting workflow:', error);
       return null;
     }
   }

@@ -96,11 +96,10 @@ export function promptForApiKey(): Promise<string | null> {
     confirmBtn.addEventListener('click', async () => {
       const apiKey = input.value.trim();
       if (apiKey) {
-        // 更新本地设置
+        // 更新本地设置（内部会 await syncToIndexedDB，确保 SW 能拿到最新配置）
         await geminiSettings.update({ apiKey });
         cleanup();
-        
-        // 配置随任务传递，无需同步到 SW
+        console.log('[promptForApiKey] API Key 已保存并同步完成');
         resolve(apiKey);
       } else {
         input.style.borderColor = '#ff4d4f';

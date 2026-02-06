@@ -535,8 +535,11 @@ class WorkflowSubmissionService {
    * 快速检测 SW 可用性，不可用时立即降级
    */
   async submit(workflow: WorkflowDefinition): Promise<void> {
-    const quickTimeout = 2000; // 2 秒快速超时
+    const availabilityTimeout = 2000; // 可用性检测超时（ping）
+    const submitTimeout = 15000; // 提交超时（首次加载时 SW 可能正在修复 IndexedDB，需更长时间）
     let lastError: Error | null = null;
+
+    console.log('[WorkflowSubmissionService][submit] 入口 workflowId:', workflow.id);
 
     // Store locally
     this.workflows.set(workflow.id, workflow);
@@ -545,13 +548,16 @@ class WorkflowSubmissionService {
     workflowStorageReader.invalidateCache();
 
     // 快速检测 SW 是否可用
-    const isSWAvailable = await this.checkSWAvailability(quickTimeout);
+    const t0 = Date.now();
+    const isSWAvailable = await this.checkSWAvailability(availabilityTimeout);
+    console.log('[WorkflowSubmissionService][submit] SW 可用性检测:', { isSWAvailable, 耗时ms: Date.now() - t0 });
 
     if (isSWAvailable) {
       // SW 可用，尝试提交
       try {
         // 获取当前配置
         const settings = geminiSettings.get();
+        console.log('[WorkflowSubmissionService][submit] 配置状态:', { hasApiKey: !!settings?.apiKey, hasBaseUrl: !!settings?.baseUrl });
         if (!settings.apiKey || !settings.baseUrl) {
           console.warn('[WorkflowSubmissionService] API key not configured, using fallback');
         } else {
@@ -565,11 +571,12 @@ class WorkflowSubmissionService {
           const result = await Promise.race([
             swChannelClient.submitWorkflow(workflow as unknown as ChannelWorkflowDefinition, taskConfig),
             new Promise<{ success: boolean; error: string }>((_, reject) =>
-              setTimeout(() => reject(new Error('timeout')), quickTimeout)
+              setTimeout(() => reject(new Error('Submit workflow timeout')), submitTimeout)
             ),
           ]);
 
           if (result.success) {
+            console.log('[WorkflowSubmissionService][submit] SW 提交成功');
             return; // 成功
           }
 
@@ -584,7 +591,9 @@ class WorkflowSubmissionService {
     }
 
     // SW 不可用或提交失败，直接使用主线程工作流引擎
+    console.log('[WorkflowSubmissionService][submit] 使用降级引擎 tryFallbackEngine');
     const fallbackSuccess = await this.tryFallbackEngine(workflow);
+    console.log('[WorkflowSubmissionService][submit] 降级引擎结果:', fallbackSuccess);
     if (fallbackSuccess) {
       return;
     }
@@ -636,7 +645,7 @@ class WorkflowSubmissionService {
       if (!this.fallbackEngine) {
         this.fallbackEngine = new MainThreadWorkflowEngine({
           onEvent: (event) => this.handleFallbackEngineEvent(event),
-          // 主线程工具执行回调（insert_mermaid, insert_mindmap 等）
+          forceFallbackExecutor: true, // 降级路径：强制主线程执行器，直接调用 API，不依赖 SW/IndexedDB
           executeMainThreadTool: async (toolName, args) => {
             try {
               const result = await swCapabilitiesHandler.execute({
