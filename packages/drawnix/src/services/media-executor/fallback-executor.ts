@@ -23,9 +23,14 @@ import {
   failLLMApiLog,
   updateLLMApiLogMetadata,
 } from './llm-api-logger';
-import { parseToolCalls, extractTextContent } from '@aitu/utils';
+import { parseToolCalls, extractTextContent, compressImageBlob } from '@aitu/utils';
 import { isAuthError, dispatchApiAuthError } from '../../utils/api-auth-error-event';
 import { unifiedCacheService } from '../unified-cache-service';
+import { getDataURL } from '../../data/blob';
+
+/** 参考图转 base64 时最大体积（1MB），避免请求体过大 */
+const MAX_REFERENCE_IMAGE_BYTES = 1 * 1024 * 1024;
+import { submitVideoGeneration } from '../media-api';
 import {
   extractPromptFromMessages,
   buildImageRequestBody,
@@ -34,6 +39,50 @@ import {
   isAsyncImageModel,
   generateAsyncImage,
 } from './fallback-utils';
+
+/** 从 uploadedImages 提取 URL 列表，与 SW ImageHandler 逻辑一致 */
+function extractUrlsFromUploadedImages(uploadedImages: unknown): string[] | undefined {
+  if (!uploadedImages || !Array.isArray(uploadedImages)) return undefined;
+  const urls = (uploadedImages as Array<{ url?: string }>)
+    .filter((img) => img && typeof img === 'object' && typeof img.url === 'string')
+    .map((img) => img.url as string);
+  return urls.length > 0 ? urls : undefined;
+}
+
+/** 将 Blob 压缩到 1MB 以内再转 base64（仅图片类型） */
+async function blobToBase64Under1MB(blob: Blob): Promise<string> {
+  let target = blob;
+  if (
+    blob.type.startsWith('image/') &&
+    blob.size > MAX_REFERENCE_IMAGE_BYTES
+  ) {
+    target = await compressImageBlob(blob, 1);
+  }
+  return getDataURL(target);
+}
+
+/** 确保图片为 base64 数据（API 要求），且体积控制在 1MB 内；getImageForAI 对未缓存远程 URL 可能返回 URL，需再转 base64 */
+async function ensureBase64ForAI(
+  imageData: { type: string; value: string },
+  signal?: AbortSignal
+): Promise<string> {
+  const value = imageData.value;
+  if (value.startsWith('data:')) {
+    const base64Part = value.slice(value.indexOf(',') + 1);
+    const estimatedBytes = (base64Part.length * 3) / 4;
+    if (estimatedBytes <= MAX_REFERENCE_IMAGE_BYTES) return value;
+    const res = await fetch(value, { signal });
+    const blob = await res.blob();
+    return blobToBase64Under1MB(blob);
+  }
+  if (value.startsWith('http://') || value.startsWith('https://')) {
+    const res = await fetch(value, { signal });
+    if (!res.ok) throw new Error(`Failed to fetch reference image: ${res.status}`);
+    const blob = await res.blob();
+    return blobToBase64Under1MB(blob);
+  }
+  return value;
+}
 
 /**
  * 主线程降级执行器
@@ -53,13 +102,22 @@ export class FallbackMediaExecutor implements IMediaExecutor {
 
   /**
    * 生成图片
+   * 参考图逻辑与 SW ImageHandler 对齐：支持 referenceImages 与 uploadedImages
    */
   async generateImage(
     params: ImageGenerationParams,
     options?: ExecutionOptions
   ): Promise<void> {
-    const { taskId, prompt, model, size, referenceImages, quality, count = 1 } = params;
+    const { taskId, prompt, model, size, quality, count = 1 } = params;
+    const referenceImages =
+      (params.referenceImages && params.referenceImages.length > 0
+        ? params.referenceImages
+        : undefined) ||
+      extractUrlsFromUploadedImages(params.uploadedImages);
+
     const config = this.getConfig();
+    const hasApiKey = Boolean(config.geminiConfig.apiKey);
+    const baseUrl = config.geminiConfig.baseUrl ?? '(default)';
 
     // 更新任务状态为 processing
     await taskStorageWriter.updateStatus(taskId, 'processing');
@@ -70,12 +128,13 @@ export class FallbackMediaExecutor implements IMediaExecutor {
 
     // 异步图片模型：使用 /v1/videos 接口（与 SW 模式一致）
     if (isAsyncImageModel(modelName)) {
-      return this.generateAsyncImageTask(taskId, {
-        prompt,
-        model: modelName,
-        size,
-        referenceImages,
-      }, config, options, startTime);
+      return this.generateAsyncImageTask(
+        taskId,
+        { prompt, model: modelName, size, referenceImages },
+        config,
+        options,
+        startTime
+      );
     }
 
     // 开始记录 LLM API 调用
@@ -84,19 +143,20 @@ export class FallbackMediaExecutor implements IMediaExecutor {
       model: modelName,
       taskType: 'image',
       prompt,
-      hasReferenceImages: referenceImages && referenceImages.length > 0,
+      hasReferenceImages: !!referenceImages && referenceImages.length > 0,
       referenceImageCount: referenceImages?.length,
       taskId,
     });
 
     try {
-      // 处理参考图片：将虚拟路径和远程 URL 转换为 base64
+      // 处理参考图片：统一转为 base64（API 要求；远程 URL 在未缓存时 getImageForAI 返回 URL，需再转 base64）
       let processedImages: string[] | undefined;
       if (referenceImages && referenceImages.length > 0) {
         processedImages = [];
         for (const imgUrl of referenceImages) {
           const imageData = await unifiedCacheService.getImageForAI(imgUrl);
-          processedImages.push(imageData.value);
+          const base64 = await ensureBase64ForAI(imageData, options?.signal);
+          processedImages.push(base64);
         }
       }
 
@@ -112,8 +172,9 @@ export class FallbackMediaExecutor implements IMediaExecutor {
 
       options?.onProgress?.({ progress: 10, phase: 'submitting' });
 
-      // 调用 API
-      const response = await fetch(`${config.geminiConfig.baseUrl}/images/generations`, {
+      // 调用 API（不添加自定义 header，避免 CORS 预检被服务端拒绝）
+      const url = `${config.geminiConfig.baseUrl}/images/generations`;
+      const response = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -209,13 +270,14 @@ export class FallbackMediaExecutor implements IMediaExecutor {
     });
 
     try {
-      // 处理参考图片：将虚拟路径和远程 URL 转换为 base64
+      // 处理参考图片：统一转为 base64（与同步路径一致）
       let processedImages: string[] | undefined;
       if (params.referenceImages && params.referenceImages.length > 0) {
         processedImages = [];
         for (const imgUrl of params.referenceImages) {
           const imageData = await unifiedCacheService.getImageForAI(imgUrl);
-          processedImages.push(imageData.value);
+          const base64 = await ensureBase64ForAI(imageData, options?.signal);
+          processedImages.push(base64);
         }
       }
 
@@ -282,6 +344,7 @@ export class FallbackMediaExecutor implements IMediaExecutor {
 
   /**
    * 生成视频
+   * 使用共享 submitVideoGeneration，支持参考图且参考图体积控制在 1MB 内
    */
   async generateVideo(
     params: VideoGenerationParams,
@@ -290,16 +353,13 @@ export class FallbackMediaExecutor implements IMediaExecutor {
     const { taskId, prompt, model = 'veo3', duration, size = '1280x720' } = params;
     const config = this.getConfig();
     const startTime = Date.now();
-    // 部分模型（sora-2-4s/8s/12s）在模型名中已经包含时长，API 不需要 seconds
     const durationEncodedInModel = (m?: string | null) => Boolean(m && m.startsWith('sora-2-'));
     const shouldSkipSeconds = durationEncodedInModel(model);
     const secondsToSend = shouldSkipSeconds ? undefined : (duration ?? '8');
 
-    // 更新任务状态为 processing
     await taskStorageWriter.updateStatus(taskId, 'processing');
     options?.onProgress?.({ progress: 0, phase: 'submitting' });
 
-    // 开始记录 LLM API 调用
     const logId = startLLMApiLog({
       endpoint: '/v1/videos',
       model,
@@ -309,54 +369,57 @@ export class FallbackMediaExecutor implements IMediaExecutor {
     });
 
     try {
-      // 提交视频生成请求
-      const submitBody: Record<string, unknown> = {
-        prompt,
-        model,
-        size,
+      // 参考图：虚拟路径先转为 data URL（1MB 内），再交给 submitVideoGeneration 走 FormData+压缩
+      const refUrls =
+        (params.referenceImages && params.referenceImages.length > 0
+          ? params.referenceImages
+          : undefined) ||
+        (params.inputReference ? [params.inputReference] : undefined);
+      let referenceImages: string[] | undefined;
+      if (refUrls && refUrls.length > 0) {
+        referenceImages = [];
+        const isVirtual = (u: string) =>
+          u.startsWith('/__aitu_cache__/') || u.startsWith('/asset-library/');
+        for (const url of refUrls) {
+          if (isVirtual(url)) {
+            const imageData = await unifiedCacheService.getImageForAI(url);
+            const dataUrl = await ensureBase64ForAI(imageData, options?.signal);
+            referenceImages.push(dataUrl);
+          } else {
+            referenceImages.push(url);
+          }
+        }
+      }
+
+      const videoApiConfig = {
+        ...config.videoConfig,
+        defaultModel: 'veo3' as const,
       };
-      if (secondsToSend) {
-        submitBody.seconds = secondsToSend;
-      }
-
-      const submitResponse = await fetch(`${config.videoConfig.baseUrl}/v1/videos`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${config.videoConfig.apiKey}`,
+      const videoId = await submitVideoGeneration(
+        {
+          prompt,
+          model,
+          size,
+          duration: secondsToSend,
+          referenceImages,
         },
-        body: JSON.stringify(submitBody),
-        signal: options?.signal,
-      });
-
-      if (!submitResponse.ok) {
-        const errorText = await submitResponse.text();
-        const elapsedTime = Date.now() - startTime;
-        failLLMApiLog(logId, {
-          httpStatus: submitResponse.status,
-          duration: elapsedTime,
-          errorMessage: errorText.substring(0, 500),
-        });
-        throw new Error(`Video submission failed: ${submitResponse.status} - ${errorText.substring(0, 200)}`);
-      }
-
-      const submitData = await submitResponse.json();
-      const videoId = submitData.id || submitData.video_id;
+        videoApiConfig,
+        options?.signal
+      );
 
       if (!videoId) {
         const elapsedTime = Date.now() - startTime;
         failLLMApiLog(logId, {
-          httpStatus: submitResponse.status,
+          httpStatus: 200,
           duration: elapsedTime,
           errorMessage: 'No video ID returned from API',
         });
         throw new Error('No video ID returned from API');
       }
 
-      // 更新日志元数据（记录 remoteId）
       updateLLMApiLogMetadata(logId, {
         remoteId: videoId,
-        httpStatus: submitResponse.status,
+        httpStatus: 200,
       });
 
       options?.onProgress?.({ progress: 10, phase: 'polling' });

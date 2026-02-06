@@ -993,17 +993,27 @@ class SWTaskQueueService {
             size: task.params.size,
             referenceImages: task.params.referenceImages as string[] | undefined,
             count: task.params.count as number | undefined,
+            uploadedImages: task.params.uploadedImages as Array<{ url?: string }> | undefined,
           });
           break;
-        case TaskType.VIDEO:
+        case TaskType.VIDEO: {
+          const refImages = task.params.referenceImages as string[] | undefined;
+          const inputRef = (task.params as { inputReference?: string }).inputReference;
           await executor.generateVideo({
             taskId: task.id,
             prompt: task.params.prompt,
             model: task.params.model,
             duration: task.params.duration?.toString(),
             size: task.params.size,
+            referenceImages:
+              refImages && refImages.length > 0
+                ? refImages
+                : inputRef
+                  ? [inputRef]
+                  : undefined,
           });
           break;
+        }
         default:
           throw new Error(`Unsupported task type for fallback: ${task.type}`);
       }

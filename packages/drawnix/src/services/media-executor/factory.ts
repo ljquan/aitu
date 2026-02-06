@@ -31,10 +31,7 @@ class ExecutorFactory {
    */
   async getExecutor(): Promise<IMediaExecutor> {
     const swAvailable = await this.isSWAvailable();
-    if (swAvailable) {
-      return this.swExecutor;
-    }
-    return this.fallbackExecutor;
+    return swAvailable ? this.swExecutor : this.fallbackExecutor;
   }
 
   /**
