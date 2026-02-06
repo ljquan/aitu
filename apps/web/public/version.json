@@ -1,10 +1,12 @@
 {
-  "version": "0.5.78",
-  "buildTime": "2026-02-06T03:09:06.132Z",
+  "version": "0.5.79",
+  "buildTime": "2026-02-06T12:44:54.618Z",
   "gitCommit": "unknown",
   "changelog": [
     "enhance SW task queue service with fallback mechanisms and canvas operation handling",
     "implement workflow handler initialization from IndexedDB",
-    "add missing apiKey to videoConfig in SW initialization"
+    "add missing apiKey to videoConfig in SW initialization",
+    "perf: 优化同步上传性能，避免 UI 阻塞",
+    "降级模式图片/视频带参考图与 1MB 限制"
   ]
 }
