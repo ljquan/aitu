@@ -1,3 +1,54 @@
+## 0.5.79 (2026-02-06)
+
+### 🚀 Features
+
+- optimize analytics reporting and payload management ([fef7bf06](https://github.com/ljquan/aitu/commit/fef7bf06))
+- add custom tools sync and prevent remote task resumption ([f296875d](https://github.com/ljquan/aitu/commit/f296875d))
+- implement workflow handler initialization from IndexedDB ([943419ec](https://github.com/ljquan/aitu/commit/943419ec))
+- enhance error handling and logging in Service Worker and task management ([167a559a](https://github.com/ljquan/aitu/commit/167a559a))
+- implement video model adapters and enhance video generation ([982313f3](https://github.com/ljquan/aitu/commit/982313f3))
+- enhance SW task queue service with fallback mechanisms and canvas operation handling ([390bb155](https://github.com/ljquan/aitu/commit/390bb155))
+- add base64 image preview functionality ([fba4fe7f](https://github.com/ljquan/aitu/commit/fba4fe7f))
+- implement image fitting utility and enhance video processing ([25746d6b](https://github.com/ljquan/aitu/commit/25746d6b))
+
+### 🩹 Fixes
+
+- 降级模式图片/视频带参考图与 1MB 限制 ([66db4935](https://github.com/ljquan/aitu/commit/66db4935))
+- add missing apiKey to videoConfig in SW initialization ([a1971c4e](https://github.com/ljquan/aitu/commit/a1971c4e))
+
+### 🔧 Chores
+
+- update postmessage-duplex dependency to version 1.2.0 ([2bea89d7](https://github.com/ljquan/aitu/commit/2bea89d7))
+- enhance project configuration and task management ([643e69fa](https://github.com/ljquan/aitu/commit/643e69fa))
+- update app version to 0.5.78 and adjust styles for mobile badge display ([afaf093b](https://github.com/ljquan/aitu/commit/afaf093b))
+- bump version to 0.5.78 ([b0f3df9e](https://github.com/ljquan/aitu/commit/b0f3df9e))
+- update version to 0.5.77 and adjust build time ([f11329fe](https://github.com/ljquan/aitu/commit/f11329fe))
+- bump version to 0.5.77 ([e158b459](https://github.com/ljquan/aitu/commit/e158b459))
+- bump version to 0.5.76 ([22ef45ad](https://github.com/ljquan/aitu/commit/22ef45ad))
+- bump version to 0.5.75 ([4a0e9128](https://github.com/ljquan/aitu/commit/4a0e9128))
+- update version to 0.5.74 and adjust build time ([c7eb7979](https://github.com/ljquan/aitu/commit/c7eb7979))
+- bump version to 0.5.74 ([1fc59675](https://github.com/ljquan/aitu/commit/1fc59675))
+- update version to 0.5.73 and improve task loading logic ([99b268e6](https://github.com/ljquan/aitu/commit/99b268e6))
+- bump version to 0.5.73 ([06a61e81](https://github.com/ljquan/aitu/commit/06a61e81))
+- update version to 0.5.72 and enhance LLM API logging ([3cdc13ea](https://github.com/ljquan/aitu/commit/3cdc13ea))
+- bump version to 0.5.72 ([df013d28](https://github.com/ljquan/aitu/commit/df013d28))
+- update app version to 0.5.71 and adjust build time ([504fee1c](https://github.com/ljquan/aitu/commit/504fee1c))
+- docs: 添加编码规则 - 统计上报旁路化 ([133b6a72](https://github.com/ljquan/aitu/commit/133b6a72))
+- docs: update localhost port references from 4200 to 7200 ([5a10c4c4](https://github.com/ljquan/aitu/commit/5a10c4c4))
+- docs: 添加编码规则 - 配置同步到 IndexedDB 供 SW 读取 ([db99fb6d](https://github.com/ljquan/aitu/commit/db99fb6d))
+- docs: 添加编码规则 - 枚举不能使用 import type 导入 ([26360e85](https://github.com/ljquan/aitu/commit/26360e85))
+- 简化方案 ([12525090](https://github.com/ljquan/aitu/commit/12525090))
+- refactor: simplify architecture by removing DDD layers and unifying types ([ad341a4f](https://github.com/ljquan/aitu/commit/ad341a4f))
+- docs: 添加配置对象深拷贝规则 ([0002654a](https://github.com/ljquan/aitu/commit/0002654a))
+- perf: 优化同步上传性能，避免 UI 阻塞 ([cbe11e08](https://github.com/ljquan/aitu/commit/cbe11e08))
+- docs: 添加 LLM API 日志记录异步任务 remoteId 规则 ([708131f7](https://github.com/ljquan/aitu/commit/708131f7))
+
+### ❤️  Thank You
+
+- liquid <ljquan@qq.com>
+- liquidliang <ljquan@qq.com>
+- gongchengtu <1817063960@qq.com>
+
 ## 0.5.78 (2026-02-06)
 
 ### 🚀 Features

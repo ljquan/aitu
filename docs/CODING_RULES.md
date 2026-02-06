@@ -3372,6 +3372,69 @@ class TaskQueueService {
 - `packages/drawnix/src/services/media-executor/factory.ts` - 执行器工厂
 - `packages/drawnix/src/services/media-executor/fallback-executor.ts` - 降级执行器
 
+### 创建图片/视频任务及执行时须传递 referenceImages
+
+**场景**: MCP 工具（如 `image-generation.ts`、`video-generation.ts`）通过 `taskQueueService.createTask` 创建任务，降级模式下由 `executeTask` 调用 `executor.generateImage` / `generateVideo` 发起请求
+
+❌ **错误示例**:
+```typescript
+// 错误：createTask 只传 uploadedImages，不传 referenceImages
+const task = taskQueueService.createTask(
+  {
+    prompt,
+    size: size || '1x1',
+    uploadedImages: uploadedImages?.length ? uploadedImages : undefined,
+    model,
+    // 缺少 referenceImages → task.params.referenceImages 为空
+  },
+  TaskType.IMAGE
+);
+
+// 错误：executeTask 调用 executor 时不传 referenceImages
+await executor.generateImage({
+  taskId: task.id,
+  prompt: task.params.prompt,
+  model: task.params.model,
+  size: task.params.size,
+  // 缺少 referenceImages → 请求体不带参考图
+});
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：createTask 同时传入 referenceImages 与 uploadedImages
+const task = taskQueueService.createTask(
+  {
+    prompt,
+    size: size || '1x1',
+    uploadedImages: uploadedImages?.length ? uploadedImages : undefined,
+    referenceImages: referenceImages?.length ? referenceImages : undefined,
+    model,
+  },
+  TaskType.IMAGE
+);
+
+// 正确：executeTask 从 task.params 取出 referenceImages 传给 executor
+await executor.generateImage({
+  taskId: task.id,
+  prompt: task.params.prompt,
+  model: task.params.model,
+  size: task.params.size,
+  referenceImages: task.params.referenceImages as string[] | undefined,
+  uploadedImages: task.params.uploadedImages as Array<{ url?: string }> | undefined,
+});
+```
+
+**原因**:
+- 执行器（含 fallback）依赖 `params.referenceImages` 或 `params.inputReference` 构建请求体；仅传 `uploadedImages` 时，executor 可从 `uploadedImages` 提取 URL，但 `task.params` 中必须至少有一种来源（referenceImages 或 uploadedImages），且 createTask 与 executeTask 两处都要一致传递
+- 视频任务同理：createTask 传 `referenceImages`，executeTask 传 `referenceImages` 或 `inputReference`，否则 sw=0 下 Form Data 不会包含 `input_reference`
+
+**相关文件**:
+- `packages/drawnix/src/mcp/tools/image-generation.ts` - 图片任务 createTask
+- `packages/drawnix/src/mcp/tools/video-generation.ts` - 视频任务 createTask
+- `packages/drawnix/src/services/task-queue-service.ts` - 降级 executeTask 调用 executor
+- `packages/drawnix/src/services/sw-task-queue-service.ts` - SW 降级 executeWithFallback
+
 ### 设置保存后需要主动更新 Service Worker 配置
 
 **场景**: 用户在设置面板修改配置（如 API Key、流式请求开关）并保存后
@@ -4998,6 +5061,72 @@ function precacheManifestPlugin(): Plugin {
 - 增加首次加载时间和带宽消耗
 - 占用用户设备存储空间
 - 影响主应用的启动性能和用户体验
+
+#### 统计与监控上报旁路化
+
+**场景**: 使用 PostHog、Sentry、Web Vitals、Page Report 等统计/监控上报时，若在首屏或用户操作路径上同步执行初始化、脱敏、capture，会抢主线程与网络，导致 LCP/INP 变差，甚至触发 413 等错误。
+
+❌ **错误示例**:
+```typescript
+// 错误：首屏 1s 后同步初始化监控，与主流程抢 CPU
+setTimeout(() => {
+  initWebVitals();
+  initPageReport();
+}, 1000);
+
+// 错误：在 track 内同步脱敏 + capture，阻塞调用方
+track(eventName: string, eventData?: Record<string, any>) {
+  const sanitized = sanitizeObject(eventData);
+  window.posthog.capture(eventName, sanitized);
+}
+
+// 错误：在 Web Vitals 回调栈里直接上报，占用性能回调时间
+function reportWebVitals(metric: Metric) {
+  analytics.track('$web_vitals', eventProperties); // 同步
+}
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：用 requestIdleCallback 在空闲时初始化（无则 setTimeout 兜底）
+const scheduleMonitoring = () => {
+  if (typeof window.requestIdleCallback === 'function') {
+    window.requestIdleCallback(initMonitoring, { timeout: 3000 });
+  } else {
+    setTimeout(initMonitoring, 3000);
+  }
+};
+scheduleMonitoring();
+
+// 正确：脱敏与 capture 在 requestIdleCallback/setTimeout 中执行，调用方同步返回
+track(eventName: string, eventData?: Record<string, any>) {
+  const doTrack = () => {
+    try {
+      const sanitized = eventData ? sanitizeObject(eventData) : undefined;
+      window.posthog!.capture(eventName, sanitized);
+    } catch (e) {
+      console.debug('[Analytics] track failed', e);
+    }
+  };
+  if (typeof requestIdleCallback !== 'undefined') {
+    requestIdleCallback(doTrack, { timeout: 2000 });
+  } else {
+    setTimeout(doTrack, 0);
+  }
+}
+
+// 正确：先延后再上报，不阻塞 CWV 回调栈
+function reportWebVitals(metric: Metric) {
+  setTimeout(() => analytics.track('$web_vitals', eventProperties), 0);
+}
+```
+
+**原因**:
+- 统计上报是旁路逻辑，不得影响首屏与交互性能
+- 初始化延后到空闲可避免与主流程争抢；track 内延后执行脱敏与网络请求，调用方不阻塞
+- 失败只 log（如 console.debug），不向上 throw，避免影响主流程
+
+**参考**: `apps/web/src/main.tsx`（统计 init）、`packages/drawnix/src/utils/posthog-analytics.ts`（track 旁路）、`packages/drawnix/src/services/web-vitals-service.ts`（CWV 延后上报）
 
 ### 安全指南
 - 验证和清理所有用户输入

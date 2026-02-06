@@ -18,7 +18,7 @@
     "is-hotkey": "^0.2.0",
     "mobile-detect": "^1.4.5",
     "open-color": "^1.9.1",
-    "postmessage-duplex": "^1.1.0",
+    "postmessage-duplex": "^1.2.0",
     "web-vitals": "^5.1.0"
   },
   "exports": {

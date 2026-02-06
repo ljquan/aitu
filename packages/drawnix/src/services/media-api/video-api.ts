@@ -4,6 +4,7 @@
  * 统一的视频生成接口，SW 和主线程共用
  */
 
+import { compressImageBlob } from '@aitu/utils';
 import type {
   VideoApiConfig,
   VideoGenerationParams,
@@ -12,6 +13,9 @@ import type {
   PollingOptions,
 } from './types';
 import { normalizeApiBase, parseErrorMessage, sleep } from './utils';
+
+/** 参考图转 FormData 时最大体积（1MB），与图片生成一致 */
+const MAX_REFERENCE_IMAGE_BYTES = 1 * 1024 * 1024;
 
 const DURATION_IN_MODEL_PREFIX = 'sora-2-';
 const durationEncodedInModel = (model?: string | null) =>
@@ -60,22 +64,25 @@ export async function submitVideoGeneration(
     formData.append('size', params.size);
   }
 
-  // 处理参考图片
+  // 处理参考图片（体积控制在 1MB 内，与图片生成一致）
   if (params.referenceImages && params.referenceImages.length > 0) {
     for (let i = 0; i < params.referenceImages.length; i++) {
       const refImage = params.referenceImages[i];
       try {
-        // 尝试 fetch 图片转 Blob
         const response = await fetchFn(refImage, { signal });
         if (response.ok) {
-          const blob = await response.blob();
+          let blob = await response.blob();
+          if (
+            blob.type.startsWith('image/') &&
+            blob.size > MAX_REFERENCE_IMAGE_BYTES
+          ) {
+            blob = await compressImageBlob(blob, 1);
+          }
           formData.append('input_reference', blob, `reference-${i + 1}.png`);
         } else {
-          // fetch 失败时回退到 URL
           formData.append('input_reference', refImage);
         }
       } catch {
-        // 网络错误时回退到 URL
         formData.append('input_reference', refImage);
       }
     }

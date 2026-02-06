@@ -48,23 +48,28 @@ enum APICallEvent {
 
 /** Analytics utility class */
 class PostHogAnalytics {
-  /** 
-   * Track a custom event
-   * SECURITY: Event data is sanitized to remove sensitive information
+  /**
+   * Track a custom event (旁路：脱敏与上报在空闲时执行，不阻塞主流程)
+   * SECURITY: Event data is sanitized before being sent to PostHog
    */
   track(eventName: string, eventData?: Record<string, any>): void {
     if (!window.posthog) {
-      // console.debug('[Analytics] PostHog not loaded:', eventName);
       return;
     }
-    try {
-      // 对事件数据进行脱敏处理，防止敏感信息泄露
-      const sanitizedData = eventData 
-        ? sanitizeObject(eventData) as Record<string, any>
-        : undefined;
-      window.posthog.capture(eventName, sanitizedData);
-    } catch (error) {
-      console.error('[Analytics] Failed to track event');
+    const doTrack = (): void => {
+      try {
+        const sanitizedData = eventData
+          ? (sanitizeObject(eventData) as Record<string, any>)
+          : undefined;
+        window.posthog!.capture(eventName, sanitizedData);
+      } catch (error) {
+        console.debug('[Analytics] track failed', error);
+      }
+    };
+    if (typeof (globalThis as Window & { requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number }).requestIdleCallback === 'function') {
+      (globalThis as Window & { requestIdleCallback: (cb: () => void, opts?: { timeout: number }) => number }).requestIdleCallback(doTrack, { timeout: 2000 });
+    } else {
+      setTimeout(doTrack, 0);
     }
   }
 
