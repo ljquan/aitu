@@ -33,6 +33,7 @@ import {
   getDefaultModelParams,
   supportsStoryboardMode,
   getStoryboardModeConfig,
+  normalizeVideoModel,
 } from '../../constants/video-model-config';
 import {
   formatStoryboardPrompt,
@@ -77,7 +78,8 @@ const AIVideoGeneration = ({
   // Video model parameters - use state to support dynamic updates
   const [currentModel, setCurrentModel] = useState<VideoModel>(() => {
     const settings = geminiSettings.get();
-    return (initialModel || settings.videoModelName || 'veo3') as VideoModel;
+    const preferred = initialModel || settings.videoModelName || 'veo3';
+    return normalizeVideoModel(preferred);
   });
 
   // Use useMemo to ensure modelConfig and defaultParams update when currentModel changes
