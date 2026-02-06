@@ -1919,12 +1919,12 @@ private async handleInit(data: { geminiConfig; videoConfig }) {
 ```typescript
 // 正确：配置同步到 IndexedDB，SW 直接读取
 
-// 1. 主线程 SettingsManager 自动同步配置到 IndexedDB
+// 1. 主线程 SettingsManager 同步配置到 IndexedDB
 private async saveToStorage(): Promise<void> {
   localStorage.setItem(DRAWNIX_SETTINGS_KEY, settingsJson);
   
-  // 同步到 IndexedDB，供 SW 读取
-  this.syncToIndexedDB().catch(console.warn);
+  // 必须 await：首次输入 API Key 后若立即提交工作流，SW 需能读到最新配置
+  await this.syncToIndexedDB();
 }
 
 private async syncToIndexedDB(): Promise<void> {
@@ -1954,6 +1954,126 @@ SW 需要配置 → 直接读取 IndexedDB → 始终可用
 - 任务/工作流仍保留配置快照，用于恢复场景
 
 **原因**: Service Worker 启动后会异步从 IndexedDB 恢复数据（`restoreFromStorage()`），这个过程可能需要一定时间。如果 RPC handler 在恢复完成前被调用，访问的数据是不完整的。需要通过 Promise 机制确保数据恢复完成后再返回响应。
+
+### SW 可用性检测需统一（channel + ping）
+
+**场景**: 决定是否使用 SW 执行工作流时，需与 WorkflowSubmissionService 使用相同的检测逻辑
+
+**问题**: 仅检查 `navigator.serviceWorker.controller` 会误判。controller 存在不代表 duplex channel 已就绪，提交时会超时后降级，WorkZone 卡在「待开始」。
+
+❌ **错误示例**:
+```typescript
+// 错误：仅检查 controller
+function checkSWAvailable(): boolean {
+  return !!(navigator.serviceWorker?.controller);
+}
+// 若 channel 未初始化，submitWorkflow 会超时，降级路径可能仍用 SW 执行器导致二次超时
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：检查 swChannelClient.isInitialized() 且 ping 成功
+async function checkSWChannelAvailable(): Promise<boolean> {
+  if (!swChannelClient.isInitialized()) return false;
+  return await Promise.race([
+    swChannelClient.ping(),
+    new Promise<boolean>((r) => setTimeout(() => r(false), 1500)),
+  ]);
+}
+```
+
+**原因**: controller 存在时 duplex channel 可能仍在初始化或 SW 正在修复 IndexedDB。需统一使用 channel + ping 检测，避免走 SW 路径后超时降级。
+
+### 降级路径强制使用主线程执行器
+
+**场景**: workflow 提交到 SW 超时后，使用 MainThreadWorkflowEngine 降级执行时
+
+**问题**: WorkflowEngine 内部用 `executorFactory.getExecutor()`，当 ping 仍成功时会返回 SW 执行器，导致 `generate_image`/`generate_video` 再次走 SW 并超时，WorkZone 一直「待开始」。
+
+❌ **错误示例**:
+```typescript
+// 错误：降级时仍用 executorFactory（可能返回 SW 执行器）
+this.fallbackEngine = new MainThreadWorkflowEngine({
+  onEvent: (e) => this.handleFallbackEngineEvent(e),
+  executeMainThreadTool: async (name, args) => { /* ... */ },
+});
+// WorkflowEngine 内部: const executor = await executorFactory.getExecutor();
+// → 返回 SW 执行器 → 再次超时
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：强制使用主线程执行器
+this.fallbackEngine = new MainThreadWorkflowEngine({
+  onEvent: (e) => this.handleFallbackEngineEvent(e),
+  forceFallbackExecutor: true,
+  executeMainThreadTool: async (name, args) => { /* ... */ },
+});
+// WorkflowEngine 内部: const executor = this.options.forceFallbackExecutor
+//   ? executorFactory.getFallbackExecutor()
+//   : await executorFactory.getExecutor();
+```
+
+**原因**: 降级路径应完全在主线程执行，直接调用 API，不依赖 SW 或 IndexedDB 就绪。
+
+### IndexedDB 主线程读取前检查 store 是否存在
+
+**场景**: 主线程 StorageReader（如 WorkflowStorageReader）从 IndexedDB 读取数据时
+
+**问题**: object store 由 SW 在 `onupgradeneeded` 中创建。首次加载或 SW 尚未初始化时 store 可能不存在，直接 `transaction(storeName)` 会抛 `NotFoundError`。
+
+❌ **错误示例**:
+```typescript
+async getWorkflow(id: string): Promise<Workflow | null> {
+  const db = await this.getDB();
+  const swWorkflow = await this.getById(WORKFLOWS_STORE, id);  // store 不存在时抛 NotFoundError
+  return swWorkflow ? convert(swWorkflow) : null;
+}
+```
+
+✅ **正确示例**:
+```typescript
+async getWorkflow(id: string): Promise<Workflow | null> {
+  const db = await this.getDB();
+  if (!db.objectStoreNames.contains(WORKFLOWS_STORE)) return null;
+  const swWorkflow = await this.getById(WORKFLOWS_STORE, id);
+  return swWorkflow ? convert(swWorkflow) : null;
+}
+```
+
+**原因**: 主线程用 `indexedDB.open(dbName)` 不加版本，不会触发 `onupgradeneeded`，无法创建 store。需在读取前检查 `db.objectStoreNames.contains(storeName)`。
+
+### 降级模式持久化失败不阻塞执行
+
+**场景**: MainThreadWorkflowEngine 或 workflowStorageWriter 在降级模式下写入 IndexedDB 时
+
+**问题**: IndexedDB store 可能不存在，`saveWorkflow` 失败会 reject，导致工作流执行中断，用户看不到请求发出。
+
+❌ **错误示例**:
+```typescript
+async saveWorkflow(workflow: Workflow): Promise<void> {
+  const db = await this.getDB();
+  if (!db.objectStoreNames.contains(WORKFLOWS_STORE)) {
+    reject(new Error('Store not found'));  // 导致 WorkflowEngine 捕获异常并标记失败
+  }
+  // ...
+}
+```
+
+✅ **正确示例**:
+```typescript
+async saveWorkflow(workflow: Workflow): Promise<void> {
+  try {
+    const db = await this.getDB();
+    if (!db.objectStoreNames.contains(WORKFLOWS_STORE)) return;
+    // ... 写入
+  } catch {
+    // 静默跳过：降级模式不依赖持久化，优先保证 API 调用执行
+  }
+}
+```
+
+**原因**: 降级模式下用户最关心的是请求能发出，持久化是次要的。失败时 resolve 而非 reject，不阻塞工作流执行。
 
 ### 主线程任务数据必须通过 RPC 持久化到 SW
 
