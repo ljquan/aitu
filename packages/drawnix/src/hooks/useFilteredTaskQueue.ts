@@ -7,8 +7,9 @@
  */
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Task, TaskStatus, TaskType } from '../types/task.types';
-import { swTaskQueueService, shouldUseSWTaskQueue } from '../services/task-queue';
+import { Task, TaskType } from '../types/task.types';
+import { taskQueueService } from '../services/task-queue';
+import { taskStorageReader } from '../services/task-storage-reader';
 
 export interface UseFilteredTaskQueueOptions {
   /** 任务类型过滤 */
@@ -55,57 +56,92 @@ export function useFilteredTaskQueue(
   const [totalCount, setTotalCount] = useState(0);
   
   const loadMoreLock = useRef(false);
-  const initialLoadDone = useRef(false);
+  // 跟踪已成功加载的 taskType，避免重复加载相同类型
+  const loadedTaskType = useRef<TaskType | undefined>(undefined);
+  // 重试计数器，用于触发重新加载
+  const [retryCount, setRetryCount] = useState(0);
+  // 最大重试次数
+  const maxRetries = 3;
+  // 重试延迟（毫秒）
+  const retryDelay = 500;
 
-  // 加载任务数据
-  const loadTasks = useCallback(async (offset: number = 0, append: boolean = false) => {
-    if (!shouldUseSWTaskQueue() || taskType === undefined) {
+  // 加载任务数据（直接读取 IndexedDB，无论 SW 模式还是降级模式）
+  const loadTasks = useCallback(async (offset = 0, append = false): Promise<boolean> => {
+    if (taskType === undefined) {
       setIsLoading(false);
-      return;
+      return false;
     }
 
     try {
-      const result = await swTaskQueueService.loadTasksByType(taskType, offset, pageSize);
-      
-      if (result.success) {
+      // 直接从 IndexedDB 读取（SW 模式和降级模式都使用同一个数据库）
+      const isAvailable = await taskStorageReader.isAvailable();
+      if (isAvailable) {
+        const result = await taskStorageReader.getTasksByType(taskType, offset, pageSize);
+        
         if (append) {
-          // 追加数据，避免重复
           setTasks(prev => {
             const existingIds = new Set(prev.map(t => t.id));
             const newTasks = result.tasks.filter(t => !existingIds.has(t.id));
             return [...prev, ...newTasks];
           });
         } else {
-          // 替换数据
           setTasks(result.tasks);
         }
         setTotalCount(result.total);
         setHasMore(result.hasMore);
+        return true;
       }
+      
+      // taskStorageReader 不可用，返回失败
+      return false;
     } catch {
-      // 静默忽略错误
+      return false;
     }
   }, [taskType, pageSize]);
 
-  // 初始加载
+  // 初始加载 - 当 taskType 变化或首次加载失败时重试
   useEffect(() => {
-    if (initialLoadDone.current) return;
-    initialLoadDone.current = true;
+    // 如果已经成功加载过相同的 taskType，跳过
+    if (loadedTaskType.current === taskType) return;
+
+    let cancelled = false;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
 
     const init = async () => {
       setIsLoading(true);
-      await loadTasks(0, false);
+      const success = await loadTasks(0, false);
+      
+      if (cancelled) return;
+      
       setIsLoading(false);
+      
+      // 只有成功加载后才标记为已加载
+      if (success) {
+        loadedTaskType.current = taskType;
+      } else if (retryCount < maxRetries) {
+        // 加载失败，安排重试
+        retryTimer = setTimeout(() => {
+          if (!cancelled) {
+            setRetryCount(prev => prev + 1);
+          }
+        }, retryDelay * (retryCount + 1)); // 指数退避
+      }
     };
 
     init();
-  }, [loadTasks]);
+
+    return () => {
+      cancelled = true;
+      if (retryTimer) {
+        clearTimeout(retryTimer);
+      }
+    };
+  }, [loadTasks, taskType, retryCount]);
 
   // 监听任务更新事件（新任务创建、状态变化等）
+  // SW 模式和降级模式都使用 taskQueueService（它会根据模式选择正确的服务）
   useEffect(() => {
-    if (!shouldUseSWTaskQueue()) return;
-
-    const subscription = swTaskQueueService.observeTaskUpdates().subscribe((event) => {
+    const subscription = taskQueueService.observeTaskUpdates().subscribe((event) => {
       if (event.type === 'taskCreated' && event.task.type === taskType) {
         // 新任务添加到列表头部
         setTasks(prev => {
@@ -141,21 +177,26 @@ export function useFilteredTaskQueue(
     }
   }, [hasMore, isLoadingMore, tasks.length, loadTasks]);
 
-  // 刷新数据
+  // 刷新数据（强制重新加载，清除已加载标记和重试计数器）
   const refresh = useCallback(async () => {
+    loadedTaskType.current = undefined; // 清除标记以允许重新加载
+    setRetryCount(0); // 重置重试计数器
     setIsLoading(true);
-    await loadTasks(0, false);
+    const success = await loadTasks(0, false);
     setIsLoading(false);
-  }, [loadTasks]);
+    if (success) {
+      loadedTaskType.current = taskType;
+    }
+  }, [loadTasks, taskType]);
 
-  // 重试任务
+  // 重试任务（使用 taskQueueService，它会根据模式选择正确的服务）
   const retryTask = useCallback((taskId: string) => {
-    swTaskQueueService.retryTask(taskId);
+    taskQueueService.retryTask(taskId);
   }, []);
 
-  // 删除任务
+  // 删除任务（使用 taskQueueService，它会根据模式选择正确的服务）
   const deleteTask = useCallback((taskId: string) => {
-    swTaskQueueService.deleteTask(taskId);
+    taskQueueService.deleteTask(taskId);
   }, []);
 
   // 计算已加载数量

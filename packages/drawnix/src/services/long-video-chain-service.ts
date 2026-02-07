@@ -10,7 +10,7 @@
 
 import { taskQueueService } from './task-queue';
 import { TaskStatus, TaskType, Task } from '../types/task.types';
-import { extractLastFrame } from '../utils/video-frame-extractor';
+import { extractLastFrame } from '@aitu/utils';
 import { mergeVideos, type MergeProgressCallback } from './video-merge-webcodecs';
 import {
   createLongVideoSegmentTask,

@@ -165,7 +165,7 @@ npm install
 npm start
 ```
 
-After successful startup, visit `http://localhost:4200` to see the application.
+After successful startup, visit `http://localhost:7200` to see the application.
 
 #### Available Commands
 
@@ -396,7 +396,7 @@ npm install
 
 ```bash
 # Check port occupation
-lsof -i :4200
+lsof -i :7200
 
 # Specify another port
 npm start -- --port 3000

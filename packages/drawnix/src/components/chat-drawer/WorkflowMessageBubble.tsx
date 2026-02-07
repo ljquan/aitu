@@ -361,41 +361,34 @@ export const WorkflowMessageBubble: React.FC<WorkflowMessageBubbleProps> = ({
   const isFailed = workflowStatus.status === 'failed';
   const isRunning = workflowStatus.status === 'running';
 
-  const completedSteps = useMemo(() => {
-    return workflow.steps.filter((s) => s.status === 'completed');
-  }, [workflow.steps]);
-
-  const summaryCounts = useMemo(() => {
-    const isImageStep = (mcp: string) =>
-      mcp === 'generate_image' ||
-      mcp === 'generate_grid_image' ||
-      mcp === 'generate_inspiration_board' ||
-      mcp === 'split_image';
-
-    const images = completedSteps.filter((s) => isImageStep(s.mcp)).length;
-    const videos = completedSteps.filter((s) => s.mcp === 'generate_video').length;
-    const flowcharts = completedSteps.filter((s) => s.mcp === 'insert_mermaid').length;
-    const mindmaps = completedSteps.filter((s) => s.mcp === 'insert_mindmap').length;
-
-    return { images, videos, flowcharts, mindmaps };
-  }, [completedSteps]);
-
-  const markdownResult = useMemo(() => {
+  /**
+   * 获取工作流最后一个 content
+   * 优先取最后一个步骤的 result.content，没有则取 workflow.aiAnalysis
+   */
+  const lastContent = useMemo(() => {
     if (!isCompleted) return '';
 
+    // 从后往前遍历步骤，找到最后一个有 content 的结果
     for (let i = workflow.steps.length - 1; i >= 0; i -= 1) {
       const result = workflow.steps[i]?.result;
       if (!result) continue;
 
+      // 字符串直接返回
       if (typeof result === 'string') {
         const text = result.trim();
         if (text) return text;
         continue;
       }
 
+      // 对象类型，取 content 或 response 字段
       if (typeof result === 'object' && result !== null) {
-        const res = result as { response?: unknown; content?: unknown };
-        const text = (res.response || res.content) as string;
+        const res = result as {
+          response?: unknown;
+          content?: unknown;
+          data?: { content?: unknown; response?: unknown };
+        };
+        // 优先取 data.content（ai_analyze 格式），再取顶层 content/response
+        const text = (res.data?.content || res.data?.response || res.content || res.response) as string;
         if (typeof text === 'string') {
           const trimmed = text.trim();
           if (trimmed) return trimmed;
@@ -403,62 +396,43 @@ export const WorkflowMessageBubble: React.FC<WorkflowMessageBubbleProps> = ({
       }
     }
 
-    return '';
-  }, [isCompleted, workflow.steps]);
+    // 没有步骤返回 content，使用 workflow.aiAnalysis
+    return workflow.aiAnalysis || '';
+  }, [isCompleted, workflow.steps, workflow.aiAnalysis]);
+
+  // 检查是否有媒体生成步骤（图片/视频）
+  const hasMediaGeneration = useMemo(() => {
+    const mediaGenerationMcps = [
+      'generate_image',
+      'generate_video',
+      'generate_grid_image',
+      'generate_inspiration_board',
+      'generate_long_video',
+    ];
+    return workflow.steps.some(step => mediaGenerationMcps.includes(step.mcp || ''));
+  }, [workflow.steps]);
 
   const summaryView = useMemo(() => {
-    if (!isCompleted) return null;
+    if (!isCompleted && !isFailed) return null;
 
-    // 优先使用后处理返回的实际插入数量
-    const actualInsertedCount = workflow.insertedCount;
-
-    let displayImages: number;
-    let displayVideos: number;
-
-    if (workflow.generationType === 'image') {
-      // 图片类型：优先使用实际插入数量，否则使用步骤计数或 workflow.count
-      displayImages = actualInsertedCount || Math.max(summaryCounts.images, workflow.count || 0);
-      displayVideos = summaryCounts.videos;
-    } else if (workflow.generationType === 'video') {
-      displayImages = summaryCounts.images;
-      displayVideos = Math.max(summaryCounts.videos, workflow.count || 0);
-    } else {
-      displayImages = summaryCounts.images;
-      displayVideos = summaryCounts.videos;
+    // 失败状态
+    if (isFailed) {
+      return { variant: 'info' as const, icon: '❌', text: '生成失败' };
     }
 
-    const parts: string[] = [];
-    if (displayImages > 0) parts.push(`${displayImages} 张图片`);
-    if (displayVideos > 0) parts.push(`${displayVideos} 个视频`);
-    if (summaryCounts.flowcharts > 0) parts.push(`${summaryCounts.flowcharts} 个流程图`);
-    if (summaryCounts.mindmaps > 0) parts.push(`${summaryCounts.mindmaps} 个思维导图`);
-
-    const hasGenerated = parts.length > 0;
-    const generatedText = hasGenerated ? `成功生成 ${parts.join('，')}` : '';
-
-    // 优先使用最后一个步骤返回的文本内容作为摘要
-    if (markdownResult) {
-      // 如果有生成内容，在结果后追加生成摘要
-      const markdown = hasGenerated
-        ? `${markdownResult}\n\n✨ ${generatedText}`
-        : markdownResult;
-      return { variant: 'markdown' as const, icon: '✨', markdown };
+    // 直接展示最后一个 content
+    if (lastContent) {
+      return { variant: 'markdown' as const, icon: '✨', markdown: lastContent };
     }
 
-    // 其次使用 AI 分析内容
-    if (workflow.aiAnalysis) {
-      const markdown = hasGenerated
-        ? `${workflow.aiAnalysis}\n\n✨ ${generatedText}`
-        : workflow.aiAnalysis;
-      return { variant: 'markdown' as const, icon: '🤖', markdown };
+    // 媒体生成场景，成功但没有 content 返回
+    if (hasMediaGeneration) {
+      return { variant: 'info' as const, icon: '✅', text: '已生成' };
     }
 
-    if (!hasGenerated) {
-      return { variant: 'info' as const, icon: 'ℹ️', text: '未生成任何内容' };
-    }
-
-    return { variant: 'success' as const, icon: '✨', text: generatedText };
-  }, [isCompleted, markdownResult, summaryCounts, workflow.count, workflow.generationType, workflow.insertedCount, workflow.aiAnalysis]);
+    // 没有任何内容
+    return { variant: 'info' as const, icon: 'ℹ️', text: '未生成任何内容' };
+  }, [isCompleted, isFailed, lastContent, hasMediaGeneration]);
 
   const markdownMessage: Message | null = useMemo(() => {
     if (!summaryView || summaryView.variant !== 'markdown') return null;

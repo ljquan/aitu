@@ -13,10 +13,10 @@ import { Task, TaskType, TaskStatus } from '../../types/task.types';
 import { useDrawnix, DialogType } from '../../hooks/use-drawnix';
 import { insertImageFromUrl } from '../../data/image';
 import { insertVideoFromUrl } from '../../data/video';
-import { MessagePlugin, Dialog, Input } from 'tdesign-react';
-import { SearchIcon } from 'tdesign-icons-react';
-import { sanitizeFilename } from '@aitu/utils';
-import { downloadMediaFile, downloadFromBlob } from '../../utils/download-utils';
+import { MessagePlugin, Dialog, Input, Button, Tooltip } from 'tdesign-react';
+import { SearchIcon, DeleteIcon } from 'tdesign-icons-react';
+import { sanitizeFilename, downloadFromBlob } from '@aitu/utils';
+import { downloadMediaFile } from '../../utils/download-utils';
 import { unifiedCacheService } from '../../services/unified-cache-service';
 import { CharacterCreateDialog } from '../character/CharacterCreateDialog';
 import { UnifiedMediaViewer, type MediaItem as UnifiedMediaItem } from '../shared/media-preview';
@@ -61,6 +61,20 @@ export const DialogTaskList: React.FC<DialogTaskListProps> = ({
   const [searchText, setSearchText] = useState('');
   // Character extraction dialog state
   const [characterDialogTask, setCharacterDialogTask] = useState<Task | null>(null);
+
+  // Clear failed tasks state
+  const [showClearFailedConfirm, setShowClearFailedConfirm] = useState(false);
+
+  const failedTaskCount = useMemo(() => {
+    return tasks.filter(t => t.status === TaskStatus.FAILED).length;
+  }, [tasks]);
+
+  const handleClearFailed = useCallback(() => {
+    const failedTasks = tasks.filter(t => t.status === TaskStatus.FAILED);
+    failedTasks.forEach(task => deleteTask(task.id));
+    setShowClearFailedConfirm(false);
+    MessagePlugin.success(`已清除 ${failedTasks.length} 个失败任务`);
+  }, [tasks, deleteTask]);
 
   // Fuzzy match helper: all tokens must be present in concatenated fields
   const taskMatchesQuery = (task: any, query: string) => {
@@ -294,8 +308,19 @@ export const DialogTaskList: React.FC<DialogTaskListProps> = ({
     <>
       <div className="dialog-task-list">
         <div className="dialog-task-list__header" style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'space-between' }}>
-          <h4>生成任务 ({displayTotalCount})</h4>
-          <div style={{ minWidth: '180px', maxWidth: '240px', flexShrink: 0 }}>
+          <h4 style={{ flex: 1 }}>生成任务 ({displayTotalCount})</h4>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+          {failedTaskCount > 0 && (
+            <Tooltip content={`清除全部失败任务 (${failedTaskCount})`} theme="light">
+              <Button
+                size="small"
+                variant="text"
+                icon={<DeleteIcon />}
+                onClick={() => setShowClearFailedConfirm(true)}
+              />
+            </Tooltip>
+          )}
+          <div style={{ minWidth: '180px', maxWidth: '240px' }}>
             <Input
               value={searchText}
               onChange={(v) => setSearchText(v)}
@@ -304,6 +329,7 @@ export const DialogTaskList: React.FC<DialogTaskListProps> = ({
               prefixIcon={<SearchIcon />}
               size="small"
             />
+          </div>
           </div>
         </div>
         <VirtualTaskList
@@ -344,6 +370,17 @@ export const DialogTaskList: React.FC<DialogTaskListProps> = ({
         onCancel={() => setShowDeleteConfirm(false)}
       >
         确定要删除此任务吗？此操作无法撤销。
+      </Dialog>
+
+      {/* Clear Failed Tasks Confirmation Dialog */}
+      <Dialog
+        visible={showClearFailedConfirm}
+        header="清除失败任务"
+        onClose={() => setShowClearFailedConfirm(false)}
+        onConfirm={handleClearFailed}
+        onCancel={() => setShowClearFailedConfirm(false)}
+      >
+        确定要清除全部 {failedTaskCount} 个失败任务吗？此操作无法撤销。
       </Dialog>
 
       {/* Unified Preview */}

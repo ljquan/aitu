@@ -1,8 +1,17 @@
 /**
  * Storage Service
- * 
- * Encapsulates IndexedDB operations using localforage for task persistence.
- * Provides reliable storage and retrieval of task queue data across browser sessions.
+ *
+ * @deprecated 此服务已废弃，仅用于历史数据迁移。
+ *
+ * 新代码请使用：
+ * - 任务队列：swTaskQueueService（使用 sw-task-queue 数据库）
+ * - 工作流：workflowPollingService（读取 sw-task-queue 数据库）
+ *
+ * 此服务使用旧的 aitu-task-queue 数据库，用于：
+ * 1. 从 localStorage 迁移历史数据到任务队列（history-migration.ts）
+ * 2. 从旧任务队列迁移到 SW 任务队列（useTaskStorage.ts）
+ *
+ * 迁移完成后可以删除此文件。
  */
 
 import localforage from 'localforage';

@@ -107,7 +107,7 @@
     </script>
     <!-- base href 由构建工具处理，CDN 模式下使用相对路径 -->
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
-    <meta name="app-version" content="0.5.64" />
+    <meta name="app-version" content="0.5.81" />
 
     <link
       rel="icon"
@@ -160,63 +160,88 @@
     <script type="module" src="./src/main.tsx"></script>
   </body>
   <!-- PostHog Analytics -->
+  <!-- 本地开发环境（localhost/127.0.0.1）默认不加载，除非 URL 带 report=1 参数 -->
   <script>
-    !(function (t, e) {
-      var o, n, p, r;
-      e.__SV ||
-        (window.posthog && window.posthog.__loaded) ||
-        ((window.posthog = e),
-        (e._i = []),
-        (e.init = function (i, s, a) {
-          function g(t, e) {
-            var o = e.split('.');
-            2 == o.length && ((t = t[o[0]]), (e = o[1])),
-              (t[e] = function () {
-                t.push([e].concat(Array.prototype.slice.call(arguments, 0)));
-              });
+    (function() {
+      var isLocalDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+      var forceReport = new URLSearchParams(window.location.search).get('report') === '1';
+      
+      // 本地开发环境且没有 report=1 参数时，不加载 PostHog
+      if (isLocalDev && !forceReport) {
+        return;
+      }
+      
+      !(function (t, e) {
+        var o, n, p, r;
+        e.__SV ||
+          (window.posthog && window.posthog.__loaded) ||
+          ((window.posthog = e),
+          (e._i = []),
+          (e.init = function (i, s, a) {
+            function g(t, e) {
+              var o = e.split('.');
+              2 == o.length && ((t = t[o[0]]), (e = o[1])),
+                (t[e] = function () {
+                  t.push([e].concat(Array.prototype.slice.call(arguments, 0)));
+                });
+            }
+            ((p = t.createElement('script')).type = 'text/javascript'),
+              (p.crossOrigin = 'anonymous'),
+              (p.async = !0),
+              (p.src =
+                s.api_host.replace('.i.posthog.com', '-assets.i.posthog.com') +
+                '/static/array.js'),
+              (r = t.getElementsByTagName('script')[0]).parentNode.insertBefore(
+                p,
+                r
+              );
+            var u = e;
+            for (
+              void 0 !== a ? (u = e[a] = []) : (a = 'posthog'),
+                u.people = u.people || [],
+                u.toString = function (t) {
+                  var e = 'posthog';
+                  return (
+                    'posthog' !== a && (e += '.' + a), t || (e += ' (stub)'), e
+                  );
+                },
+                u.people.toString = function () {
+                  return u.toString(1) + '.people (stub)';
+                },
+                o =
+                  'init Dr Ur fi Lr zr ci Or jr capture Ai calculateEventProperties qr register register_once register_for_session unregister unregister_for_session Jr getFeatureFlag getFeatureFlagPayload isFeatureEnabled reloadFeatureFlags updateEarlyAccessFeatureEnrollment getEarlyAccessFeatures on onFeatureFlags onSurveysLoaded onSessionId getSurveys getActiveMatchingSurveys renderSurvey displaySurvey cancelPendingSurvey canRenderSurvey canRenderSurveyAsync identify setPersonProperties group resetGroups setPersonPropertiesForFlags resetPersonPropertiesForFlags setGroupPropertiesForFlags resetGroupPropertiesForFlags reset get_distinct_id getGroups get_session_id get_session_replay_url alias set_config startSessionRecording stopSessionRecording sessionRecordingStarted captureException loadToolbar get_property getSessionProperty Gr Br createPersonProfile Vr Cr Kr opt_in_capturing opt_out_capturing has_opted_in_capturing has_opted_out_capturing get_explicit_consent_status is_capturing clear_opt_in_out_capturing Hr debug O Wr getPageViewId captureTraceFeedback captureTraceMetric Rr'.split(
+                    ' '
+                  ),
+                n = 0;
+              n < o.length;
+              n++
+            )
+              g(u, o[n]);
+            e._i.push([i, s, a]);
+          }),
+          (e.__SV = 1));
+      })(document, window.posthog || []);
+      posthog.init('phc_13URtidKwTR9POlwnB153NsN99shRykvPguKWf3vZVn', {
+        api_host: 'https://us.i.posthog.com',
+        defaults: '2025-11-30',
+        person_profiles: 'identified_only',
+        // 关闭 Session Recording，避免 rrweb 主线程开销（wheel/setInterval）与 413
+        disable_session_recording: true,
+        // 限制单次 flush 体积，避免 413 Content Too Large
+        rate_limiting: { events_per_second: 10, events_burst_limit: 30 },
+        request_queue: { flush_interval_ms: 2000 },
+        // 白板 SPA 点击多，关闭 autocapture 减少事件量与请求体
+        autocapture: false,
+        // 静默网络错误；413 时打 debug 避免重试风暴干扰
+        on_xhr_error: function(err) {
+          var code = err && (typeof err.statusCode !== 'undefined' ? err.statusCode : err.status);
+          if (code === 413) {
+            if (typeof console !== 'undefined' && console.debug) {
+              console.debug('[PostHog] 413 Content Too Large, batch dropped');
+            }
           }
-          ((p = t.createElement('script')).type = 'text/javascript'),
-            (p.crossOrigin = 'anonymous'),
-            (p.async = !0),
-            (p.src =
-              s.api_host.replace('.i.posthog.com', '-assets.i.posthog.com') +
-              '/static/array.js'),
-            (r = t.getElementsByTagName('script')[0]).parentNode.insertBefore(
-              p,
-              r
-            );
-          var u = e;
-          for (
-            void 0 !== a ? (u = e[a] = []) : (a = 'posthog'),
-              u.people = u.people || [],
-              u.toString = function (t) {
-                var e = 'posthog';
-                return (
-                  'posthog' !== a && (e += '.' + a), t || (e += ' (stub)'), e
-                );
-              },
-              u.people.toString = function () {
-                return u.toString(1) + '.people (stub)';
-              },
-              o =
-                'init Dr Ur fi Lr zr ci Or jr capture Ai calculateEventProperties qr register register_once register_for_session unregister unregister_for_session Jr getFeatureFlag getFeatureFlagPayload isFeatureEnabled reloadFeatureFlags updateEarlyAccessFeatureEnrollment getEarlyAccessFeatures on onFeatureFlags onSurveysLoaded onSessionId getSurveys getActiveMatchingSurveys renderSurvey displaySurvey cancelPendingSurvey canRenderSurvey canRenderSurveyAsync identify setPersonProperties group resetGroups setPersonPropertiesForFlags resetPersonPropertiesForFlags setGroupPropertiesForFlags resetGroupPropertiesForFlags reset get_distinct_id getGroups get_session_id get_session_replay_url alias set_config startSessionRecording stopSessionRecording sessionRecordingStarted captureException loadToolbar get_property getSessionProperty Gr Br createPersonProfile Vr Cr Kr opt_in_capturing opt_out_capturing has_opted_in_capturing has_opted_out_capturing get_explicit_consent_status is_capturing clear_opt_in_out_capturing Hr debug O Wr getPageViewId captureTraceFeedback captureTraceMetric Rr'.split(
-                  ' '
-                ),
-              n = 0;
-            n < o.length;
-            n++
-          )
-            g(u, o[n]);
-          e._i.push([i, s, a]);
-        }),
-        (e.__SV = 1));
-    })(document, window.posthog || []);
-    posthog.init('phc_13URtidKwTR9POlwnB153NsN99shRykvPguKWf3vZVn', {
-      api_host: 'https://us.i.posthog.com',
-      defaults: '2025-11-30',
-      person_profiles: 'identified_only',
-      // 静默网络错误，避免控制台报错
-      on_xhr_error: function() {},
-    });
+        },
+      });
+    })();
   </script>
 </html>

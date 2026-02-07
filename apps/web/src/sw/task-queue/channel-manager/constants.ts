@@ -11,7 +11,6 @@
 export const RPC_METHODS = {
   // 初始化
   INIT: 'init',
-  UPDATE_CONFIG: 'updateConfig',
 
   // 任务操作
   TASK_CREATE: 'task:create',
@@ -19,11 +18,10 @@ export const RPC_METHODS = {
   TASK_RETRY: 'task:retry',
   TASK_DELETE: 'task:delete',
   TASK_MARK_INSERTED: 'task:markInserted',
-  TASK_IMPORT: 'task:import', // 导入已完成的任务（用于云同步恢复）
 
   // 任务查询
   TASK_GET: 'task:get',
-  TASK_LIST_PAGINATED: 'task:listPaginated',
+  // Note: TASK_LIST_PAGINATED 已移除，主线程直接从 IndexedDB 读取
 
   // Chat
   CHAT_START: 'chat:start',
@@ -33,9 +31,8 @@ export const RPC_METHODS = {
   // Workflow
   WORKFLOW_SUBMIT: 'workflow:submit',
   WORKFLOW_CANCEL: 'workflow:cancel',
-  WORKFLOW_GET_STATUS: 'workflow:getStatus',
-  WORKFLOW_GET_ALL: 'workflow:getAll',
-  WORKFLOW_RESPOND_TOOL: 'workflow:respondTool',
+  // Note: WORKFLOW_GET_STATUS、WORKFLOW_GET_ALL、WORKFLOW_RESPOND_TOOL 已移除
+  // 主线程直接从 IndexedDB 读取，工具响应通过 sendToolRequest 直接返回
   WORKFLOW_CLAIM: 'workflow:claim', // 客户端声明接管工作流
 
   // Thumbnail (图片缩略图，由 SW 生成)
@@ -79,6 +76,10 @@ export const RPC_METHODS = {
 
   // Cache management
   CACHE_DELETE: 'cache:delete',
+
+  // Executor (媒体执行器 - SW 可选降级方案)
+  PING: 'ping',
+  EXECUTOR_EXECUTE: 'executor:execute',
 } as const;
 
 // ============================================================================
@@ -121,7 +122,7 @@ export const SW_EVENTS = {
   SW_NEW_VERSION_READY: 'sw:newVersionReady',
   SW_ACTIVATED: 'sw:activated',
   SW_UPDATED: 'sw:updated',
-  SW_REQUEST_CONFIG: 'sw:requestConfig',
+  // Note: SW_REQUEST_CONFIG 已移除 - 配置现在同步到 IndexedDB，SW 直接读取
 
   // MCP events
   MCP_TOOL_RESULT: 'mcp:toolResult',

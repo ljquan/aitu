@@ -3,12 +3,19 @@
  * 
  * Core service for managing the task queue lifecycle.
  * Implements singleton pattern and uses RxJS for event-driven architecture.
+ * 
+ * In fallback mode (SW disabled), this service directly writes to IndexedDB
+ * via taskStorageWriter to ensure data persistence.
  */
 
 import { Subject, Observable } from 'rxjs';
 import { Task, TaskStatus, TaskType, TaskEvent, GenerationParams, TaskExecutionPhase } from '../types/task.types';
 import { generateTaskId, isTaskActive } from '../utils/task-utils';
 import { validateGenerationParams, sanitizeGenerationParams } from '../utils/validation-utils';
+import { taskStorageWriter, type SWTask } from './media-executor/task-storage-writer';
+import { taskStorageReader } from './task-storage-reader';
+import { executorFactory, waitForTaskCompletion } from './media-executor';
+import { geminiSettings } from '../utils/settings-manager';
 
 /**
  * Task Queue Service
@@ -22,6 +29,162 @@ class TaskQueueService {
   private constructor() {
     this.tasks = new Map();
     this.taskUpdates$ = new Subject();
+  }
+
+  /**
+   * Converts Task to SWTask format for IndexedDB storage
+   */
+  private convertToSWTask(task: Task): SWTask {
+    return {
+      id: task.id,
+      type: task.type,
+      status: task.status,
+      params: task.params as SWTask['params'],
+      createdAt: task.createdAt,
+      updatedAt: task.updatedAt,
+      startedAt: task.startedAt,
+      completedAt: task.completedAt,
+      result: task.result,
+      error: task.error,
+      progress: task.progress,
+      remoteId: task.remoteId,
+      executionPhase: task.executionPhase,
+      savedToLibrary: task.savedToLibrary,
+      insertedToCanvas: task.insertedToCanvas,
+    };
+  }
+
+  /**
+   * Persist task to IndexedDB (async, fire-and-forget)
+   */
+  private persistTask(task: Task): void {
+    const swTask = this.convertToSWTask(task);
+    taskStorageWriter.saveTask(swTask).catch((error) => {
+      console.error('[TaskQueueService] Failed to persist task:', error);
+    });
+    // Invalidate reader cache after write
+    taskStorageReader.invalidateCache();
+  }
+
+  /**
+   * Delete task from IndexedDB (async, fire-and-forget)
+   */
+  private persistDelete(taskId: string): void {
+    taskStorageWriter.deleteTask(taskId).catch((error) => {
+      console.error('[TaskQueueService] Failed to delete task from storage:', error);
+    });
+    // Invalidate reader cache after delete
+    taskStorageReader.invalidateCache();
+  }
+
+  /**
+   * Execute task using fallback executor (for legacy/fallback mode)
+   * This is called automatically after task creation
+   */
+  private async executeTask(task: Task): Promise<void> {
+    try {
+      // Check API configuration
+      const settings = geminiSettings.get();
+      if (!settings.apiKey || !settings.baseUrl) {
+        console.warn('[TaskQueueService] No API configuration, cannot execute task');
+        this.updateTaskStatus(task.id, TaskStatus.FAILED, {
+          error: { code: 'NO_API_KEY', message: '未配置 API Key' },
+        });
+        return;
+      }
+
+      // Get executor
+      const executor = await executorFactory.getExecutor();
+
+      // Execute based on task type
+      switch (task.type) {
+        case TaskType.IMAGE:
+          await executor.generateImage({
+            taskId: task.id,
+            prompt: task.params.prompt,
+            model: task.params.model,
+            size: task.params.size,
+            referenceImages: task.params.referenceImages as string[] | undefined,
+            count: task.params.count as number | undefined,
+            uploadedImages: task.params.uploadedImages as Array<{ url?: string }> | undefined,
+          });
+          break;
+        case TaskType.VIDEO: {
+          const refImages = task.params.referenceImages as string[] | undefined;
+          const inputRef = (task.params as { inputReference?: string }).inputReference;
+          await executor.generateVideo({
+            taskId: task.id,
+            prompt: task.params.prompt,
+            model: task.params.model,
+            duration: task.params.duration?.toString(),
+            size: task.params.size,
+            referenceImages:
+              refImages && refImages.length > 0
+                ? refImages
+                : inputRef
+                  ? [inputRef]
+                  : undefined,
+          });
+          break;
+        }
+        default:
+          throw new Error(`Unsupported task type: ${task.type}`);
+      }
+
+      // Poll for task completion
+      const result = await waitForTaskCompletion(task.id, {
+        timeout: 10 * 60 * 1000, // 10 minutes
+        onProgress: (updatedTask) => {
+          // Update local state with progress
+          const localTask = this.tasks.get(task.id);
+          if (localTask) {
+            localTask.status = updatedTask.status as TaskStatus;
+            localTask.progress = updatedTask.progress;
+            localTask.updatedAt = Date.now();
+            this.emitEvent('taskUpdated', localTask);
+          }
+        },
+      });
+
+      // Update final state
+      const localTask = this.tasks.get(task.id);
+      if (localTask && result.task) {
+        localTask.status = result.task.status as TaskStatus;
+        localTask.result = result.task.result;
+        localTask.error = result.task.error;
+        localTask.completedAt = result.task.completedAt;
+        localTask.updatedAt = Date.now();
+
+        // Persist final state
+        this.persistTask(localTask);
+
+        if (result.success) {
+          this.emitEvent('taskUpdated', localTask);
+        } else {
+          this.emitEvent('taskUpdated', localTask);
+        }
+      }
+    } catch (error: any) {
+      console.error('[TaskQueueService] Task execution failed:', error);
+      const localTask = this.tasks.get(task.id);
+      if (localTask) {
+        const now = Date.now();
+        const failedTask: Task = {
+          ...localTask,
+          status: TaskStatus.FAILED,
+          error: {
+            code: 'EXECUTION_ERROR',
+            message: error.message || 'Task execution failed',
+          },
+          updatedAt: now,
+          completedAt: now,
+          progress: undefined, // 清除进行中进度，避免仍显示百分比
+        };
+        this.tasks.set(task.id, failedTask);
+        this.persistTask(failedTask);
+        this.emitEvent('taskUpdated', failedTask);
+      }
+    }
   }
 
   /**
@@ -70,8 +233,16 @@ class TaskQueueService {
     // Add to queue
     this.tasks.set(task.id, task);
 
+    // Persist to IndexedDB
+    this.persistTask(task);
+
     // Emit event
     this.emitEvent('taskCreated', task);
+
+    // Execute task asynchronously (fire-and-forget)
+    this.executeTask(task).catch((error) => {
+      console.error('[TaskQueueService] Task execution error:', error);
+    });
 
     // console.log(`[TaskQueueService] Created task ${task.id} (${type})`);
     return task;
@@ -111,6 +282,10 @@ class TaskQueueService {
     }
 
     this.tasks.set(taskId, updatedTask);
+
+    // Persist to IndexedDB
+    this.persistTask(updatedTask);
+
     this.emitEvent('taskUpdated', updatedTask);
 
     // console.log(`[TaskQueueService] Updated task ${taskId} to ${status}`);
@@ -136,6 +311,10 @@ class TaskQueueService {
     };
 
     this.tasks.set(taskId, updatedTask);
+
+    // Persist to IndexedDB
+    this.persistTask(updatedTask);
+
     this.emitEvent('taskUpdated', updatedTask);
   }
 
@@ -226,6 +405,14 @@ class TaskQueueService {
       progress: task.type === TaskType.VIDEO ? 0 : undefined, // Reset progress for video
     });
 
+    // Execute task after retry
+    const updatedTask = this.tasks.get(taskId);
+    if (updatedTask) {
+      this.executeTask(updatedTask).catch((error) => {
+        console.error('[TaskQueueService] Retry execution error:', error);
+      });
+    }
+
     // console.log(`[TaskQueueService] Retrying task ${taskId}`);
   }
 
@@ -242,6 +429,10 @@ class TaskQueueService {
     }
 
     this.tasks.delete(taskId);
+
+    // Delete from IndexedDB
+    this.persistDelete(taskId);
+
     this.emitEvent('taskDeleted', task);
 
     // console.log(`[TaskQueueService] Deleted task ${taskId}`);

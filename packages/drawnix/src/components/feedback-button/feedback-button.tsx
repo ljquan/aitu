@@ -15,6 +15,7 @@ import { ToolButton } from '../tool-button';
 import './feedback-button.scss';
 
 const QR_CODE_URL = 'https://tuziai.oss-cn-shenzhen.aliyuncs.com/aitu/AiTu.png';
+const SERVICE_QR_CODE_URL = 'https://tuziai.oss-cn-shenzhen.aliyuncs.com/linkme.png';
 
 export const FeedbackButton: React.FC = () => {
   const board = useBoard();
@@ -23,8 +24,10 @@ export const FeedbackButton: React.FC = () => {
 
   // 预加载图片
   useEffect(() => {
-    const img = new Image();
-    img.src = QR_CODE_URL;
+    const img1 = new Image();
+    img1.src = QR_CODE_URL;
+    const img2 = new Image();
+    img2.src = SERVICE_QR_CODE_URL;
   }, []);
 
   return (
@@ -47,12 +50,24 @@ export const FeedbackButton: React.FC = () => {
       </PopoverTrigger>
       <PopoverContent container={container} style={{ zIndex: Z_INDEX.POPOVER_FEEDBACK }}>
         <div className="feedback-qrcode-content">
-          <img
-            src={QR_CODE_URL}
-            alt="意见反馈二维码"
-            className="feedback-qrcode-image"
-          />
-          <div className="feedback-qrcode-text">扫码反馈意见</div>
+          <div className="feedback-qrcode-grid">
+            <div className="feedback-qrcode-item">
+              <img
+                src={QR_CODE_URL}
+                alt="用户反馈群二维码"
+                className="feedback-qrcode-image"
+              />
+              <div className="feedback-qrcode-text">用户反馈群</div>
+            </div>
+            {/* <div className="feedback-qrcode-item">
+              <img
+                src={SERVICE_QR_CODE_URL}
+                alt="客服二维码"
+                className="feedback-qrcode-image"
+              />
+              <div className="feedback-qrcode-text">客服</div>
+            </div> */}
+          </div>
         </div>
       </PopoverContent>
     </Popover>

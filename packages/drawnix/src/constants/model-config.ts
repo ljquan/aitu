@@ -345,6 +345,48 @@ export const VIDEO_MODELS: ModelConfig[] = [
     videoDefaults: SORA_DEFAULT_PARAMS,
   },
   {
+    id: 'sora-2-4s',
+    label: 'Sora 2 · 4s',
+    shortCode: 's24',
+    description: '4秒固定时长，模型名已包含时长',
+    type: 'video',
+    isVip: true,
+    supportsTools: true,
+    videoDefaults: {
+      duration: '4',
+      size: '1280x720',
+      aspectRatio: '16:9',
+    },
+  },
+  {
+    id: 'sora-2-8s',
+    label: 'Sora 2 · 8s',
+    shortCode: 's28',
+    description: '8秒固定时长，模型名已包含时长',
+    type: 'video',
+    isVip: true,
+    supportsTools: true,
+    videoDefaults: {
+      duration: '8',
+      size: '1280x720',
+      aspectRatio: '16:9',
+    },
+  },
+  {
+    id: 'sora-2-12s',
+    label: 'Sora 2 · 12s',
+    shortCode: 's212',
+    description: '12秒固定时长，模型名已包含时长',
+    type: 'video',
+    isVip: true,
+    supportsTools: true,
+    videoDefaults: {
+      duration: '12',
+      size: '1280x720',
+      aspectRatio: '16:9',
+    },
+  },
+  {
     id: 'veo3',
     label: 'Veo 3',
     shortCode: 'v3',
@@ -679,6 +721,9 @@ const SORA_2_MODEL_IDS = ['sora-2'];
 /** Sora 2 Pro 模型（支持 10/15/25 秒和高清尺寸） */
 const SORA_2_PRO_MODEL_IDS = ['sora-2-pro'];
 
+/** Sora 2 固定时长模型（模型名已包含时长，不传 seconds） */
+const SORA_2_FIXED_MODEL_IDS = ['sora-2-4s', 'sora-2-8s', 'sora-2-12s'];
+
 /** GPT 图片模型 ID（仅支持有限尺寸） */
 const GPT_IMAGE_MODEL_IDS = ['gpt-image-1.5'];
 
@@ -750,7 +795,7 @@ export const VIDEO_PARAMS: ParamConfig[] = [
       { value: '720x1280', label: '竖屏 9:16 (720x1280)' },
     ],
     defaultValue: '1280x720',
-    compatibleModels: [...VEO_MODEL_IDS, ...SORA_2_MODEL_IDS],
+    compatibleModels: [...VEO_MODEL_IDS, ...SORA_2_MODEL_IDS, ...SORA_2_FIXED_MODEL_IDS],
     modelType: 'video',
   },
   // Veo 4K 尺寸参数（4K 分辨率）

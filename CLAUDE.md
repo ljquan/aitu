@@ -26,10 +26,10 @@ pnpm run build          # 构建所有包
 pnpm run build:web      # 仅构建 Web 应用
 
 # 测试与检查
+pnpm check              # 类型检查 + ESLint（推荐）
+pnpm typecheck          # 仅类型检查
+pnpm lint               # 仅 ESLint
 pnpm test               # 运行所有测试
-pnpm nx test <项目名>    # 运行特定项目的测试
-pnpm nx lint <项目名>    # 检查代码规范
-cd packages/drawnix && npx tsc --noEmit  # 类型检查
 
 # 版本发布
 pnpm run version:patch  # 升级补丁版本 (0.0.x)
@@ -127,14 +127,24 @@ Service Worker (后台执行)
 
 > 详细规则和错误示例请参考 `docs/CODING_RULES.md`
 
+### 断舍离原则（最高优先级）
+
+> **极简主义是本项目的核心哲学。代码越少，Bug 越少，维护成本越低。**
+
+1. **坚决删除冗余代码**：发现无用代码立即删除，不犹豫、不"留着以后可能用到"
+2. **拒绝重复实现**：主线程已实现的功能，SW 不要再实现一遍；一处写入成功，不需要另一处"同步通知"
+3. **质疑每一行代码**：新增代码前问"这真的需要吗？"；能用 10 行解决的不写 100 行
+4. **历史包袱及时清理**：架构演进后的遗留代码、废弃的 RPC 调用、不再使用的 Handler 都要删除
+5. **YAGNI 原则**：You Aren't Gonna Need It —— 不为假想的未来需求预留代码
+
 ### 必须遵守
 
 1. **文件大小限制**：单个文件不超过 500 行
-2. **类型定义**：对象用 `interface`，联合类型用 `type`，避免 `any`
+2. **类型定义**：对象用 `interface`，联合类型用 `type`，避免 `any`；枚举作为值使用时不能用 `import type`
 3. **组件规范**：函数组件 + Hooks，事件处理器用 `useCallback`
 4. **定时器清理**：`setInterval` 必须保存 ID，提供 `destroy()` 方法
 5. **API 请求**：禁止重试，区分业务失败和网络错误
-6. **调试日志**：提交前必须清理 `console.log`
+6. **调试日志**：提交前必须清理 `console.log`；同步模块（`github-sync/*`）使用 `logDebug/logInfo/logSuccess/logWarning/logError` 而非 `console.log`；**禁止空 catch 块**，至少记录 `console.debug`
 7. **敏感信息**：永不硬编码 API Key，使用 `sanitizeObject` 过滤日志，敏感 ID 用 `maskId` 脱敏
 8. **布局抖动**：`Suspense` 的 fallback 应撑满容器或固定高度，防止加载时跳动
 9. **结构化数据**：复杂消息展示应优先使用 `aiContext` 等结构化数据而非字符串解析
@@ -143,8 +153,14 @@ Service Worker (后台执行)
 12. **共享模块设计**：相似功能提取到 `*-core.ts` 核心模块，通过配置类型区分行为
 13. **同名模块隔离**：多个同名模块有独立全局状态，确保从正确的模块路径导入
 14. **工作区初始化**：`getCurrentBoard()` 返回 `null` 但 `hasBoards()` 为 `true` 时，必须自动选择第一个画板，不能只在 "无画板" 时创建新画板
-15. **工具函数组织**：通用工具函数放 `@aitu/utils`，使用时直接导入，禁止在业务包中二次导出
+15. **工具函数组织**：通用工具函数放 `@aitu/utils`，使用时直接导入，禁止二次导出或不必要的包装
 16. **数据安全保护**：破坏性操作（删除、覆盖）前必须安全检查，当前编辑项不可删除，批量删除需确认，不可逆操作需输入确认文字
+17. **模块循环依赖**：将共享函数（如 `shouldUseSWTaskQueue`）提取到独立模块打破循环；单例构造函数用 `queueMicrotask` 延迟访问其他模块导出
+18. **配置对象深拷贝**：`getSetting()` 等返回配置对象的方法需返回深拷贝，防止脱敏函数等外部操作修改全局状态
+19. **避免过度设计**：优先使用简单的 interface + service 模式；只在有明确需求时才添加 Repository、Strategy 等抽象层
+20. **重构先问问题**：重构前明确要解决的实际问题；验证方案是否真的解决问题而非增加复杂度
+21. **统计上报旁路化**：统计/监控的初始化与上报须在 requestIdleCallback 或 setTimeout 中执行，不在主路径上做脱敏与网络请求；失败静默不向上抛
+22. **第三方 Session Replay**：默认关闭或按采样开启，避免主线程卡顿（wheel/setInterval）与 413；若开启需配置限流与 413 错误处理
 
 ### Service Worker 规则
 
@@ -160,11 +176,22 @@ Service Worker (后台执行)
 10. **postmessage-duplex 1.1.0 通信模式**：RPC 用 `call()` 方法（需响应），单向广播用 `broadcast()` + `onBroadcast()`（fire-and-forget）；SW 用 `enableGlobalRouting` 自动管理 channel
 11. **postmessage-duplex 客户端初始化**：`createFromPage()` 设置 `autoReconnect: true` 处理 SW 更新；禁用日志需 `log: {...}` 配合 `as any`（类型定义不含 log）
 12. **postmessage-duplex 消息大小限制**：单次 RPC 响应不超过 1MB，大数据查询需后端分页+精简数据（去掉 requestBody/responseBody 等大字段）
-13. **任务队列双服务同步**：`taskQueueService`（本地）和 `swTaskQueueService`（SW）是独立的，组件渲染时需调用 `syncTasksFromSW()` 同步数据
-14. **任务数据持久化**：主线程的 `tasks` Map 只是内存状态，恢复任务必须通过 `importTasks` RPC 持久化到 SW 的 IndexedDB
-15. **工作流恢复状态不一致**：UI 与 SW 状态不一致时（如终态但有运行中步骤），必须先从 SW 获取真实状态，不能直接标记为失败
-16. **错误处理链保持完整**：需要传递特殊错误属性（如 `isAwaitingClient`）时，必须重新抛出原始错误，不能创建新 Error 对象
-17. **SW 重发 Tool Request 需延迟**：页面刷新后 claim 工作流时，SW 重发 pending tool request 需延迟 500ms，等待主线程 handler 准备好
+13. **主线程直接读取 IndexedDB**：只读数据直接用 `taskStorageReader.getAllTasks()` 读取，避免 postMessage 限制；写操作通过 SW 或 `taskStorageWriter` 保持一致性
+14. **任务数据持久化**：主线程直接通过 `taskStorageWriter` 写入 IndexedDB，无需通过 RPC 通知 SW（断舍离：避免重复写入）
+15. **降级模式任务执行**：`?sw=0` 降级模式下，`createTask` 后必须自动触发 `executeTask`，否则任务只会被创建但不会执行
+16. **工作流恢复状态不一致**：UI 与 SW 状态不一致时（如终态但有运行中步骤），必须先从 SW 获取真实状态，不能直接标记为失败
+17. **错误处理链保持完整**：需要传递特殊错误属性（如 `isAwaitingClient`）时，必须重新抛出原始错误，不能创建新 Error 对象
+18. **SW 重发 Tool Request 需延迟**：页面刷新后 claim 工作流时，SW 重发 pending tool request 需延迟 500ms，等待主线程 handler 准备好
+19. **同步数据双向合并**：下载远程数据时必须与本地合并（基于 ID 去重，`updatedAt` 判断版本），合并后自动上传确保双向同步
+20. **同步数据格式一致性**：`tasks.json` 结构是 `{ completedTasks: Task[] }` 不是数组，画板文件是 `board_{id}.json` 不是 `.drawnix`
+21. **RPC 超时与重连**：关键 RPC 调用（如工作流提交）需设置合理超时（15-30秒），超时时主动重新初始化 SW 连接并重试
+22. **降级路径功能一致性**：降级到主线程直接调用 API 时，必须保持与 SW 模式相同的功能行为（如 LLM API 日志记录），否则调试工具会漏掉这些调用
+23. **SW 初始化统一入口**：使用 `swChannelClient.ensureReady()` 作为统一入口，避免在各处重复初始化逻辑；任务队列用 `swTaskQueueService.initialize()`
+24. **配置同步到 IndexedDB**：SW 无法访问 localStorage，`SettingsManager` 自动将配置同步到 IndexedDB（同一数据库 `sw-task-queue`），SW 直接从 IndexedDB 读取，避免依赖 postMessage
+25. **远程同步任务不恢复执行**：通过 `syncedFromRemote` 标记区分本地和远程任务，SW 的 `shouldResumeTask()` 跳过远程任务，避免多设备重复调用大模型接口
+26. **任务参考图传递**：创建图片/视频任务时 `createTask` 的 params 须包含 `referenceImages`（与 `uploadedImages` 一并）；执行时 `executor.generateImage/generateVideo` 须传入 `referenceImages`（或 video 的 `inputReference`），否则 sw=0 降级请求不会带参考图
+27. **SW 可用性检测统一**：决定是否走 SW 时需用 `swChannelClient.isInitialized()` + `ping`，不能仅检查 `navigator.serviceWorker.controller`，否则 channel 未就绪会提交超时
+28. **降级路径强制主线程执行器**：workflow 提交超时后降级时，MainThreadWorkflowEngine 须传 `forceFallbackExecutor: true`，否则 `executorFactory.getExecutor()` 可能仍返回 SW 执行器导致二次超时
 
 ### React 规则
 
@@ -180,6 +207,7 @@ Service Worker (后台执行)
 10. Slate-React Leaf 组件 DOM 结构必须稳定，不能根据条件切换标签/CSS 实现方式
 11. **异步操作不阻塞 UI**：远程同步等耗时操作应异步执行（fire-and-forget），不阻塞弹窗关闭
 12. **关键操作直接调用**：不依赖 RxJS 事件订阅触发关键业务逻辑，订阅时序不可靠
+13. **CPU 密集型循环需 yield**：大量 JSON.stringify/加密等操作的循环，每 3-5 次迭代调用 `await yieldToMain()` 让出主线程
 
 ### 缓存规则
 
@@ -255,8 +283,7 @@ Service Worker (后台执行)
 修改代码后执行：
 
 ```bash
-cd packages/drawnix && npx tsc --noEmit  # 类型检查
-pnpm nx lint drawnix                      # 代码规范
-pnpm nx test drawnix                      # 单元测试
-pnpm run build                            # 构建验证
+pnpm check              # 类型检查 + ESLint（推荐）
+pnpm test               # 单元测试
+pnpm run build          # 构建验证
 ```

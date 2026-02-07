@@ -220,6 +220,9 @@ export interface AssetContextState {
 
   // 存储状态
   storageStatus: StorageStatus | null;
+
+  // 同步状态 - 已同步到 Gist 的 URL 集合
+  syncedUrls: Set<string>;
 }
 
 /**
@@ -245,6 +248,9 @@ export interface AssetContextActions {
 
   // 存储管理
   checkStorageQuota: () => Promise<void>;
+
+  // 同步状态
+  loadSyncedUrls: () => Promise<void>;
 }
 
 /**

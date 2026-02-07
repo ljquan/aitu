@@ -12,6 +12,8 @@ import {
   UpdateGistRequest,
   SYNC_FILES,
 } from './types';
+import { SHARD_FILES } from './shard-types';
+import { logInfo, logWarning, logError } from './sync-log-service';
 
 /** API 错误 */
 export class GitHubApiError extends Error {
@@ -26,10 +28,23 @@ export class GitHubApiError extends Error {
 }
 
 /**
+ * Gist 缓存项
+ */
+interface GistCacheEntry {
+  response: GistResponse;
+  timestamp: number;
+}
+
+/**
  * GitHub Gist API 服务
  */
 class GitHubApiService {
   private gistId: string | null = null;
+  
+  // Gist 响应缓存（页面会话级，整个页面生命周期有效，只有更新 Gist 后才清除）
+  private gistCache: Map<string, GistCacheEntry> = new Map();
+  // 进行中的请求，用于并发去重
+  private pendingGistRequests: Map<string, Promise<GistResponse>> = new Map();
 
   /**
    * 设置 Gist ID
@@ -43,6 +58,13 @@ class GitHubApiService {
    */
   getGistId(): string | null {
     return this.gistId;
+  }
+
+  /**
+   * 检查是否已设置 Gist ID
+   */
+  hasGistId(): boolean {
+    return !!this.gistId;
   }
 
   /**
@@ -83,6 +105,13 @@ class GitHubApiService {
         errorData = await response.text();
       }
 
+      // 记录详细错误信息用于调试
+      logError('API 请求失败', undefined, {
+        status: response.status,
+        endpoint,
+        errorData: String(errorData).substring(0, 200), // 截断避免过长
+      });
+
       const message = this.getErrorMessage(response.status, errorData);
       throw new GitHubApiError(message, response.status, errorData);
     }
@@ -99,6 +128,18 @@ class GitHubApiService {
    * 获取错误消息
    */
   private getErrorMessage(status: number, data: unknown): string {
+    // 对于 422 错误，尝试提取更详细的信息
+    if (status === 422 && data && typeof data === 'object') {
+      const errorData = data as { message?: string; errors?: Array<{ message?: string; resource?: string; field?: string }> };
+      if (errorData.errors && errorData.errors.length > 0) {
+        const errorDetails = errorData.errors.map(e => e.message || `${e.resource}.${e.field}`).join(', ');
+        return `请求数据无效: ${errorDetails}`;
+      }
+      if (errorData.message) {
+        return `请求数据无效: ${errorData.message}`;
+      }
+    }
+
     const messages: Record<number, string> = {
       401: 'Token 无效或已过期，请重新配置',
       403: '权限不足，请确保 Token 具有 gist 权限',
@@ -120,13 +161,32 @@ class GitHubApiService {
 
   /**
    * 查找现有的同步 Gist
+   * 优先查找包含 master-index.json 的分片主 Gist（选择最新更新的）
    */
   async findSyncGist(): Promise<GistResponse | null> {
     try {
       // 列出用户的所有 Gists
       const gists = await this.request<GistResponse[]>('/gists?per_page=100');
 
-      // 查找包含 manifest.json 的 Gist（同步 Gist 的标识）
+      // 查找所有包含 master-index.json 的 Gist（分片主 Gist）
+      const masterGists = gists.filter(gist => SHARD_FILES.MASTER_INDEX in gist.files);
+      if (masterGists.length > 0) {
+        // 选择最新更新的主 Gist
+        const latestMasterGist = masterGists.reduce((latest, gist) => {
+          const latestTime = new Date(latest.updated_at).getTime();
+          const gistTime = new Date(gist.updated_at).getTime();
+          return gistTime > latestTime ? gist : latest;
+        });
+        this.gistId = latestMasterGist.id;
+        logInfo('找到主数据库 Gist', { 
+          gistId: latestMasterGist.id.substring(0, 8), 
+          totalMasterGists: masterGists.length,
+          updatedAt: latestMasterGist.updated_at,
+        });
+        return latestMasterGist;
+      }
+
+      // 退化：查找包含 manifest.json 的旧 Gist
       const syncGist = gists.find(gist => {
         const hasManifest = SYNC_FILES.MANIFEST in gist.files;
         const matchDescription = gist.description === GIST_DESCRIPTION;
@@ -140,29 +200,38 @@ class GitHubApiService {
 
       return null;
     } catch (error) {
-      console.error('[GitHubApiService] Failed to find sync gist:', error);
+      logError('查找同步 Gist 失败', error instanceof Error ? error : new Error(String(error)));
       throw error;
     }
   }
 
   /**
    * 获取所有同步 Gist 列表
+   * 包含 master-index.json 或 manifest.json 的 Gist
    */
   async listSyncGists(): Promise<GistResponse[]> {
     try {
       // 列出用户的所有 Gists
       const gists = await this.request<GistResponse[]>('/gists?per_page=100');
 
-      // 筛选同步 Gist（包含 manifest.json 或描述匹配）
+      // 筛选同步 Gist（包含 master-index.json、manifest.json 或描述匹配）
       return gists.filter(gist => {
+        const hasMasterIndex = SHARD_FILES.MASTER_INDEX in gist.files;
         const hasManifest = SYNC_FILES.MANIFEST in gist.files;
         const matchDescription = gist.description === GIST_DESCRIPTION;
-        return hasManifest || matchDescription;
+        return hasMasterIndex || hasManifest || matchDescription;
       });
     } catch (error) {
-      console.error('[GitHubApiService] Failed to list sync gists:', error);
+      logError('列出同步 Gist 失败', error instanceof Error ? error : new Error(String(error)));
       throw error;
     }
+  }
+
+  /**
+   * 检查 Gist 是否为分片主 Gist（包含 master-index.json）
+   */
+  isGistMaster(gist: GistResponse): boolean {
+    return SHARD_FILES.MASTER_INDEX in gist.files;
   }
 
   /**
@@ -205,7 +274,31 @@ class GitHubApiService {
   }
 
   /**
-   * 获取 Gist 内容
+   * 获取调用栈信息（用于调试）
+   */
+  private getCallerInfo(): string {
+    const stack = new Error().stack || '';
+    const lines = stack.split('\n');
+    // 跳过 Error、getCallerInfo、getGist 三行，取第4-6行作为调用来源
+    const callerLines = lines.slice(4, 7).map(line => {
+      // 提取文件名和行号
+      const match = line.match(/at\s+(.+?)\s+\((.+?):(\d+):\d+\)/);
+      if (match) {
+        return `${match[1]} (${match[2].split('/').pop()}:${match[3]})`;
+      }
+      // 匿名函数的情况
+      const anonMatch = line.match(/at\s+(.+?):(\d+):\d+/);
+      if (anonMatch) {
+        return `${anonMatch[1].split('/').pop()}:${anonMatch[2]}`;
+      }
+      return line.trim();
+    });
+    return callerLines.join(' <- ');
+  }
+
+  /**
+   * 获取 Gist 内容（页面会话级缓存）
+   * 整个页面生命周期内只请求一次，更新 Gist 后会自动清除缓存
    */
   async getGist(gistId?: string): Promise<GistResponse> {
     const id = gistId || this.gistId;
@@ -213,7 +306,45 @@ class GitHubApiService {
       throw new GitHubApiError('未指定 Gist ID', 400);
     }
 
-    return this.request<GistResponse>(`/gists/${id}`);
+    // 页面会话级缓存：只要有缓存就返回，不检查 TTL
+    const cached = this.gistCache.get(id);
+    if (cached) {
+      return cached.response;
+    }
+
+    // 检查是否有进行中的请求（并发去重）
+    const pending = this.pendingGistRequests.get(id);
+    if (pending) {
+      return pending;
+    }
+
+    // 发起新请求
+    const requestPromise = this.request<GistResponse>(`/gists/${id}`)
+      .then((response) => {
+        // 缓存响应（页面会话级，不会自动过期）
+        this.gistCache.set(id, { response, timestamp: Date.now() });
+        this.pendingGistRequests.delete(id);
+        return response;
+      })
+      .catch((error) => {
+        this.pendingGistRequests.delete(id);
+        throw error;
+      });
+
+    this.pendingGistRequests.set(id, requestPromise);
+    return requestPromise;
+  }
+
+  /**
+   * 清除 Gist 缓存
+   * 在更新 Gist 后调用，确保下次获取到最新数据
+   */
+  clearGistCache(gistId?: string): void {
+    if (gistId) {
+      this.gistCache.delete(gistId);
+    } else if (this.gistId) {
+      this.gistCache.delete(this.gistId);
+    }
   }
 
   /**
@@ -253,16 +384,47 @@ class GitHubApiService {
     }
 
     const filesPayload: Record<string, { content: string }> = {};
+    
+    // 收集每个文件的大小信息
+    const fileSizes: Array<{ name: string; sizeKB: number }> = [];
+    
     for (const [filename, content] of Object.entries(files)) {
+      // 验证文件名长度（GitHub 限制约 255 字符）
+      if (filename.length > 255) {
+        logWarning(`文件名过长 (${filename.length}): ${filename.substring(0, 50)}...`);
+        throw new GitHubApiError(`文件名过长: ${filename.length} 字符`, 400);
+      }
+      // 验证内容不为空
+      if (!content || content.length === 0) {
+        logWarning(`文件内容为空: ${filename}`);
+        throw new GitHubApiError(`文件内容为空: ${filename}`, 400);
+      }
       filesPayload[filename] = { content };
+      
+      const sizeKB = content.length / 1024;
+      fileSizes.push({ name: filename, sizeKB });
+    }
+
+    // 检查是否有超过 10MB 的文件（GitHub 限制）
+    fileSizes.sort((a, b) => b.sizeKB - a.sizeKB);
+    const largeFiles = fileSizes.filter(f => f.sizeKB > 10 * 1024);
+    if (largeFiles.length > 0) {
+      logWarning(`发现 ${largeFiles.length} 个超过 10MB 的文件`, {
+        files: largeFiles.map(f => `${f.name} (${(f.sizeKB / 1024).toFixed(2)} MB)`).join(', '),
+      });
     }
 
     const request: UpdateGistRequest = { files: filesPayload };
 
-    return this.request<GistResponse>(`/gists/${id}`, {
+    const response = await this.request<GistResponse>(`/gists/${id}`, {
       method: 'PATCH',
       body: JSON.stringify(request),
     });
+
+    // 更新后用返回的响应刷新缓存（而不是清除），避免后续请求重新发起
+    this.gistCache.set(id, { response, timestamp: Date.now() });
+
+    return response;
   }
 
   /**
@@ -281,10 +443,15 @@ class GitHubApiService {
 
     const request: UpdateGistRequest = { files: filesPayload };
 
-    return this.request<GistResponse>(`/gists/${id}`, {
+    const response = await this.request<GistResponse>(`/gists/${id}`, {
       method: 'PATCH',
       body: JSON.stringify(request),
     });
+
+    // 删除文件后用返回的响应刷新缓存
+    this.gistCache.set(id, { response, timestamp: Date.now() });
+
+    return response;
   }
 
   /**
@@ -299,6 +466,9 @@ class GitHubApiService {
     await this.request<void>(`/gists/${id}`, {
       method: 'DELETE',
     });
+
+    // 删除 Gist 后清除缓存
+    this.clearGistCache(id);
 
     if (id === this.gistId) {
       this.gistId = null;

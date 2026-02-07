@@ -19,7 +19,7 @@ import { Task, TaskType, TaskStatus, GenerationParams, TaskExecutionPhase } from
 import { swChannelClient } from './sw-channel/client';
 import { swTaskQueueService } from './sw-task-queue-service';
 import { generationAPIService } from './generation-api-service';
-import { legacyTaskQueueService } from './task-queue';
+import { legacyTaskQueueService, shouldUseSWTaskQueue } from './task-queue';
 import { generateTaskId } from '../utils/task-utils';
 import { validateGenerationParams, sanitizeGenerationParams } from '../utils/validation-utils';
 
@@ -91,19 +91,25 @@ class UnifiedGenerationService {
    * 
    * 检测顺序：
    * 0. 测试开关检查
-   * 1. 基础检查（浏览器支持、controller 存在）
-   * 2. 缓存检查（30 秒内复用）
-   * 3. ping 检测（2 秒超时）
+   * 1. URL 参数检查（?sw=0 禁用 SW）
+   * 2. 基础检查（浏览器支持、controller 存在）
+   * 3. 缓存检查（30 秒内复用）
+   * 4. ping 检测（2 秒超时）
    */
   async checkSWHealth(): Promise<boolean> {
     // 0. 测试开关：强制使用主线程
     if (this.forceMainThread) {
-      console.log('[UnifiedGenerationService] Force main thread mode enabled');
       this.swHealthy = false;
       return false;
     }
 
-    // 1. 基础检查
+    // 1. URL 参数检查：?sw=0 禁用 SW
+    if (!shouldUseSWTaskQueue()) {
+      this.swHealthy = false;
+      return false;
+    }
+
+    // 2. 基础检查
     if (!('serviceWorker' in navigator)) {
       this.swHealthy = false;
       return false;
@@ -267,6 +273,9 @@ class UnifiedGenerationService {
    * 用于 UI 显示，不发起网络请求
    */
   isSWAvailable(): boolean {
+    // URL 参数检查
+    if (!shouldUseSWTaskQueue()) return false;
+    
     // 基础检查
     if (!('serviceWorker' in navigator)) return false;
     if (!navigator.serviceWorker.controller) return false;

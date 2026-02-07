@@ -7,6 +7,9 @@
 import { CryptoUtils } from './crypto-utils';
 import { DRAWNIX_SETTINGS_KEY } from '../constants/storage';
 import { getSafeErrorMessage } from '@aitu/utils';
+import { configIndexedDBWriter } from './config-indexeddb-writer';
+import type { GeminiConfig } from './gemini-api/types';
+import type { VideoAPIConfig } from './config-indexeddb-writer';
 
 // ====================================
 // 类型定义
@@ -77,6 +80,8 @@ class SettingsManager {
       // 加密功能初始化完成后，解密已加载的敏感数据
       await this.decryptSensitiveDataForLoading(this.settings);
       this.initializeFromUrl();
+      // 初始化完成后，同步配置到 IndexedDB，供 SW 读取
+      await this.syncToIndexedDB();
       // console.log('SettingsManager initialization completed');
     } catch (error) {
       console.error('SettingsManager initialization failed:', error);
@@ -239,6 +244,7 @@ class SettingsManager {
         const decoded = decodeURIComponent(settingsParam);
         const urlSettings = JSON.parse(decoded);
         
+        // updateSetting 已有占位符检查，会自动忽略无效值
         if (urlSettings.key) {
           this.updateSetting('gemini.apiKey', urlSettings.key);
         }
@@ -248,6 +254,7 @@ class SettingsManager {
       }
 
       // 处理apiKey参数
+      // updateSetting 已有占位符检查，会自动忽略无效值
       const apiKey = urlParams.get('apiKey');
       if (apiKey) {
         this.updateSetting('gemini.apiKey', apiKey);
@@ -281,8 +288,42 @@ class SettingsManager {
       // 使用单个 key 存储序列化的设置
       const settingsJson = JSON.stringify(settingsToSave);
       localStorage.setItem(DRAWNIX_SETTINGS_KEY, settingsJson);
+      
+      // 同步到 IndexedDB，供 SW 读取（必须等待完成，确保首次输入 API Key 后 SW 能立即拿到配置）
+      await this.syncToIndexedDB();
     } catch (error) {
       console.warn('Failed to save settings to localStorage:', error);
+    }
+  }
+
+  /**
+   * 同步配置到 IndexedDB
+   * 将当前设置转换为 SW 需要的配置格式并写入 IndexedDB
+   */
+  private async syncToIndexedDB(): Promise<void> {
+    if (typeof window === 'undefined') return;
+
+    try {
+      const gemini = this.settings.gemini;
+      
+      // 构建 GeminiConfig（与 SW 期望的格式一致）
+      const geminiConfig: GeminiConfig = {
+        apiKey: gemini.apiKey,
+        baseUrl: gemini.baseUrl,
+        modelName: gemini.imageModelName,
+      };
+      
+      // 构建 VideoAPIConfig（与 SW 期望的格式一致）
+      const videoConfig: VideoAPIConfig = {
+        apiKey: gemini.apiKey,
+        baseUrl: gemini.baseUrl,
+        model: gemini.videoModelName,
+      };
+      
+      await configIndexedDBWriter.saveConfig(geminiConfig, videoConfig);
+    } catch (error) {
+      // IndexedDB 写入失败不影响正常流程
+      console.warn('[SettingsManager] Failed to sync config to IndexedDB:', error);
     }
   }
 
@@ -316,6 +357,7 @@ class SettingsManager {
 
   /**
    * 获取特定设置值（支持点记号法）
+   * 返回深拷贝，防止外部修改影响原始设置
    */
   public getSetting<T = any>(path: string): T {
     const keys = path.split('.');
@@ -329,13 +371,37 @@ class SettingsManager {
       }
     }
     
+    // 返回深拷贝，防止外部代码修改返回值影响原始设置
+    // 这是防止脱敏函数或其他代码意外修改 apiKey 等敏感字段的关键
+    if (value && typeof value === 'object') {
+      return JSON.parse(JSON.stringify(value)) as T;
+    }
+    
     return value as T;
+  }
+
+  /**
+   * 检查字符串是否是占位符格式
+   * 如 {key}、${key}、{{key}}、{apiKey} 等
+   */
+  private isPlaceholderValue(value: unknown): boolean {
+    if (!value || typeof value !== 'string') return false;
+    // 匹配 {xxx}、${xxx}、{{xxx}} 等占位符格式
+    return /^[{$]*\{?\w+\}?\}*$/.test(value) || 
+           value.includes('{key}') || 
+           value.includes('${');
   }
 
   /**
    * 更新特定设置值（支持点记号法）
    */
   public async updateSetting<T = any>(path: string, newValue: T): Promise<void> {
+    // 对 apiKey 相关字段进行占位符检查
+    if ((path.endsWith('.apiKey') || path === 'apiKey') && this.isPlaceholderValue(newValue)) {
+      console.warn(`[SettingsManager] Detected placeholder value for ${path}, ignoring:`, newValue);
+      return;
+    }
+    
     const keys = path.split('.');
     const lastKey = keys.pop()!;
     

@@ -1487,3 +1487,29 @@ export const CloudIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number
     <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z" />
   </svg>
 );
+
+// 清除失效链接图标 - 断开的链接 + 删除标记
+export const CleanBrokenLinksIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 18, ...props }) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    width={size}
+    height={size}
+    {...props}
+  >
+    {/* 断开的链接 - 左半部分 */}
+    <path d="M9 17H7A5 5 0 0 1 7 7" />
+    <path d="M7 12h4" />
+    {/* 断开的链接 - 右半部分 */}
+    <path d="M15 7h2a5 5 0 0 1 4 8" />
+    <path d="M13 12h4" />
+    {/* 删除标记 */}
+    <circle cx="18" cy="18" r="4" fill="#ff4d4f" stroke="#ff4d4f" />
+    <path d="M16 18h4" stroke="white" strokeWidth="2" />
+  </svg>
+);

@@ -293,6 +293,45 @@ export async function executeSWMCPTool(
 }
 
 /**
+ * Canvas 操作工具（必须在主线程执行，需要访问 DOM/Canvas）
+ * 这些工具会被标记为 pending_main_thread，由主线程轮询 IndexedDB 后执行
+ */
+const CANVAS_TOOLS = [
+  'canvas_insert',
+  'insert_to_canvas', // alias for canvas_insert
+  'insert_mermaid',
+  'insert_mindmap',
+  'insert_svg',
+];
+
+/**
+ * 媒体生成工具（可在 SW 执行，但为了任务队列集成委托给主线程）
+ */
+const MEDIA_GENERATION_TOOLS = [
+  'generate_image',
+  'generate_video',
+  'generate_grid_image',
+  'generate_inspiration_board',
+  'split_image',
+  'generate_long_video',
+];
+
+/**
+ * 检查工具是否必须在主线程执行（Canvas 操作）
+ * 这些工具将被标记为 pending_main_thread，由主线程轮询执行
+ */
+export function isCanvasTool(toolName: string): boolean {
+  return CANVAS_TOOLS.includes(toolName);
+}
+
+/**
+ * 检查工具是否是媒体生成工具
+ */
+export function isMediaGenerationTool(toolName: string): boolean {
+  return MEDIA_GENERATION_TOOLS.includes(toolName);
+}
+
+/**
  * Check if a tool requires main thread delegation
  *
  * Note: generate_image and generate_video are delegated to main thread
@@ -304,19 +343,5 @@ export async function executeSWMCPTool(
  * ai_analyze now runs in SW using textModelName configuration.
  */
 export function requiresMainThread(toolName: string): boolean {
-  const delegatedTools = [
-    'canvas_insert',
-    'insert_to_canvas', // alias for canvas_insert
-    'insert_mermaid',
-    'insert_mindmap',
-    'insert_svg',
-    // ai_analyze now runs in SW with textModelName
-    'generate_image',        // Delegate to main thread for task queue integration
-    'generate_video',        // Delegate to main thread for task queue integration
-    'generate_grid_image',
-    'generate_inspiration_board',
-    'split_image',
-    'generate_long_video',
-  ];
-  return delegatedTools.includes(toolName);
+  return isCanvasTool(toolName) || isMediaGenerationTool(toolName);
 }

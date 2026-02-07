@@ -96,17 +96,9 @@ export class ChatWorkflowHandler {
    */
   private async restoreFromStorage(): Promise<void> {
     const startTime = Date.now();
-    console.log(`[SW:ChatWorkflow] 🔄 SW startup: restoring workflows from IndexedDB at ${new Date().toISOString()}`);
     
     try {
       const workflows = await taskQueueStorage.getAllChatWorkflows();
-
-      // Count by status for logging
-      const statusCounts: Record<string, number> = {};
-      for (const workflow of workflows) {
-        statusCounts[workflow.status] = (statusCounts[workflow.status] || 0) + 1;
-      }
-      console.log(`[SW:ChatWorkflow] 📊 Found ${workflows.length} workflows:`, statusCounts);
 
       let recoveredCount = 0;
       let failedCount = 0;
@@ -128,13 +120,9 @@ export class ChatWorkflowHandler {
         } else {
           recoveredCount++;
         }
-        
-        console.log(`[SW:ChatWorkflow] 📝 Workflow ${workflow.id}: ${prevStatus} → ${workflow.status}`);
       }
 
       this.storageRestored = true;
-      const elapsed = Date.now() - startTime;
-      console.log(`[SW:ChatWorkflow] ✓ Storage restoration complete in ${elapsed}ms. Recovered: ${recoveredCount}, Failed: ${failedCount}`);
     } catch (error) {
       console.error('[SW:ChatWorkflow] ❌ Failed to restore from storage:', error);
       this.storageRestored = true; // Mark as done even on error
@@ -155,27 +143,22 @@ export class ChatWorkflowHandler {
    * - awaiting_client: Already waiting for client, just load into memory
    */
   private async handleInterruptedWorkflow(workflow: ChatWorkflow): Promise<void> {
-    console.log(`[SW:ChatWorkflow] 🔄 SW restart: handling interrupted workflow ${workflow.id}, status: ${workflow.status}`);
-
     switch (workflow.status) {
       case 'pending':
         // SW restarted while workflow was pending
         // We can't know if the API request was sent - marking as failed to avoid double charging
-        console.log(`[SW:ChatWorkflow] ❌ Workflow ${workflow.id} was pending at SW restart, marking failed to avoid duplicate API call`);
         await this.markWorkflowFailed(workflow, 'Service Worker 重启时工作流尚未完成，请重试');
         break;
 
       case 'streaming':
         // SW restarted while streaming - stream data is lost
         // Note: On page refresh (SW continues), streaming continues normally and won't reach here
-        console.log(`[SW:ChatWorkflow] ❌ Workflow ${workflow.id} was streaming at SW restart, data lost`);
         await this.markWorkflowFailed(workflow, 'Service Worker 重启导致流式响应中断，请重试');
         break;
 
       case 'parsing':
         // If we have content, we can try to re-parse
         if (workflow.content && workflow.content.length > 0) {
-          console.log(`[SW:ChatWorkflow] 🔧 Workflow ${workflow.id} has content, attempting to re-parse`);
           try {
             const toolCalls = parseToolCalls(workflow.content);
             const aiAnalysis = extractTextContent(workflow.content);
@@ -209,7 +192,6 @@ export class ChatWorkflowHandler {
 
       case 'awaiting_client':
         // Already waiting for client, just load into memory
-        console.log(`[SW:ChatWorkflow] ⏳ Workflow ${workflow.id} already awaiting client`);
         this.workflows.set(workflow.id, workflow);
         break;
 
@@ -224,7 +206,6 @@ export class ChatWorkflowHandler {
    * Check which tools need to be resumed or re-executed
    */
   private async handleInterruptedToolExecution(workflow: ChatWorkflow): Promise<void> {
-    console.log(`[SW:ChatWorkflow] 🔧 Handling interrupted tool execution for ${workflow.id}`);
 
     // Check for pending DOM operations that were stored
     const pendingOps = await taskQueueStorage.getPendingDomOperationsByChatId(workflow.id);
@@ -254,7 +235,6 @@ export class ChatWorkflowHandler {
     if (hasPendingTools || hasRunningMainThreadTool || pendingOps.length > 0) {
       // Has work to do, wait for client
       workflow.status = 'awaiting_client';
-      console.log(`[SW:ChatWorkflow] ⏳ Workflow ${workflow.id} has pending work, waiting for client`);
     } else {
       // All tools completed, check if workflow should be completed
       const allCompleted = workflow.toolCalls.every(tc => 
@@ -263,7 +243,6 @@ export class ChatWorkflowHandler {
       if (allCompleted) {
         workflow.status = 'completed';
         workflow.completedAt = Date.now();
-        console.log(`[SW:ChatWorkflow] ✓ Workflow ${workflow.id} all tools completed`);
       } else {
         workflow.status = 'awaiting_client';
       }
@@ -295,7 +274,6 @@ export class ChatWorkflowHandler {
 
     this.workflows.set(workflow.id, workflow);
     await taskQueueStorage.saveChatWorkflow(workflow);
-    console.log(`[SW:ChatWorkflow] ❌ Marked workflow ${workflow.id} as failed: ${errorMessage}`);
   }
 
   /**
@@ -319,7 +297,6 @@ export class ChatWorkflowHandler {
     };
 
     await taskQueueStorage.savePendingDomOperation(operation);
-    console.log(`[SW:ChatWorkflow] 📥 Deferred DOM operation: ${toolCall.name} for workflow ${workflow.id}`);
   }
 
   /**
@@ -352,18 +329,15 @@ export class ChatWorkflowHandler {
    * @param clientId ID of the client that initiated the workflow
    */
   async startWorkflow(chatId: string, params: ChatParams, clientId: string): Promise<void> {
-    console.log(`[SW:ChatWorkflow] ▶️ Starting workflow ${chatId} from client ${clientId.substring(0, 8)}...`);
-    
     // Check for duplicate
     const existing = this.workflows.get(chatId);
     if (existing) {
       if (existing.status === 'streaming' || existing.status === 'pending' || existing.status === 'executing_tools') {
-        console.log(`[SW:ChatWorkflow] ♻️ Re-claiming active workflow ${chatId}, status: ${existing.status}`);
         this.workflowClients.set(chatId, clientId);
         this.broadcastStatus(existing);
         return;
       }
-      console.warn(`[SW:ChatWorkflow] ⚠️ Workflow ${chatId} already exists with status: ${existing.status}`);
+      console.warn(`[SW:ChatWorkflow] Workflow ${chatId} already exists with status: ${existing.status}`);
       this.broadcastStatus(existing);
       return;
     }
@@ -390,8 +364,6 @@ export class ChatWorkflowHandler {
     // Create abort controller
     const abortController = new AbortController();
     this.abortControllers.set(chatId, abortController);
-
-    console.log(`[SW:ChatWorkflow] 🚀 Workflow ${chatId} created, starting execution...`);
     
     // Execute workflow
     this.executeWorkflow(workflow, abortController.signal);
@@ -428,7 +400,6 @@ export class ChatWorkflowHandler {
    * @param clientId The client to send recovered workflows to
    */
   sendRecoveredWorkflowsToClient(clientId: string): void {
-    console.log(`[SW:ChatWorkflow] 🔄 Sending recovered workflows to client ${clientId.substring(0, 8)}...`);
     // ChatWorkflowStatus active states: 'pending' | 'streaming' | 'parsing' | 'executing_tools' | 'awaiting_client'
     // Terminal states: 'completed' | 'failed' | 'cancelled'
     const terminalStatuses: ChatWorkflowStatus[] = ['completed', 'failed', 'cancelled'];
@@ -439,7 +410,6 @@ export class ChatWorkflowHandler {
         // Update clientId mapping for active workflows so they can continue
         this.workflowClients.set(workflow.id, clientId);
         
-        console.log(`[SW:ChatWorkflow] 📤 Sending recovered workflow ${workflow.id}, status: ${workflow.status}`);
         this.config.sendToClient(clientId, {
           type: 'CHAT_WORKFLOW_RECOVERED',
           chatId: workflow.id,
@@ -461,14 +431,11 @@ export class ChatWorkflowHandler {
    * Called when a new client connects and claims the workflow
    */
   private async resumeAwaitingWorkflow(workflow: ChatWorkflow, clientId: string): Promise<void> {
-    console.log(`[SW:ChatWorkflow] ▶️ Resuming awaiting workflow ${workflow.id}`);
-
     try {
       // Check for pending DOM operations
       const pendingOps = await taskQueueStorage.getPendingDomOperationsByChatId(workflow.id);
       
       if (pendingOps.length > 0) {
-        console.log(`[SW:ChatWorkflow] 📋 Found ${pendingOps.length} pending DOM operations for workflow ${workflow.id}`);
         
         // Process each pending DOM operation
         for (const op of pendingOps) {
@@ -476,8 +443,6 @@ export class ChatWorkflowHandler {
           const toolCall = workflow.toolCalls.find(tc => tc.id === op.toolCallId);
           
           if (toolCall && toolCall.status === 'pending') {
-            // Send the tool request to the client
-            console.log(`[SW:ChatWorkflow] 🔧 Re-executing deferred tool ${op.toolName}`);
             
             try {
               // Notify client that tool is starting
@@ -584,7 +549,6 @@ export class ChatWorkflowHandler {
             toolCalls: workflow.toolCalls,
           });
 
-          console.log(`[SW:ChatWorkflow] ✓ Workflow ${workflow.id} completed after resuming`);
         }
       }
     } catch (error: any) {
@@ -641,21 +605,18 @@ export class ChatWorkflowHandler {
     
     try {
       // Phase 1: Stream LLM response
-      console.log(`[SW:ChatWorkflow] 📡 Phase 1: Streaming for workflow ${workflow.id}`);
       workflow.status = 'streaming';
       await taskQueueStorage.saveChatWorkflow(workflow);
       this.broadcastStatus(workflow);
 
       const fullContent = await this.streamChat(workflow, signal);
       workflow.content = fullContent;
-      console.log(`[SW:ChatWorkflow] ✓ Streaming complete, content length: ${fullContent.length}`);
 
       if (signal.aborted) {
         throw new Error('Workflow cancelled');
       }
 
       // Phase 2: Parse tool calls
-      console.log(`[SW:ChatWorkflow] 🔍 Phase 2: Parsing for workflow ${workflow.id}`);
       workflow.status = 'parsing';
       await taskQueueStorage.saveChatWorkflow(workflow);
       this.broadcastStatus(workflow);
@@ -665,7 +626,6 @@ export class ChatWorkflowHandler {
 
       workflow.toolCalls = toolCalls;
       workflow.aiAnalysis = aiAnalysis;
-      console.log(`[SW:ChatWorkflow] ✓ Parsed ${toolCalls.length} tool calls`);
 
       // 发送 tool calls（点对点）
       if (toolCalls.length > 0) {
@@ -679,7 +639,6 @@ export class ChatWorkflowHandler {
 
       // Phase 3: Execute tools
       if (toolCalls.length > 0) {
-        console.log(`[SW:ChatWorkflow] 🔧 Phase 3: Executing tools for workflow ${workflow.id}`);
         workflow.status = 'executing_tools';
         await taskQueueStorage.saveChatWorkflow(workflow);
         this.broadcastStatus(workflow);
@@ -689,7 +648,6 @@ export class ChatWorkflowHandler {
         // Check if workflow is awaiting client (deferred due to no client)
         // executeTools may change status to 'awaiting_client' when no client is available
         if ((workflow.status as ChatWorkflowStatus) === 'awaiting_client') {
-          console.log(`[SW:ChatWorkflow] ⏳ Workflow ${workflow.id} awaiting client, execution paused`);
           return;
         }
       }
@@ -702,9 +660,6 @@ export class ChatWorkflowHandler {
       // Persist completed state
       await taskQueueStorage.saveChatWorkflow(workflow);
 
-      const elapsed = Date.now() - startTime;
-      console.log(`[SW:ChatWorkflow] ✅ Workflow ${workflow.id} completed in ${elapsed}ms`);
-
       this.sendToWorkflowClient(workflow.id, {
         type: 'CHAT_WORKFLOW_COMPLETE',
         chatId: workflow.id,
@@ -716,7 +671,6 @@ export class ChatWorkflowHandler {
     } catch (error: any) {
       if (error.message === 'Workflow cancelled') {
         workflow.status = 'cancelled';
-        console.log(`[SW:ChatWorkflow] ⏹️ Workflow ${workflow.id} cancelled`);
       } else {
         workflow.status = 'failed';
         workflow.error = error.message;
@@ -896,7 +850,6 @@ export class ChatWorkflowHandler {
       if (needsMainThread) {
         if (!clientId || !this.isClientAvailable(workflow.id)) {
           // No client available, defer the operation and wait
-          console.log(`[SW:ChatWorkflow] ⏳ No client available for main thread tool ${toolCall.name}, deferring`);
           await this.deferDomOperation(workflow, toolCall);
           
           // Mark workflow as awaiting client
@@ -979,7 +932,6 @@ export class ChatWorkflowHandler {
       } catch (error: any) {
         // Check if error is due to client unavailable
         if (error.message?.includes('No client') || error.message?.includes('timeout')) {
-          console.log(`[SW:ChatWorkflow] ⏳ Client became unavailable during tool ${toolCall.name}, deferring`);
           toolCall.status = 'pending';
           await this.deferDomOperation(workflow, toolCall);
           

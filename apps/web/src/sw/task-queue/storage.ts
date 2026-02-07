@@ -36,6 +36,7 @@ const CHAT_WORKFLOWS_STORE = 'chat-workflows';
 const PENDING_TOOL_REQUESTS_STORE = 'pending-tool-requests';
 const PENDING_DOM_OPERATIONS_STORE = 'pending-dom-operations';
 const TASK_STEP_MAPPINGS_STORE = 'task-step-mappings';
+const PENDING_CANVAS_OPERATIONS_STORE = 'pending-canvas-operations';
 
 // All required stores for integrity check
 const REQUIRED_STORES = [
@@ -46,6 +47,7 @@ const REQUIRED_STORES = [
   PENDING_TOOL_REQUESTS_STORE,
   PENDING_DOM_OPERATIONS_STORE,
   TASK_STEP_MAPPINGS_STORE,
+  PENDING_CANVAS_OPERATIONS_STORE,
 ];
 
 /**
@@ -86,6 +88,31 @@ export interface PendingDomOperation {
   toolCallId: string;
   /** Creation timestamp */
   createdAt: number;
+}
+
+/**
+ * Pending Canvas operation stored in IndexedDB
+ * 
+ * When a canvas operation fails (e.g., timeout, no client), it's stored here
+ * for retry when client reconnects.
+ */
+export interface PendingCanvasOperation {
+  /** Unique operation ID */
+  id: string;
+  /** Associated workflow ID */
+  workflowId: string;
+  /** Operation type (e.g., 'canvas_insert') */
+  operation: string;
+  /** Operation parameters */
+  params: Record<string, unknown>;
+  /** Number of retry attempts */
+  retryCount: number;
+  /** Last error message */
+  lastError?: string;
+  /** Creation timestamp */
+  createdAt: number;
+  /** Last retry timestamp */
+  lastRetryAt?: number;
 }
 
 /**
@@ -196,6 +223,12 @@ function createAllStores(db: IDBDatabase): void {
   if (!db.objectStoreNames.contains(TASK_STEP_MAPPINGS_STORE)) {
     const taskStepMappingsStore = db.createObjectStore(TASK_STEP_MAPPINGS_STORE, { keyPath: 'taskId' });
     taskStepMappingsStore.createIndex('workflowId', 'workflowId', { unique: false });
+  }
+
+  // Create pending canvas operations store (for canvas operation retry)
+  if (!db.objectStoreNames.contains(PENDING_CANVAS_OPERATIONS_STORE)) {
+    const pendingCanvasOpsStore = db.createObjectStore(PENDING_CANVAS_OPERATIONS_STORE, { keyPath: 'id' });
+    pendingCanvasOpsStore.createIndex('workflowId', 'workflowId', { unique: false });
   }
 }
 
@@ -443,15 +476,7 @@ export class TaskQueueStorage {
         const store = transaction.objectStore(TASKS_STORE);
         const index = store.index('createdAt');
 
-        // First, get total count with filters
-        const countRequest = store.count();
-        let total = 0;
-
-        countRequest.onsuccess = () => {
-          total = countRequest.result;
-        };
-
-        // Use cursor to iterate with pagination
+        // Use cursor to iterate with pagination (filteredTotal is calculated during iteration)
         const direction: IDBCursorDirection = sortOrder === 'desc' ? 'prev' : 'next';
         const cursorRequest = index.openCursor(null, direction);
 
@@ -520,77 +545,80 @@ export class TaskQueueStorage {
   }
 
   /**
-   * Save API configuration
+   * Get a specific configuration by key
    */
-  async saveConfig(
-    geminiConfig: GeminiConfig | null,
-    videoConfig: VideoAPIConfig | null
-  ): Promise<void> {
-    try {
-      const db = await this.getDB();
-      return new Promise((resolve, reject) => {
-        const transaction = db.transaction(CONFIG_STORE, 'readwrite');
-        const store = transaction.objectStore(CONFIG_STORE);
-
-        if (geminiConfig) {
-          store.put({ key: 'gemini', ...geminiConfig });
-        }
-        if (videoConfig) {
-          store.put({ key: 'video', ...videoConfig });
-        }
-
-        transaction.oncomplete = () => resolve();
-        transaction.onerror = () => reject(transaction.error);
-      });
-    } catch (error) {
-      // 只记录错误类型，不记录详细信息（可能包含敏感配置）
-      console.error('[SWStorage] Failed to save config:', getSafeErrorMessage(error));
-    }
-  }
-
-  /**
-   * Load API configuration
-   */
-  async loadConfig(): Promise<{
-    geminiConfig: GeminiConfig | null;
-    videoConfig: VideoAPIConfig | null;
-  }> {
+  async getConfig<T>(key: 'gemini' | 'video'): Promise<T | null> {
     try {
       const db = await this.getDB();
       return new Promise((resolve, reject) => {
         const transaction = db.transaction(CONFIG_STORE, 'readonly');
         const store = transaction.objectStore(CONFIG_STORE);
+        const request = store.get(key);
 
-        const geminiRequest = store.get('gemini');
-        const videoRequest = store.get('video');
-
-        transaction.oncomplete = () => {
-          const geminiResult = geminiRequest.result;
-          const videoResult = videoRequest.result;
-
-          resolve({
-            geminiConfig: geminiResult
-              ? {
-                  apiKey: geminiResult.apiKey,
-                  baseUrl: geminiResult.baseUrl,
-                  modelName: geminiResult.modelName,
-                }
-              : null,
-            videoConfig: videoResult
-              ? {
-                  baseUrl: videoResult.baseUrl,
-                  apiKey: videoResult.apiKey,
-                }
-              : null,
-          });
+        request.onsuccess = () => {
+          const result = request.result;
+          if (!result) {
+            resolve(null);
+            return;
+          }
+          // Remove the 'key' field from result
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          const { key: _, ...config } = result;
+          resolve(config as T);
         };
+        request.onerror = () => reject(request.error);
+      });
+    } catch (error) {
+      console.error('[SWStorage] Failed to get config:', getSafeErrorMessage(error));
+      return null;
+    }
+  }
+
+  /**
+   * Save a configuration by key
+   * 持久化配置到 IndexedDB，确保 SW 重启后可恢复
+   */
+  async saveConfig<T extends object>(key: 'gemini' | 'video', config: T): Promise<void> {
+    try {
+      const db = await this.getDB();
+      return new Promise((resolve, reject) => {
+        const transaction = db.transaction(CONFIG_STORE, 'readwrite');
+        const store = transaction.objectStore(CONFIG_STORE);
+        store.put({ 
+          key, 
+          ...config,
+          updatedAt: Date.now(),
+        });
+
+        transaction.oncomplete = () => resolve();
         transaction.onerror = () => reject(transaction.error);
       });
     } catch (error) {
-      // 只记录错误类型，不记录详细信息（可能包含敏感配置）
-      console.error('[SWStorage] Failed to load config:', getSafeErrorMessage(error));
-      return { geminiConfig: null, videoConfig: null };
+      console.error('[SWStorage] Failed to save config:', getSafeErrorMessage(error));
+      throw error;
     }
+  }
+
+  /**
+   * Load both gemini and video configurations
+   * 便捷方法，一次性加载两个配置
+   */
+  async loadConfig(): Promise<{
+    geminiConfig: GeminiConfig | null;
+    videoConfig: VideoAPIConfig | null;
+  }> {
+    const geminiConfig = await this.getConfig<GeminiConfig>('gemini');
+    const videoConfig = await this.getConfig<VideoAPIConfig>('video');
+    return { geminiConfig, videoConfig };
+  }
+
+  /**
+   * Save both gemini and video configurations
+   * 便捷方法，一次性保存两个配置
+   */
+  async saveAllConfig(geminiConfig: GeminiConfig, videoConfig: VideoAPIConfig): Promise<void> {
+    await this.saveConfig('gemini', geminiConfig);
+    await this.saveConfig('video', videoConfig);
   }
 
   // ============================================================================
@@ -968,6 +996,32 @@ export class TaskQueueStorage {
     }
   }
 
+  /**
+   * Cleanup stale pending tool requests older than maxAgeMs
+   * @param maxAgeMs Maximum age in milliseconds (default: 1 hour)
+   * @returns Number of requests deleted
+   */
+  async cleanupStalePendingToolRequests(maxAgeMs = 3600000): Promise<number> {
+    try {
+      const requests = await this.getAllPendingToolRequests();
+      const now = Date.now();
+      const staleRequests = requests.filter(r => now - r.createdAt > maxAgeMs);
+      
+      if (staleRequests.length === 0) {
+        return 0;
+      }
+
+      console.log(`[SWStorage] Cleaning up ${staleRequests.length} stale pending tool requests`);
+      for (const request of staleRequests) {
+        await this.deletePendingToolRequest(request.requestId);
+      }
+      return staleRequests.length;
+    } catch (error) {
+      console.error('[SWStorage] Failed to cleanup stale pending tool requests:', error);
+      return 0;
+    }
+  }
+
   // ============================================================================
   // Pending DOM Operations Storage Methods
   // ============================================================================
@@ -1235,6 +1289,103 @@ export class TaskQueueStorage {
       }
     } catch (error) {
       console.error('[SWStorage] Failed to delete task-step mappings by workflow:', error);
+    }
+  }
+
+  // ============================================================================
+  // Pending Canvas Operation Storage Methods (for canvas operation retry)
+  // ============================================================================
+
+  /**
+   * Save a pending canvas operation to IndexedDB
+   */
+  async savePendingCanvasOperation(operation: PendingCanvasOperation): Promise<void> {
+    try {
+      const db = await this.getDB();
+      return new Promise((resolve, reject) => {
+        const transaction = db.transaction(PENDING_CANVAS_OPERATIONS_STORE, 'readwrite');
+        const store = transaction.objectStore(PENDING_CANVAS_OPERATIONS_STORE);
+        const request = store.put(operation);
+
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => resolve();
+      });
+    } catch (error) {
+      console.error('[SWStorage] Failed to save pending canvas operation:', error);
+    }
+  }
+
+  /**
+   * Get all pending canvas operations
+   */
+  async getAllPendingCanvasOperations(): Promise<PendingCanvasOperation[]> {
+    try {
+      const db = await this.getDB();
+      return new Promise((resolve, reject) => {
+        const transaction = db.transaction(PENDING_CANVAS_OPERATIONS_STORE, 'readonly');
+        const store = transaction.objectStore(PENDING_CANVAS_OPERATIONS_STORE);
+        const request = store.getAll();
+
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => resolve(request.result || []);
+      });
+    } catch (error) {
+      console.error('[SWStorage] Failed to get all pending canvas operations:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get pending canvas operations by workflow ID
+   */
+  async getPendingCanvasOperationsByWorkflow(workflowId: string): Promise<PendingCanvasOperation[]> {
+    try {
+      const db = await this.getDB();
+      return new Promise((resolve, reject) => {
+        const transaction = db.transaction(PENDING_CANVAS_OPERATIONS_STORE, 'readonly');
+        const store = transaction.objectStore(PENDING_CANVAS_OPERATIONS_STORE);
+        const index = store.index('workflowId');
+        const request = index.getAll(workflowId);
+
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => resolve(request.result || []);
+      });
+    } catch (error) {
+      console.error('[SWStorage] Failed to get pending canvas operations by workflow:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Delete a pending canvas operation
+   */
+  async deletePendingCanvasOperation(operationId: string): Promise<void> {
+    try {
+      const db = await this.getDB();
+      return new Promise((resolve, reject) => {
+        const transaction = db.transaction(PENDING_CANVAS_OPERATIONS_STORE, 'readwrite');
+        const store = transaction.objectStore(PENDING_CANVAS_OPERATIONS_STORE);
+        const request = store.delete(operationId);
+
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => resolve();
+      });
+    } catch (error) {
+      console.error('[SWStorage] Failed to delete pending canvas operation:', error);
+    }
+  }
+
+  /**
+   * Delete all pending canvas operations for a workflow
+   */
+  async deletePendingCanvasOperationsByWorkflow(workflowId: string): Promise<void> {
+    try {
+      const operations = await this.getPendingCanvasOperationsByWorkflow(workflowId);
+      for (const op of operations) {
+        await this.deletePendingCanvasOperation(op.id);
+      }
+    } catch (error) {
+      console.error('[SWStorage] Failed to delete pending canvas operations by workflow:', error);
     }
   }
 }

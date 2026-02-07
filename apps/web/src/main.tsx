@@ -36,10 +36,20 @@ initCrashLogger();
 
 // ===== 初始化 Sentry 错误监控 =====
 // 必须在其他代码之前初始化，以捕获所有错误
+
+// 判断是否应该启用上报：
+// - 本地开发环境（localhost/127.0.0.1）默认不上报，除非 URL 带 report=1 参数
+// - 生产环境始终上报
+const isLocalDev = typeof window !== 'undefined' && 
+  (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+const forceReport = typeof window !== 'undefined' && 
+  new URLSearchParams(window.location.search).get('report') === '1';
+const shouldEnableReporting = forceReport || (!isLocalDev && import.meta.env.PROD);
+
 Sentry.init({
   dsn: "https://a18e755345995baaa0e1972c4cf24497@o4510700882296832.ingest.us.sentry.io/4510700883869696",
-  // 仅在生产环境启用
-  enabled: import.meta.env.PROD,
+  // 本地开发环境默认不启用，除非 URL 带 report=1 参数
+  enabled: shouldEnableReporting,
   // 禁用自动 PII 收集，保护用户隐私
   sendDefaultPii: false,
   // 性能监控采样率（降低以减少数据量）
@@ -115,20 +125,24 @@ if (typeof window !== 'undefined') {
     memoryMonitorService.logMemoryStatus();
   }, 5000);
 
-  // 等待 PostHog 加载完成后初始化监控
+  // 统计上报为旁路逻辑：在空闲时初始化，不占首屏主流程
   const initMonitoring = () => {
     if (window.posthog) {
-      // console.log('[Monitoring] PostHog loaded, initializing Web Vitals and Page Report');
       initWebVitals();
       initPageReport();
     } else {
-      // console.log('[Monitoring] Waiting for PostHog to load...');
       setTimeout(initMonitoring, 500);
     }
   };
 
-  // 延迟初始化，确保 PostHog 已加载
-  setTimeout(initMonitoring, 1000);
+  const scheduleMonitoring = () => {
+    if (typeof (window as Window & { requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number }).requestIdleCallback === 'function') {
+      (window as Window & { requestIdleCallback: (cb: () => void, opts?: { timeout: number }) => number }).requestIdleCallback(initMonitoring, { timeout: 3000 });
+    } else {
+      setTimeout(initMonitoring, 3000);
+    }
+  };
+  scheduleMonitoring();
 }
 
 // 注册Service Worker来处理CORS问题和PWA功能
@@ -263,16 +277,32 @@ if ('serviceWorker' in navigator) {
     
     swChannelClient.registerVideoThumbnailHandler(async (url) => {
       try {
-        const { generateVideoThumbnailFromBlob } = await import('@drawnix/drawnix');
+        const { generateVideoThumbnailFromBlob } = await import('@aitu/utils');
         
-        // 从缓存获取视频 blob
+        let videoBlob: Blob | null = null;
+        
+        // 1. 尝试从缓存获取视频 blob
         const cache = await caches.open('drawnix-images');
-        const response = await cache.match(url);
-        if (!response) {
-          return { error: 'Video not found in cache' };
+        const cachedResponse = await cache.match(url);
+        if (cachedResponse) {
+          videoBlob = await cachedResponse.blob();
         }
         
-        const videoBlob = await response.blob();
+        // 2. 如果缓存中没有，尝试从网络获取（支持远程视频）
+        if (!videoBlob && (url.startsWith('http://') || url.startsWith('https://'))) {
+          try {
+            const networkResponse = await fetch(url);
+            if (networkResponse.ok) {
+              videoBlob = await networkResponse.blob();
+            }
+          } catch (fetchError) {
+            console.warn('[Main] Failed to fetch video from network:', fetchError);
+          }
+        }
+        
+        if (!videoBlob) {
+          return { error: 'Video not found in cache or network' };
+        }
         
         // 生成预览图
         const thumbnailBlob = await generateVideoThumbnailFromBlob(videoBlob, 400);

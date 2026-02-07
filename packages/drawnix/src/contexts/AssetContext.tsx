@@ -20,6 +20,7 @@ import {
 import { MessagePlugin } from 'tdesign-react';
 import { assetStorageService } from '../services/asset-storage-service';
 import { taskQueueService } from '../services/task-queue';
+import { taskStorageReader } from '../services/task-storage-reader';
 import { unifiedCacheService } from '../services/unified-cache-service';
 import { getStorageStatus } from '../utils/storage-quota';
 import { getAssetSizeFromCache } from '../hooks/useAssetSize';
@@ -64,6 +65,9 @@ export function AssetProvider({ children }: AssetProviderProps) {
   // 存储状态
   const [storageStatus, setStorageStatus] = useState<StorageStatus | null>(null);
 
+  // 同步状态 - 已同步到 Gist 的 URL 集合
+  const [syncedUrls, setSyncedUrls] = useState<Set<string>>(new Set());
+
   /**
    * Initialize service on mount
    * 组件挂载时初始化服务
@@ -72,9 +76,10 @@ export function AssetProvider({ children }: AssetProviderProps) {
     const initService = async () => {
       try {
         await assetStorageService.initialize();
-      } catch (err: any) {
+      } catch (err) {
         console.error('Failed to initialize asset storage service:', err);
-        setError(err.message);
+        const error = err as Error;
+        setError(error.message);
       }
     };
 
@@ -90,7 +95,14 @@ export function AssetProvider({ children }: AssetProviderProps) {
    * Convert completed task to Asset
    * 将已完成的任务转换为素材
    */
-  const taskToAsset = useCallback((task: any): Asset => {
+  const taskToAsset = useCallback((task: {
+    id: string;
+    type: TaskType;
+    result: { url: string; format?: string; size?: number };
+    params: { prompt?: string; model?: string };
+    completedAt?: number;
+    createdAt: number;
+  }): Asset => {
     return {
       id: task.id,
       type: task.type === TaskType.IMAGE ? AssetTypeEnum.IMAGE : AssetTypeEnum.VIDEO,
@@ -110,146 +122,57 @@ export function AssetProvider({ children }: AssetProviderProps) {
   }, []);
 
   /**
-   * 从文件名中提取时间戳
-   */
-  const extractTimestampFromFilename = useCallback((filename: string): number => {
-    // 尝试从文件名中提取时间戳（格式：xxx-1234567890123.ext 或 xxx-1234567890123-xxx.ext）
-    const timestampMatch = filename.match(/[-_](\d{13})(?:[-_.]|$)/);
-    if (timestampMatch) {
-      return parseInt(timestampMatch[1], 10);
-    }
-    // 尝试匹配 10 位时间戳（秒级）
-    const shortTimestampMatch = filename.match(/[-_](\d{10})(?:[-_.]|$)/);
-    if (shortTimestampMatch) {
-      return parseInt(shortTimestampMatch[1], 10) * 1000;
-    }
-    return Date.now();
-  }, []);
-
-  /**
-   * 从 Cache Storage 和 IndexedDB 同步获取本地缓存的媒体资源
-   * 1. 从 Cache Storage 获取所有有效的 URL
-   * 2. 从 IndexedDB (unified-cache) 获取元数据
-   * 3. 过滤掉 IndexedDB 中无效的（Cache Storage 中没有的）
-   * 4. 为 Cache Storage 中有但 IndexedDB 中没有的创建元数据
+   * 从 IndexedDB 获取本地缓存的媒体资源
+   * 优化：不再逐个访问 Cache Storage，直接使用 IndexedDB 元数据
+   * 这大幅提升了素材库的加载速度
    */
   const getAssetsFromCacheStorage = useCallback(async (): Promise<Asset[]> => {
-    if (typeof caches === 'undefined') return [];
-    
     try {
-      const cache = await caches.open('drawnix-images');
-      const requests = await cache.keys();
+      // 直接从 IndexedDB 获取所有缓存媒体的元数据
+      // 这比遍历 Cache Storage 快得多
+      const cachedMediaList = await unifiedCacheService.getAllCachedMedia();
       
-      // 1. 收集 Cache Storage 中有效的 URL 及其信息
-      const cacheStorageMap = new Map<string, {
-        pathname: string;
-        isVideo: boolean;
-        size: number;
-        mimeType: string;
-        cachedAt: number;
-        filename: string;
-      }>();
+      const assets: Asset[] = [];
       
-      for (const request of requests) {
-        const url = new URL(request.url);
-        const pathname = url.pathname;
+      for (const item of cachedMediaList) {
+        // 统一使用 pathname
+        const pathname = item.url.startsWith('/') ? item.url : (() => {
+          try {
+            return new URL(item.url).pathname;
+          } catch {
+            return item.url;
+          }
+        })();
         
-        // 处理 /__aitu_cache__/ 和 /asset-library/ 前缀的资源
+        // 只处理 /__aitu_cache__/ 和 /asset-library/ 前缀的资源
         const isAituCache = pathname.startsWith('/__aitu_cache__/');
         const isAssetLibrary = pathname.startsWith('/asset-library/');
         
         if (!isAituCache && !isAssetLibrary) continue;
         
-        // 判断媒体类型
-        const isVideo = pathname.includes('/video/') || 
-                        /\.(mp4|webm|mov)$/i.test(pathname);
-        const isImage = pathname.includes('/image/') || 
-                        /\.(jpg|jpeg|png|gif|webp)$/i.test(pathname);
-        
-        if (!isVideo && !isImage) continue;
-        
-        // 获取响应以读取大小和时间
-        const response = await cache.match(request);
-        if (!response) continue;
-        
-        const size = parseInt(response.headers.get('Content-Length') || response.headers.get('sw-image-size') || '0', 10);
-        const mimeType = response.headers.get('Content-Type') || 
-                        (isVideo ? 'video/mp4' : 'image/png');
         const filename = pathname.split('/').pop() || '';
+        const isVideo = item.type === 'video' || 
+                        pathname.includes('/video/') || 
+                        /\.(mp4|webm|mov)$/i.test(pathname);
         
-        // 从响应头获取缓存时间戳
-        const cacheDate = response.headers.get('sw-cache-date');
-        const cachedAt = cacheDate 
-          ? parseInt(cacheDate, 10) 
-          : extractTimestampFromFilename(filename);
-        
-        cacheStorageMap.set(pathname, {
-          pathname,
-          isVideo,
-          size,
-          mimeType,
-          cachedAt,
-          filename,
+        assets.push({
+          id: `unified-cache-${filename}`,
+          type: isVideo ? AssetTypeEnum.VIDEO : AssetTypeEnum.IMAGE,
+          source: AssetSourceEnum.LOCAL,
+          url: pathname,
+          name: item.metadata?.name || filename,
+          mimeType: item.mimeType,
+          createdAt: item.cachedAt,
+          size: item.size,
         });
-      }
-      
-      // 2. 从 IndexedDB 获取元数据
-      const cachedMediaList = await unifiedCacheService.getAllCachedMedia();
-      const indexedDBMap = new Map<string, typeof cachedMediaList[0]>();
-      for (const item of cachedMediaList) {
-        // 统一使用 pathname 作为 key
-        const pathname = item.url.startsWith('/') ? item.url : new URL(item.url).pathname;
-        indexedDBMap.set(pathname, item);
-      }
-      
-      const assets: Asset[] = [];
-      
-      // 3. 遍历 Cache Storage，构建素材列表
-      for (const [pathname, cacheInfo] of cacheStorageMap) {
-        const indexedDBItem = indexedDBMap.get(pathname);
-        
-        if (indexedDBItem) {
-          // IndexedDB 中有元数据，使用它
-          assets.push({
-            id: `unified-cache-${cacheInfo.filename}`,
-            type: cacheInfo.isVideo ? AssetTypeEnum.VIDEO : AssetTypeEnum.IMAGE,
-            source: AssetSourceEnum.LOCAL,
-            url: pathname,
-            name: indexedDBItem.metadata?.name || cacheInfo.filename,
-            mimeType: indexedDBItem.mimeType || cacheInfo.mimeType,
-            createdAt: indexedDBItem.cachedAt || cacheInfo.cachedAt,
-            size: indexedDBItem.size || cacheInfo.size,
-          });
-        } else {
-          // Cache Storage 中有但 IndexedDB 中没有，创建元数据
-          await unifiedCacheService.createCachedMediaMetadata(
-            pathname,
-            cacheInfo.isVideo ? 'video' : 'image',
-            cacheInfo.mimeType,
-            cacheInfo.size,
-            cacheInfo.cachedAt,
-            { name: cacheInfo.filename }
-          );
-          
-          assets.push({
-            id: `unified-cache-${cacheInfo.filename}`,
-            type: cacheInfo.isVideo ? AssetTypeEnum.VIDEO : AssetTypeEnum.IMAGE,
-            source: AssetSourceEnum.LOCAL,
-            url: pathname,
-            name: cacheInfo.filename,
-            mimeType: cacheInfo.mimeType,
-            createdAt: cacheInfo.cachedAt,
-            size: cacheInfo.size,
-          });
-        }
       }
       
       return assets;
     } catch (error) {
-      console.error('[AssetContext] Failed to get assets from Cache Storage:', error);
+      console.error('[AssetContext] Failed to get assets from IndexedDB:', error);
       return [];
     }
-  }, [extractTimestampFromFilename]);
+  }, []);
 
   /**
    * Load Assets
@@ -265,11 +188,12 @@ export function AssetProvider({ children }: AssetProviderProps) {
       const localAssets = await assetStorageService.getAllAssets();
 
       // 2. 从任务队列获取已完成的 AI 生成任务
-      const completedTasks = taskQueueService.getTasksByStatus(TaskStatus.COMPLETED);
+      // 统一从 IndexedDB 直接读取，SW 模式和降级模式使用同一个数据库
+      const completedTasks = await taskStorageReader.getAllTasks({ status: TaskStatus.COMPLETED });
       const aiAssets = completedTasks
-        .filter(task =>
+        .filter((task): task is typeof task & { result: NonNullable<typeof task.result> } =>
           (task.type === TaskType.IMAGE || task.type === TaskType.VIDEO) &&
-          task.result?.url
+          !!task.result?.url
         )
         .map(taskToAsset);
 
@@ -306,33 +230,66 @@ export function AssetProvider({ children }: AssetProviderProps) {
 
       setAssets(allAssets);
 
-      // 7. 异步填充缺失的文件大小（从缓存获取）
-      const assetsNeedingSize = allAssets.filter(a => !a.size || a.size === 0);
-      if (assetsNeedingSize.length > 0) {
-        // 并行获取所有缺失的文件大小
-        const sizePromises = assetsNeedingSize.map(async (asset) => {
-          const size = await getAssetSizeFromCache(asset.url);
-          return { id: asset.id, size };
-        });
+      // 7. 延迟异步填充缺失的文件大小（不阻塞加载）
+      // 使用 requestIdleCallback 在浏览器空闲时执行
+      const fillMissingSizes = () => {
+        const assetsNeedingSize = allAssets.filter(a => !a.size || a.size === 0);
+        if (assetsNeedingSize.length === 0) return;
 
-        const sizeResults = await Promise.all(sizePromises);
+        // 分批获取，每批最多 10 个，避免一次性发起太多请求
+        const batchSize = 10;
+        let currentIndex = 0;
 
-        // 更新有新大小的素材
-        const sizeMap = new Map(
-          sizeResults
-            .filter(r => r.size !== null && r.size > 0)
-            .map(r => [r.id, r.size as number])
-        );
+        const processBatch = async () => {
+          const batch = assetsNeedingSize.slice(currentIndex, currentIndex + batchSize);
+          if (batch.length === 0) return;
 
-        if (sizeMap.size > 0) {
-          setAssets(prev =>
-            prev.map(asset =>
-              sizeMap.has(asset.id)
-                ? { ...asset, size: sizeMap.get(asset.id) }
-                : asset
-            )
+          const sizePromises = batch.map(async (asset) => {
+            const size = await getAssetSizeFromCache(asset.url);
+            return { id: asset.id, size };
+          });
+
+          const sizeResults = await Promise.all(sizePromises);
+          const sizeMap = new Map(
+            sizeResults
+              .filter(r => r.size !== null && r.size > 0)
+              .map(r => [r.id, r.size as number])
           );
+
+          if (sizeMap.size > 0) {
+            setAssets(prev =>
+              prev.map(asset =>
+                sizeMap.has(asset.id)
+                  ? { ...asset, size: sizeMap.get(asset.id) }
+                  : asset
+              )
+            );
+          }
+
+          currentIndex += batchSize;
+          if (currentIndex < assetsNeedingSize.length) {
+            // 继续处理下一批
+            if ('requestIdleCallback' in window) {
+              (window as Window).requestIdleCallback(processBatch);
+            } else {
+              setTimeout(processBatch, 50);
+            }
+          }
+        };
+
+        // 启动第一批
+        if ('requestIdleCallback' in window) {
+          (window as Window).requestIdleCallback(processBatch);
+        } else {
+          setTimeout(processBatch, 100);
         }
+      };
+
+      // 使用 requestIdleCallback 延迟执行，不阻塞加载
+      if ('requestIdleCallback' in window) {
+        (window as Window).requestIdleCallback(fillMissingSizes, { timeout: 3000 });
+      } else {
+        setTimeout(fillMissingSizes, 200);
       }
     } catch (err: any) {
       console.error('Failed to load assets:', err);
@@ -477,9 +434,9 @@ export function AssetProvider({ children }: AssetProviderProps) {
       // 查找素材来源
       const asset = assets.find(a => a.id === id);
 
-      if (id.startsWith('cache-')) {
+      if (id.startsWith('unified-cache-')) {
         // 缓存素材：从 unified-cache 删除
-        const url = id.replace('cache-', '');
+        const url = id.replace('unified-cache-', '');
         await unifiedCacheService.deleteCache(url);
       } else if (asset?.source === AssetSourceEnum.AI_GENERATED) {
         // AI 生成的素材：从任务队列删除
@@ -502,11 +459,12 @@ export function AssetProvider({ children }: AssetProviderProps) {
         content: '素材删除成功',
         duration: 2000,
       });
-    } catch (err: any) {
+    } catch (err) {
       console.error('Failed to remove asset:', err);
-      setError(err.message);
+      const error = err as Error;
+      setError(error.message);
 
-      if (err.name === 'NotFoundError') {
+      if (error.name === 'NotFoundError') {
         MessagePlugin.warning({
           content: '素材未找到，可能已被删除',
           duration: 3000,
@@ -536,7 +494,7 @@ export function AssetProvider({ children }: AssetProviderProps) {
 
     try {
       const successIds: string[] = [];
-      const errors: { id: string; error: any }[] = [];
+      const errors: { id: string; error: Error }[] = [];
 
       // 区分本地素材、AI 生成素材和缓存素材
       const localIds: string[] = [];
@@ -544,7 +502,7 @@ export function AssetProvider({ children }: AssetProviderProps) {
       const cacheIds: string[] = [];
 
       for (const id of ids) {
-        if (id.startsWith('cache-')) {
+        if (id.startsWith('unified-cache-')) {
           cacheIds.push(id);
         } else {
           const asset = assets.find(a => a.id === id);
@@ -559,12 +517,12 @@ export function AssetProvider({ children }: AssetProviderProps) {
       // 删除缓存素材（从 unified-cache）
       for (const id of cacheIds) {
         try {
-          const url = id.replace('cache-', '');
+          const url = id.replace('unified-cache-', '');
           await unifiedCacheService.deleteCache(url);
           successIds.push(id);
         } catch (err) {
           console.error(`Failed to remove cache asset ${id}:`, err);
-          errors.push({ id, error: err });
+          errors.push({ id, error: err as Error });
         }
       }
 
@@ -575,7 +533,7 @@ export function AssetProvider({ children }: AssetProviderProps) {
           successIds.push(id);
         } catch (err) {
           console.error(`Failed to remove AI asset ${id}:`, err);
-          errors.push({ id, error: err });
+          errors.push({ id, error: err as Error });
         }
       }
 
@@ -590,7 +548,7 @@ export function AssetProvider({ children }: AssetProviderProps) {
             successIds.push(localIds[index]);
           } else {
             console.error(`Failed to remove asset ${localIds[index]}:`, result.reason);
-            errors.push({ id: localIds[index], error: result.reason });
+            errors.push({ id: localIds[index], error: result.reason as Error });
           }
         });
       }
@@ -618,9 +576,10 @@ export function AssetProvider({ children }: AssetProviderProps) {
           duration: 3000,
         });
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error('Batch remove assets error:', err);
-      setError(err.message);
+      const error = err as Error;
+      setError(error.message);
       MessagePlugin.error({
         content: '批量删除失败',
         duration: 3000,
@@ -712,6 +671,22 @@ export function AssetProvider({ children }: AssetProviderProps) {
     }));
   }, []);
 
+  /**
+   * Load Synced URLs
+   * 从远程加载已同步的 URL 集合
+   */
+  const loadSyncedUrls = useCallback(async () => {
+    try {
+      const { mediaSyncService } = await import('../services/github-sync/media-sync-service');
+      const urls = await mediaSyncService.getRemoteSyncedUrls();
+      setSyncedUrls(urls);
+      console.log('[AssetContext] Loaded synced URLs:', urls.size);
+    } catch (error) {
+      console.warn('[AssetContext] Failed to load synced URLs:', error);
+      // 不设置错误状态，同步状态加载失败不影响主功能
+    }
+  }, []);
+
   // Context value
   const value = useMemo<AssetContextValue>(
     () => ({
@@ -722,6 +697,7 @@ export function AssetProvider({ children }: AssetProviderProps) {
       filters,
       selectedAssetId,
       storageStatus,
+      syncedUrls,
 
       // Actions
       loadAssets,
@@ -732,6 +708,7 @@ export function AssetProvider({ children }: AssetProviderProps) {
       setFilters,
       setSelectedAssetId,
       checkStorageQuota,
+      loadSyncedUrls,
     }),
     [
       assets,
@@ -740,6 +717,7 @@ export function AssetProvider({ children }: AssetProviderProps) {
       filters,
       selectedAssetId,
       storageStatus,
+      syncedUrls,
       loadAssets,
       addAsset,
       removeAsset,
@@ -747,6 +725,7 @@ export function AssetProvider({ children }: AssetProviderProps) {
       renameAsset,
       setFilters,
       checkStorageQuota,
+      loadSyncedUrls,
     ],
   );
 

@@ -31,8 +31,13 @@ import type {
   MainThreadToolRequestEvent as ChannelToolRequestEvent,
   WorkflowRecoveredEvent as ChannelWorkflowRecoveredEvent,
   MainThreadToolResponse,
-} from './sw-channel/types';
+} from './sw-channel/types/';
 import { swCapabilitiesHandler } from './sw-capabilities';
+import { workflowStorageReader } from './workflow-storage-reader';
+import { WorkflowEngine as MainThreadWorkflowEngine } from './workflow-engine';
+import { executorFactory } from './media-executor';
+import { geminiSettings } from '../utils/settings-manager';
+import type { Workflow as EngineWorkflow, WorkflowEvent as EngineWorkflowEvent } from './workflow-engine/types';
 
 // ============================================================================
 // Types
@@ -79,6 +84,11 @@ export interface WorkflowDefinition {
     };
     referenceImages?: string[];
   };
+  /**
+   * 发起工作流的画布 ID
+   * 用于多画布场景下隔离工作流执行
+   */
+  initiatorBoardId?: string;
 }
 
 // Events emitted by the service
@@ -238,7 +248,7 @@ class WorkflowSubmissionService {
             addSteps: result.addSteps as MainThreadToolResponse['addSteps'],
           };
         } catch (error) {
-          console.error('[WorkflowSubmissionService] Tool request handler error:', error);
+          console.error('[WorkflowSubmissionService] ❌ Tool request handler error:', error);
           return {
             success: false,
             error: error instanceof Error ? error.message : String(error),
@@ -260,31 +270,37 @@ class WorkflowSubmissionService {
 
   /**
    * Recover workflow states after page refresh
-   * Call this after initialization to restore all workflows from SW
+   * Call this after initialization to restore all workflows from IndexedDB
    * This includes failed workflows (e.g., interrupted by SW restart during ai_analyze)
    */
   async recoverWorkflows(): Promise<WorkflowDefinition[]> {
-    if (!swChannelClient.isInitialized()) {
-      return [];
-    }
-
     try {
-      const response = await swChannelClient.getAllWorkflows();
+      // 优先直接从 IndexedDB 读取，避免 postMessage 通信
+      let workflows: WorkflowDefinition[] = [];
       
-      if (!response.success) {
+      if (await workflowStorageReader.isAvailable()) {
+        workflows = await workflowStorageReader.getAllWorkflows();
+      } else if (swChannelClient.isInitialized()) {
+        // Fallback: 通过 RPC 获取
+        const response = await swChannelClient.getAllWorkflows();
+        if (response.success) {
+          workflows = response.workflows as unknown as WorkflowDefinition[];
+        }
+      }
+      
+      if (workflows.length === 0) {
         return [];
       }
       
-      // Sync all workflows from SW to local cache (including failed/completed)
+      // Sync all workflows to local cache (including failed/completed)
       // This ensures UI shows correct status for interrupted workflows
-      for (const workflow of response.workflows) {
+      for (const workflow of workflows) {
         const existingWorkflow = this.workflows.get(workflow.id);
-        // Only update if SW has newer data or workflow doesn't exist locally
+        // Only update if data is newer or workflow doesn't exist locally
         if (!existingWorkflow || workflow.updatedAt > (existingWorkflow.updatedAt || 0)) {
-          this.workflows.set(workflow.id, workflow as unknown as WorkflowDefinition);
+          this.workflows.set(workflow.id, workflow);
           
           // Emit status event for failed workflows so UI can update
-          // Guard against undefined events$ (service destroyed or other edge cases)
           if (workflow.status === 'failed' && existingWorkflow?.status !== 'failed' && this.events$) {
             this.events$.next({
               type: 'failed',
@@ -296,11 +312,7 @@ class WorkflowSubmissionService {
       }
       
       // Return running/pending workflows for callers that need them
-      const runningWorkflows = response.workflows.filter(
-        w => w.status === 'running' || w.status === 'pending'
-      );
-      
-      return runningWorkflows as unknown as WorkflowDefinition[];
+      return workflows.filter(w => w.status === 'running' || w.status === 'pending');
     } catch (error) {
       console.warn('[WorkflowSubmissionService] Failed to recover workflows:', error);
       return [];
@@ -313,6 +325,147 @@ class WorkflowSubmissionService {
   getRunningWorkflows(): WorkflowDefinition[] {
     return Array.from(this.workflows.values())
       .filter(w => w.status === 'running' || w.status === 'pending');
+  }
+
+  /**
+   * 通知工作流步骤状态更新（由 WorkflowPollingService 调用）
+   */
+  notifyStepUpdate(workflowId: string, stepId: string, status: WorkflowStepStatus, result?: unknown, error?: string, duration?: number): void {
+    // 更新本地缓存
+    const workflow = this.workflows.get(workflowId);
+    if (workflow) {
+      const step = workflow.steps.find(s => s.id === stepId);
+      if (step) {
+        step.status = status;
+        step.result = result;
+        step.error = error;
+        step.duration = duration;
+      }
+    }
+
+    // 发送事件通知 UI
+    this.events$.next({
+      type: 'step',
+      workflowId,
+      stepId,
+      status,
+      result,
+      error,
+      duration,
+    });
+  }
+
+  /**
+   * 通知工作流完成（由 WorkflowPollingService 调用）
+   */
+  notifyWorkflowCompleted(workflowId: string, workflow: WorkflowDefinition): void {
+    // 更新本地缓存
+    this.workflows.set(workflowId, workflow);
+
+    // 发送事件通知 UI
+    this.events$.next({
+      type: 'completed',
+      workflowId,
+      workflow,
+    });
+  }
+
+  /**
+   * 通知工作流失败（由 WorkflowPollingService 调用）
+   */
+  notifyWorkflowFailed(workflowId: string, error: string): void {
+    // 更新本地缓存
+    const workflow = this.workflows.get(workflowId);
+    if (workflow) {
+      workflow.status = 'failed';
+      workflow.error = error;
+    }
+
+    // 发送事件通知 UI
+    this.events$.next({
+      type: 'failed',
+      workflowId,
+      error,
+    });
+  }
+
+  /**
+   * 检查工作流是否由降级引擎管理
+   */
+  isWorkflowManagedByFallback(workflowId: string): boolean {
+    if (!this.fallbackEngine) return false;
+    const workflow = this.fallbackEngine.getWorkflow(workflowId);
+    return workflow !== undefined;
+  }
+
+  /**
+   * 从降级引擎获取工作流状态
+   */
+  getWorkflowFromFallback(workflowId: string): WorkflowDefinition | undefined {
+    if (!this.fallbackEngine) return undefined;
+    const workflow = this.fallbackEngine.getWorkflow(workflowId);
+    if (!workflow) return undefined;
+    
+    // 转换为 WorkflowDefinition 格式
+    return {
+      id: workflow.id,
+      name: workflow.name,
+      steps: workflow.steps.map((step) => ({
+        id: step.id,
+        mcp: step.mcp,
+        args: step.args,
+        description: step.description,
+        status: step.status,
+        result: step.result,
+        error: step.error,
+        duration: step.duration,
+        options: step.options,
+      })),
+      status: workflow.status,
+      createdAt: workflow.createdAt,
+      updatedAt: workflow.updatedAt,
+      completedAt: workflow.completedAt,
+      error: workflow.error,
+      context: workflow.context,
+    };
+  }
+
+  /**
+   * 使用降级引擎恢复并继续执行工作流
+   * 用于页面刷新后恢复有 pending 步骤的工作流
+   */
+  async resumeWorkflowWithFallback(workflowId: string): Promise<boolean> {
+    // 确保降级引擎已初始化
+    if (!this.fallbackEngine) {
+      this.fallbackEngine = new MainThreadWorkflowEngine({
+        onEvent: (event) => this.handleFallbackEngineEvent(event),
+        // 主线程工具执行回调（insert_mermaid, insert_mindmap 等）
+        executeMainThreadTool: async (toolName, args) => {
+          try {
+            const result = await swCapabilitiesHandler.execute({
+              operation: toolName,
+              args,
+            });
+            return {
+              success: result.success,
+              result: result.result,
+              error: result.error,
+            };
+          } catch (error: any) {
+            return {
+              success: false,
+              error: error.message || 'Main thread tool execution failed',
+            };
+          }
+        },
+      });
+    }
+
+    // 从 IndexedDB 恢复
+    await this.fallbackEngine.resumeWorkflow(workflowId);
+    
+    // 检查是否成功恢复
+    return this.fallbackEngine.getWorkflow(workflowId) !== undefined;
   }
 
   /**
@@ -379,41 +532,246 @@ class WorkflowSubmissionService {
 
   /**
    * Submit a workflow for execution
+   * 快速检测 SW 可用性，不可用时立即降级
    */
   async submit(workflow: WorkflowDefinition): Promise<void> {
-    if (!swChannelClient.isInitialized()) {
-      throw new Error('SWChannelClient not initialized');
-    }
+    const availabilityTimeout = 2000; // 可用性检测超时（ping）
+    const submitTimeout = 15000; // 提交超时（首次加载时 SW 可能正在修复 IndexedDB，需更长时间）
+    let lastError: Error | null = null;
 
-    // 检查 SW 端是否已初始化，如果未初始化则重新初始化
-    // 这处理了 init RPC 超时但 channel 已建立的情况
-    if (!swTaskQueueService.isInitialized()) {
-      const initSuccess = await swTaskQueueService.initializeSW();
-      if (!initSuccess) {
-        throw new Error('Failed to initialize Service Worker');
-      }
-    }
+    console.log('[WorkflowSubmissionService][submit] 入口 workflowId:', workflow.id);
 
     // Store locally
     this.workflows.set(workflow.id, workflow);
 
-    // Submit via SWChannelClient (uses postmessage-duplex)
-    let result = await swChannelClient.submitWorkflow(workflow as unknown as ChannelWorkflowDefinition);
-    
-    // 如果 SW 端返回 "Workflow executor not initialized"，尝试重新初始化并重试一次
-    if (!result.success && result.error?.includes('not initialized')) {
-      // 强制重新初始化
-      const reinitSuccess = await swTaskQueueService.initializeSW();
-      if (reinitSuccess) {
-        // 重试提交
-        result = await swChannelClient.submitWorkflow(workflow as unknown as ChannelWorkflowDefinition);
+    // 工作流变更时清除读取缓存
+    workflowStorageReader.invalidateCache();
+
+    // 快速检测 SW 是否可用
+    const t0 = Date.now();
+    const isSWAvailable = await this.checkSWAvailability(availabilityTimeout);
+    console.log('[WorkflowSubmissionService][submit] SW 可用性检测:', { isSWAvailable, 耗时ms: Date.now() - t0 });
+
+    if (isSWAvailable) {
+      // SW 可用，尝试提交
+      try {
+        // 获取当前配置
+        const settings = geminiSettings.get();
+        console.log('[WorkflowSubmissionService][submit] 配置状态:', { hasApiKey: !!settings?.apiKey, hasBaseUrl: !!settings?.baseUrl });
+        if (!settings.apiKey || !settings.baseUrl) {
+          console.warn('[WorkflowSubmissionService] API key not configured, using fallback');
+        } else {
+          const taskConfig = {
+            apiKey: settings.apiKey,
+            baseUrl: settings.baseUrl,
+            modelName: settings.imageModelName,
+            textModelName: settings.textModelName,
+          };
+
+          const result = await Promise.race([
+            swChannelClient.submitWorkflow(workflow as unknown as ChannelWorkflowDefinition, taskConfig),
+            new Promise<{ success: boolean; error: string }>((_, reject) =>
+              setTimeout(() => reject(new Error('Submit workflow timeout')), submitTimeout)
+            ),
+          ]);
+
+          if (result.success) {
+            console.log('[WorkflowSubmissionService][submit] SW 提交成功');
+            return; // 成功
+          }
+
+          // SW 返回错误，降级
+          lastError = new Error(result.error || 'SW submission failed');
+          console.warn('[WorkflowSubmissionService] SW submission failed, using fallback:', result.error);
+        }
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error));
+        console.warn('[WorkflowSubmissionService] SW submission error, using fallback:', error);
       }
     }
-    
-    if (!result.success) {
-      // Remove from local cache if submission failed
-      this.workflows.delete(workflow.id);
-      throw new Error(result.error || 'Submit workflow failed');
+
+    // SW 不可用或提交失败，直接使用主线程工作流引擎
+    console.log('[WorkflowSubmissionService][submit] 使用降级引擎 tryFallbackEngine');
+    const fallbackSuccess = await this.tryFallbackEngine(workflow);
+    console.log('[WorkflowSubmissionService][submit] 降级引擎结果:', fallbackSuccess);
+    if (fallbackSuccess) {
+      return;
+    }
+
+    // 降级也失败
+    this.workflows.delete(workflow.id);
+    throw lastError || new Error('Submit workflow failed after retries');
+  }
+
+  /**
+   * 快速检测 SW 是否可用
+   */
+  private async checkSWAvailability(timeout: number): Promise<boolean> {
+    try {
+      // 检查 SW 是否已初始化
+      if (!swChannelClient.isInitialized()) {
+        return false;
+      }
+
+      // 使用 ping 检测 SW 连接
+      const pingResult = await Promise.race([
+        swChannelClient.ping(),
+        new Promise<boolean>((resolve) => setTimeout(() => resolve(false), timeout)),
+      ]);
+
+      return pingResult;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * 主线程工作流引擎实例（降级模式）
+   */
+  private fallbackEngine: MainThreadWorkflowEngine | null = null;
+
+  /**
+   * 尝试使用主线程工作流引擎执行工作流
+   */
+  private async tryFallbackEngine(workflow: WorkflowDefinition): Promise<boolean> {
+    try {
+      // 检查执行器是否可用
+      const executor = await executorFactory.getExecutor();
+      if (!executor) {
+        return false;
+      }
+
+      // 创建或获取主线程工作流引擎
+      if (!this.fallbackEngine) {
+        this.fallbackEngine = new MainThreadWorkflowEngine({
+          onEvent: (event) => this.handleFallbackEngineEvent(event),
+          forceFallbackExecutor: true, // 降级路径：强制主线程执行器，直接调用 API，不依赖 SW/IndexedDB
+          executeMainThreadTool: async (toolName, args) => {
+            try {
+              const result = await swCapabilitiesHandler.execute({
+                operation: toolName,
+                args,
+              });
+              return {
+                success: result.success,
+                result: result.result,
+                error: result.error,
+              };
+            } catch (error: any) {
+              return {
+                success: false,
+                error: error.message || 'Main thread tool execution failed',
+              };
+            }
+          },
+        });
+      }
+
+      // 转换工作流定义为引擎格式
+      const engineWorkflow: EngineWorkflow = {
+        id: workflow.id,
+        name: workflow.name,
+        steps: workflow.steps.map((step) => ({
+          id: step.id,
+          mcp: step.mcp,
+          args: step.args,
+          description: step.description,
+          status: step.status as 'pending' | 'running' | 'completed' | 'failed' | 'skipped',
+          result: step.result,
+          error: step.error,
+          duration: step.duration,
+          options: step.options,
+        })),
+        status: workflow.status as 'pending' | 'running' | 'completed' | 'failed' | 'cancelled',
+        createdAt: workflow.createdAt,
+        updatedAt: workflow.updatedAt,
+        completedAt: workflow.completedAt,
+        error: workflow.error,
+        context: workflow.context,
+      };
+
+      // 提交到主线程引擎
+      await this.fallbackEngine.submitWorkflow(engineWorkflow);
+
+      return true;
+    } catch (error) {
+      console.error('[WorkflowSubmissionService] Fallback engine error:', error);
+      return false;
+    }
+  }
+
+  /**
+   * 处理主线程工作流引擎事件
+   */
+  private handleFallbackEngineEvent(event: EngineWorkflowEvent): void {
+    // 转换引擎事件为服务事件格式并广播
+    switch (event.type) {
+      case 'status':
+        this.events$.next({
+          type: 'status',
+          workflowId: event.workflowId,
+          status: event.status,
+        });
+        break;
+      case 'step':
+        this.events$.next({
+          type: 'step',
+          workflowId: event.workflowId,
+          stepId: event.stepId,
+          status: event.status,
+          result: event.result,
+          error: event.error,
+          duration: event.duration,
+        });
+        // 同步更新本地缓存
+        const workflow = this.workflows.get(event.workflowId);
+        if (workflow) {
+          const step = workflow.steps.find((s) => s.id === event.stepId);
+          if (step) {
+            step.status = event.status;
+            step.result = event.result;
+            step.error = event.error;
+            step.duration = event.duration;
+          }
+          workflow.updatedAt = Date.now();
+        }
+        break;
+      case 'completed':
+        this.events$.next({
+          type: 'completed',
+          workflowId: event.workflowId,
+          workflow: event.workflow as unknown as WorkflowDefinition,
+        });
+        // 更新本地缓存
+        this.workflows.set(event.workflowId, event.workflow as unknown as WorkflowDefinition);
+        break;
+      case 'failed':
+        this.events$.next({
+          type: 'failed',
+          workflowId: event.workflowId,
+          error: event.error,
+        });
+        // 更新本地缓存
+        const failedWorkflow = this.workflows.get(event.workflowId);
+        if (failedWorkflow) {
+          failedWorkflow.status = 'failed';
+          failedWorkflow.error = event.error;
+          failedWorkflow.updatedAt = Date.now();
+        }
+        break;
+      case 'steps_added':
+        this.events$.next({
+          type: 'steps_added',
+          workflowId: event.workflowId,
+          steps: event.steps.map((s) => ({
+            id: s.id,
+            mcp: s.mcp,
+            args: s.args,
+            description: s.description,
+            status: s.status,
+          })),
+        });
+        break;
     }
   }
 
@@ -422,6 +780,7 @@ class WorkflowSubmissionService {
    */
   async cancel(workflowId: string): Promise<void> {
     if (!swChannelClient.isInitialized()) return;
+    workflowStorageReader.invalidateCache();
     await swChannelClient.cancelWorkflow(workflowId);
   }
 
@@ -433,36 +792,60 @@ class WorkflowSubmissionService {
   }
 
   /**
-   * Query workflow status from SW (returns full workflow data)
+   * Query workflow status (returns full workflow data)
+   * 优先直接从 IndexedDB 读取
    */
   async queryWorkflowStatus(workflowId: string): Promise<WorkflowDefinition | null> {
-    if (!swChannelClient.isInitialized()) {
-      return this.workflows.get(workflowId) || null;
+    try {
+      // 优先直接从 IndexedDB 读取
+      if (await workflowStorageReader.isAvailable()) {
+        const workflow = await workflowStorageReader.getWorkflow(workflowId);
+        if (workflow) {
+          this.workflows.set(workflowId, workflow);
+          return workflow;
+        }
+      } else if (swChannelClient.isInitialized()) {
+        // Fallback: 通过 RPC 获取
+        const response = await swChannelClient.getWorkflowStatus(workflowId);
+        if (response.success && response.workflow) {
+          this.workflows.set(workflowId, response.workflow as unknown as WorkflowDefinition);
+          return response.workflow as unknown as WorkflowDefinition;
+        }
+      }
+    } catch (error) {
+      console.warn('[WorkflowSubmissionService] Failed to query workflow status:', error);
     }
-
-    const response = await swChannelClient.getWorkflowStatus(workflowId);
-    if (response.success && response.workflow) {
-      this.workflows.set(workflowId, response.workflow as unknown as WorkflowDefinition);
-      return response.workflow as unknown as WorkflowDefinition;
-    }
+    
     return this.workflows.get(workflowId) || null;
   }
 
   /**
-   * Query all workflows from SW
+   * Query all workflows
+   * 优先直接从 IndexedDB 读取
    */
   async queryAllWorkflows(): Promise<WorkflowDefinition[]> {
-    if (!swChannelClient.isInitialized()) {
-      return Array.from(this.workflows.values());
-    }
-
-    const response = await swChannelClient.getAllWorkflows();
-    if (response.success) {
-      for (const workflow of response.workflows) {
-        this.workflows.set(workflow.id, workflow as unknown as WorkflowDefinition);
+    try {
+      // 优先直接从 IndexedDB 读取
+      if (await workflowStorageReader.isAvailable()) {
+        const workflows = await workflowStorageReader.getAllWorkflows();
+        for (const workflow of workflows) {
+          this.workflows.set(workflow.id, workflow);
+        }
+        return workflows;
+      } else if (swChannelClient.isInitialized()) {
+        // Fallback: 通过 RPC 获取
+        const response = await swChannelClient.getAllWorkflows();
+        if (response.success) {
+          for (const workflow of response.workflows) {
+            this.workflows.set(workflow.id, workflow as unknown as WorkflowDefinition);
+          }
+          return response.workflows as unknown as WorkflowDefinition[];
+        }
       }
-      return response.workflows as unknown as WorkflowDefinition[];
+    } catch (error) {
+      console.warn('[WorkflowSubmissionService] Failed to query all workflows:', error);
     }
+    
     return Array.from(this.workflows.values());
   }
 
@@ -546,31 +929,6 @@ class WorkflowSubmissionService {
     callback: (event: WorkflowEvent) => void
   ): Subscription {
     return this.events$.subscribe(callback);
-  }
-
-  /**
-   * Respond to a main thread tool request
-   * @deprecated Use registerToolRequestHandler in init() for direct response instead.
-   * The new approach reduces one round trip by returning results directly in the subscribe callback.
-   * This method is kept for backward compatibility but may be removed in future versions.
-   */
-  async respondToToolRequest(
-    requestId: string,
-    success: boolean,
-    result?: unknown,
-    error?: string,
-    addSteps?: Array<{
-      id: string;
-      mcp: string;
-      args: Record<string, unknown>;
-      description: string;
-      status: WorkflowStepStatus;
-    }>
-  ): Promise<void> {
-    console.warn('[WorkflowSubmissionService] respondToToolRequest is deprecated. Tool responses are now handled via registerToolRequestHandler.');
-    if (!swChannelClient.isInitialized()) return;
-
-    await swChannelClient.respondToToolRequest(requestId, success, result, error, addSteps);
   }
 
   // ============================================================================

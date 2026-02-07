@@ -1,6 +1,6 @@
 {
   "name": "@aitu/source",
-  "version": "0.5.64",
+  "version": "0.5.83",
   "license": "MIT",
   "packageManager": "pnpm@10.21.0",
   "description": "Opentu - An open-source whiteboard tool with AI-powered image/video creation, mind mapping, flowcharts, and freehand drawing",
@@ -27,7 +27,11 @@
     "build": "node scripts/update-version.js && nx run-many -t=build",
     "build:web": "node scripts/update-version.js && nx build web",
     "preview": "npx serve dist/apps/web -l 7288",
+    "preview:watch": "concurrently -k \"cd apps/web && NODE_OPTIONS='--max-old-space-size=8192' npx vite build --watch\" \"npx wait-on dist/apps/web/index.html && npx serve dist/apps/web -l 7288\"",
     "package": "npm run build && node scripts/create-deploy-package.js",
+    "typecheck": "nx run-many -t=typecheck",
+    "lint": "nx run-many -t=lint",
+    "check": "pnpm typecheck && pnpm lint",
     "test": "nx run-many -t=test",
     "e2e": "nx e2e web-e2e",
     "e2e:smoke": "nx e2e web-e2e --project=smoke",
@@ -90,7 +94,7 @@
     "mermaid": "^11.12.2",
     "mobile-detect": "^1.4.5",
     "open-color": "^1.9.1",
-    "postmessage-duplex": "^1.1.1",
+    "postmessage-duplex": "^1.2.0",
     "react": "18.3.1",
     "react-dom": "18.3.1",
     "roughjs": "^4.6.6",
@@ -139,6 +143,7 @@
     "@vitejs/plugin-react": "^4.2.0",
     "@vitest/ui": "^3.0.8",
     "autoprefixer": "^10.4.22",
+    "concurrently": "^9.2.1",
     "eslint": "~8.57.0",
     "eslint-config-prettier": "^9.0.0",
     "eslint-plugin-import": "2.27.5",
@@ -161,6 +166,7 @@
     "typescript": "~5.4.2",
     "vite": "^6.2.2",
     "vite-plugin-dts": "^4.5.3",
-    "vitest": "^3.0.8"
+    "vitest": "^3.0.8",
+    "wait-on": "^9.0.3"
   }
 }

@@ -12,8 +12,6 @@ import type {
   SWTask,
   TaskCreateParams,
   TaskCreateResult,
-  TaskListPaginatedParams,
-  TaskListPaginatedResult,
   TaskOperationParams,
   TaskOperationResult,
   InitParams,
@@ -44,8 +42,13 @@ import type {
   MainThreadToolRequestEvent,
   WorkflowRecoveredEvent,
   DebugStatusResult,
+  TaskConfig,
 } from './types';
 import { callWithDefault, callOperation } from './rpc-helpers';
+import { geminiSettings, settingsManager } from '../../utils/settings-manager';
+// Import from isolated module to avoid circular dependencies
+// IMPORTANT: sw-detection.ts does NOT import task queue services
+import { shouldUseSWTaskQueue } from '../task-queue/sw-detection';
 
 // ============================================================================
 // 事件处理器类型
@@ -77,6 +80,7 @@ export interface SWChannelEventHandlers {
   onSWNewVersionReady?: (event: import('./types').SWNewVersionReadyEvent) => void;
   onSWActivated?: (event: import('./types').SWActivatedEvent) => void;
   onSWUpdated?: (event: import('./types').SWUpdatedEvent) => void;
+  /** @deprecated 配置现在同步到 IndexedDB，SW 直接读取，不再需要请求主线程 */
   onSWRequestConfig?: (event: import('./types').SWRequestConfigEvent) => void;
   // MCP events
   onMCPToolResult?: (event: import('./types').MCPToolResultEvent) => void;
@@ -170,8 +174,9 @@ export class SWChannelClient {
         // 创建客户端通道
         // postmessage-duplex 1.1.0 配合 SW 的 enableGlobalRouting 自动创建 channel
         // autoReconnect: SW 更新时自动重连
+        // timeout: 120 秒，与 SW 端保持一致，以支持慢速 IndexedDB 操作
         this.channel = await ServiceWorkerChannel.createFromPage<SWMethods>({
-          timeout: 30000,
+          timeout: 120000,
           autoReconnect: true,
           log: { log: () => {}, warn: () => {}, error: () => {} },
         } as any);  // log 属性在 PageChannelOptions 中不存在，但 BaseChannel 支持
@@ -211,6 +216,31 @@ export class SWChannelClient {
   }
 
   /**
+   * 仅初始化 SW 通道，不同步配置
+   * 配置随每个任务传递，不需要预先同步
+   */
+  async initializeChannel(): Promise<boolean> {
+    // URL 参数检查（?sw=0 禁用 SW）
+    if (!shouldUseSWTaskQueue()) {
+      return false;
+    }
+
+    // 已初始化则直接返回
+    if (this.isInitialized()) {
+      return true;
+    }
+
+    // 只初始化通道，不同步配置
+    try {
+      const initSuccess = await this.initialize();
+      return initSuccess;
+    } catch (error) {
+      console.error('[SWChannelClient] initializeChannel failed:', error);
+      return false;
+    }
+  }
+
+  /**
    * 设置事件处理器
    */
   setEventHandlers(handlers: SWChannelEventHandlers): void {
@@ -222,35 +252,75 @@ export class SWChannelClient {
   // ============================================================================
 
   /**
+   * 带超时的 Promise 包装器
+   * @param promise 原始 Promise
+   * @param timeoutMs 超时时间（毫秒）
+   * @param errorMessage 超时错误消息
+   */
+  private withTimeout<T>(
+    promise: Promise<T>,
+    timeoutMs: number,
+    errorMessage: string
+  ): Promise<T> {
+    return Promise.race([
+      promise,
+      new Promise<T>((_, reject) =>
+        setTimeout(() => reject(new Error(errorMessage)), timeoutMs)
+      ),
+    ]);
+  }
+
+  /**
    * 通用 RPC 调用 helper，统一处理初始化检查、响应处理和默认值
+   * @param timeoutMs 可选超时时间，默认使用 channel 的 120s 超时
    */
   private async callRPC<T>(
     method: string,
     params: unknown,
-    defaultOnError: T
+    defaultOnError: T,
+    timeoutMs?: number
   ): Promise<T> {
     this.ensureInitialized();
-    const response = await this.channel!.call(method, params);
-    if (response.ret !== ReturnCode.Success) {
+    try {
+      const callPromise = this.channel!.call(method, params);
+      const response = timeoutMs
+        ? await this.withTimeout(callPromise, timeoutMs, `RPC ${method} timeout`)
+        : await callPromise;
+      if (response.ret !== ReturnCode.Success) {
+        return defaultOnError;
+      }
+      return (response.data ?? defaultOnError) as T;
+    } catch (error) {
+      console.warn(`[SWChannelClient] ${method} failed:`, error);
       return defaultOnError;
     }
-    return (response.data ?? defaultOnError) as T;
   }
 
   /**
    * 通用操作型 RPC 调用 helper，返回 { success, error? } 格式
+   * @param timeoutMs 可选超时时间
    */
   private async callOperationRPC(
     method: string,
     params: unknown,
-    errorMessage: string
+    errorMessage: string,
+    timeoutMs?: number
   ): Promise<TaskOperationResult> {
     this.ensureInitialized();
-    const response = await this.channel!.call(method, params);
-    if (response.ret !== ReturnCode.Success) {
-      return { success: false, error: response.msg || errorMessage };
+    try {
+      const callPromise = this.channel!.call(method, params);
+      const response = timeoutMs
+        ? await this.withTimeout(callPromise, timeoutMs, `RPC ${method} timeout`)
+        : await callPromise;
+      if (response.ret !== ReturnCode.Success) {
+        return { success: false, error: response.msg || errorMessage };
+      }
+      return response.data || { success: true };
+    } catch (error) {
+      const errMsg = error instanceof Error ? error.message : errorMessage;
+      console.warn(`[SWChannelClient] ${method} failed:`, error);
+      return { success: false, error: errMsg };
     }
-    return response.data || { success: true };
   }
 
   // ============================================================================
@@ -297,23 +367,18 @@ export class SWChannelClient {
     return { success: false, error: 'Init failed after retries' };
   }
 
-  /**
-   * 更新配置
-   */
-  async updateConfig(params: Partial<InitParams>): Promise<InitResult> {
-    this.ensureInitialized();
-    const response = await this.channel!.call('updateConfig', params);
-    
-    if (response.ret !== ReturnCode.Success) {
-      return { success: false, error: response.msg || 'Update config failed' };
-    }
-    
-    return response.data || { success: true };
-  }
-
   // ============================================================================
   // 任务操作 RPC
   // ============================================================================
+
+  /** RPC 超时配置 */
+  private static readonly RPC_TIMEOUTS = {
+    createTask: 15000,     // 15s - 任务创建
+    submitWorkflow: 15000, // 15s - 工作流提交
+    retryTask: 10000,      // 10s - 重试任务
+    cancelTask: 10000,     // 10s - 取消任务
+    getTask: 5000,         // 5s  - 获取任务状态
+  };
 
   /**
    * 创建任务（原子性操作）
@@ -323,7 +388,12 @@ export class SWChannelClient {
     this.ensureInitialized();
     
     try {
-      const response = await this.channel!.call('task:create', params);
+      const callPromise = this.channel!.call('task:create', params);
+      const response = await this.withTimeout(
+        callPromise,
+        SWChannelClient.RPC_TIMEOUTS.createTask,
+        'Create task timeout'
+      );
       
       if (response.ret !== ReturnCode.Success) {
         return { 
@@ -334,8 +404,9 @@ export class SWChannelClient {
       
       return response.data || { success: false, reason: 'No response data' };
     } catch (error) {
+      const errMsg = error instanceof Error ? error.message : 'Create task failed';
       console.error('[SWChannelClient] task:create error:', error);
-      throw error;
+      return { success: false, reason: errMsg };
     }
   }
 
@@ -350,7 +421,12 @@ export class SWChannelClient {
    * 重试任务
    */
   retryTask(taskId: string): Promise<TaskOperationResult> {
-    return this.callOperationRPC('task:retry', { taskId }, 'Retry task failed');
+    return this.callOperationRPC(
+      'task:retry',
+      { taskId },
+      'Retry task failed',
+      SWChannelClient.RPC_TIMEOUTS.retryTask
+    );
   }
 
   /**
@@ -365,21 +441,6 @@ export class SWChannelClient {
    */
   markTaskInserted(taskId: string): Promise<TaskOperationResult> {
     return this.callOperationRPC('task:markInserted', { taskId }, 'Mark inserted failed');
-  }
-
-  /**
-   * 导入任务（用于云同步恢复已完成的任务）
-   */
-  async importTasks(tasks: SWTask[]): Promise<{ success: boolean; imported: number; error?: string }> {
-    this.ensureInitialized();
-    const response = await this.channel!.call('task:import', { tasks });
-    
-    if (response.ret !== ReturnCode.Success) {
-      console.error('[SWChannel] importTasks failed:', response);
-      return { success: false, imported: 0, error: 'Import tasks failed' };
-    }
-    
-    return response.data as { success: boolean; imported: number; error?: string };
   }
 
   // ============================================================================
@@ -400,19 +461,8 @@ export class SWChannelClient {
     return response.data?.task || null;
   }
 
-  /**
-   * 分页获取任务（避免 postMessage 消息大小限制）
-   */
-  async listTasksPaginated(params: TaskListPaginatedParams): Promise<TaskListPaginatedResult> {
-    this.ensureInitialized();
-    const response = await this.channel!.call('task:listPaginated', params);
-
-    if (response.ret !== ReturnCode.Success) {
-      return { success: false, tasks: [], total: 0, offset: params.offset, hasMore: false };
-    }
-    
-    return response.data || { success: false, tasks: [], total: 0, offset: params.offset, hasMore: false };
-  }
+  // Note: listTasksPaginated 已移除
+  // 主线程现在直接从 IndexedDB 读取任务数据，避免 postMessage 的 1MB 大小限制问题
 
   // ============================================================================
   // Chat RPC
@@ -446,11 +496,16 @@ export class SWChannelClient {
   /**
    * 提交工作流
    */
-  async submitWorkflow(workflow: WorkflowDefinition): Promise<WorkflowSubmitResult> {
+  async submitWorkflow(workflow: WorkflowDefinition, config: TaskConfig): Promise<WorkflowSubmitResult> {
     this.ensureInitialized();
     
     try {
-      const response = await this.channel!.call('workflow:submit', { workflow });
+      const callPromise = this.channel!.call('workflow:submit', { workflow, config });
+      const response = await this.withTimeout(
+        callPromise,
+        SWChannelClient.RPC_TIMEOUTS.submitWorkflow,
+        'Submit workflow timeout'
+      );
       
       if (response.ret !== ReturnCode.Success) {
         return { 
@@ -461,8 +516,9 @@ export class SWChannelClient {
       
       return response.data || { success: false, error: 'No response data' };
     } catch (error) {
+      const errMsg = error instanceof Error ? error.message : 'Submit workflow failed';
       console.error('[SWChannelClient] workflow:submit error:', error);
-      throw error;
+      return { success: false, error: errMsg };
     }
   }
 
@@ -500,14 +556,7 @@ export class SWChannelClient {
     hasPendingToolRequest?: boolean;
     error?: string;
   }> {
-    console.log(`[SWChannelClient] 🔄 Claiming workflow: ${workflowId}`);
     const result = await this.callRPC('workflow:claim', { workflowId }, { success: false, error: 'Claim failed' });
-    console.log(`[SWChannelClient] Claim result:`, {
-      success: result.success,
-      status: result.workflow?.status,
-      hasPendingToolRequest: result.hasPendingToolRequest,
-      error: result.error,
-    });
     return result;
   }
 
@@ -578,33 +627,6 @@ export class SWChannelClient {
         return { ret: ReturnCode.ReceiverCallbackError, msg: String(error) };
       }
     });
-  }
-
-  /**
-   * 响应主线程工具请求
-   * @deprecated 使用 registerToolRequestHandler 直接返回结果，减少一次交互
-   */
-  async respondToToolRequest(
-    requestId: string,
-    success: boolean,
-    result?: unknown,
-    error?: string,
-    addSteps?: MainThreadToolResponse['addSteps']
-  ): Promise<TaskOperationResult> {
-    this.ensureInitialized();
-    const response = await this.channel!.call('workflow:respondTool', { 
-      requestId, 
-      success, 
-      result, 
-      error, 
-      addSteps 
-    });
-    
-    if (response.ret !== ReturnCode.Success) {
-      return { success: false, error: response.msg || 'Respond tool failed' };
-    }
-    
-    return response.data || { success: true };
   }
 
   // ============================================================================
@@ -959,6 +981,61 @@ export class SWChannelClient {
   }
 
   // ============================================================================
+  // 执行器方法 (Media Executor)
+  // ============================================================================
+
+  /**
+   * 健康检查 - 用于检测 SW 是否可用
+   */
+  async ping(): Promise<boolean> {
+    if (!this.initialized || !this.channel) {
+      return false;
+    }
+    try {
+      const response = await this.channel.call('ping', undefined);
+      return response.ret === ReturnCode.Success;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * 调用执行器执行媒体生成任务
+   *
+   * SW 会在后台执行任务，结果直接写入 IndexedDB 的 tasks 表。
+   * 此方法立即返回，不等待任务完成。
+   *
+   * @param params 执行参数
+   * @returns 提交结果（不是执行结果）
+   */
+  async callExecutor(params: {
+    taskId: string;
+    type: 'image' | 'video' | 'ai_analyze';
+    params: Record<string, unknown>;
+  }): Promise<{ success: boolean; error?: string }> {
+    this.ensureInitialized();
+
+    try {
+      const response = await this.channel!.call('executor:execute', params);
+
+      if (response.ret !== ReturnCode.Success) {
+        return {
+          success: false,
+          error: response.msg || 'Executor call failed',
+        };
+      }
+
+      return response.data || { success: true };
+    } catch (error) {
+      console.error('[SWChannelClient] executor:execute error:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
+  }
+
+  // ============================================================================
   // 工具方法
   // ============================================================================
 
@@ -1129,7 +1206,7 @@ export class SWChannelClient {
     this.subscribeEvent<import('./types').SWActivatedEvent>('sw:activated', () => this.eventHandlers.onSWActivated);
     this.subscribeEvent<import('./types').SWUpdatedEvent>('sw:updated', () => this.eventHandlers.onSWUpdated);
 
-    this.subscribeEvent<import('./types').SWRequestConfigEvent>('sw:requestConfig', () => this.eventHandlers.onSWRequestConfig);
+    // Note: sw:requestConfig 已移除 - 配置现在同步到 IndexedDB，SW 直接读取
 
     // ============================================================================
     // MCP 事件订阅

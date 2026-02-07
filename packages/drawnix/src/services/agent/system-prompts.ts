@@ -150,9 +150,9 @@ ${toolsDescription}
 {"content": "根据文字描述生成海滩夕阳图片", "next": [{"mcp": "generate_image", "args": {"prompt": "夕阳下的海滩", "size": "16x9"}}]}
 
 ### 示例5：图生视频（保留原始提示词）
-用户：[图片1] #veo3 让画面动起来
+用户：[图片1] 让画面动起来
 [参考图片: [图片1]]
-{"content": "将静态图片转换为动态视频", "next": [{"mcp": "generate_video", "args": {"prompt": "让画面动起来", "model": "veo3", "seconds": "8", "size": "1280x720", "referenceImages": ["[图片1]"]}}]}
+{"content": "将静态图片转换为动态视频", "next": [{"mcp": "generate_video", "args": {"prompt": "让画面动起来", "seconds": "8", "size": "1280x720", "referenceImages": ["[图片1]"]}}]}
 
 ### 示例6：多图片参考（保留原始提示词）
 用户：[图片1] [图片2] 把这两个角色放在同一个场景里

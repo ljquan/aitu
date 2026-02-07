@@ -14,6 +14,7 @@ import {
   taskQueueStorage,
   initChannelManager,
   getChannelManager,
+  ensureWorkflowHandlerInitialized,
   type WorkflowMainToSWMessage,
   type MainThreadToolResponseMessage,
 } from './task-queue';
@@ -1368,19 +1369,18 @@ sw.addEventListener('message', (event: ExtendableMessageEvent) => {
       workflowHandlerInitialized = true;
     }
 
-    // If still not initialized, try to load config from storage
+    // If still not initialized, try to load config from IndexedDB
+    // 主线程会自动同步配置到 IndexedDB，SW 可以直接读取
     if (!workflowHandlerInitialized) {
       // Use async IIFE to handle the async operation
       (async () => {
         try {
-          const { geminiConfig, videoConfig } =
-            await taskQueueStorage.loadConfig();
-          if (geminiConfig && videoConfig) {
-            storedGeminiConfig = geminiConfig;
-            storedVideoConfig = videoConfig;
-            initWorkflowHandler(sw, geminiConfig, videoConfig);
+          // 使用 ensureWorkflowHandlerInitialized 从 IndexedDB 加载配置
+          const initialized = await ensureWorkflowHandlerInitialized(sw);
+          
+          if (initialized) {
             workflowHandlerInitialized = true;
-            // console.log('Service Worker: Workflow handler initialized from storage');
+            // console.log('Service Worker: Workflow handler initialized from IndexedDB');
 
             // Now handle the message (use wfClientId from outer scope)
             handleWorkflowMessage(
@@ -1388,19 +1388,9 @@ sw.addEventListener('message', (event: ExtendableMessageEvent) => {
               wfClientId
             );
           } else {
-            // 配置不存在时，通知主线程需要重新发送配置
-            // 广播请求配置消息给所有客户端
-            const clients = await sw.clients.matchAll({ type: 'window' });
-            for (const client of clients) {
-              client.postMessage({
-                type: 'SW_REQUEST_CONFIG',
-                reason: 'workflow_handler_not_initialized',
-                pendingMessageType: (event.data as WorkflowMainToSWMessage)
-                  .type,
-              });
-            }
-
-            // 将消息暂存，等配置到达后再处理
+            // 配置不存在时，将消息暂存
+            // 注意：配置应由主线程同步到 IndexedDB，不再请求主线程发送
+            console.warn('[SW] No config in IndexedDB, queueing workflow message');
             pendingWorkflowMessages.push({
               message: event.data as WorkflowMainToSWMessage,
               clientId: wfClientId,
@@ -2150,6 +2140,90 @@ async function checkStorageQuota(): Promise<void> {
   }
 }
 
+// ============================================================================
+// 失败 URL 缓存 - 避免短时间内重复请求已知 404 的过期外部图片
+// 注意：只对"过期"的 URL 生效，刚生成的资源可能暂时 404（还在处理中）
+// ============================================================================
+const failedUrlCache = new Map<string, number>(); // URL -> 失败时间戳
+const FAILED_URL_TTL = 5 * 60 * 1000; // 5 分钟内不重复请求
+const MAX_FAILED_URL_CACHE_SIZE = 500; // 最大缓存条目
+
+/**
+ * 检查 URL 是否可能是"过期"的（不是今天生成的）
+ * 通过检查 URL 中的日期路径来判断，如 /2026/01/09/
+ */
+function isLikelyExpiredUrl(url: string): boolean {
+  // 匹配 URL 中的日期路径 /YYYY/MM/DD/ 或 /YYYYMMDD/
+  const datePathMatch = url.match(/\/(\d{4})\/(\d{2})\/(\d{2})\//);
+  const dateCompactMatch = url.match(/\/(\d{4})(\d{2})(\d{2})\//);
+  
+  let urlDate: Date | null = null;
+  
+  if (datePathMatch) {
+    urlDate = new Date(
+      parseInt(datePathMatch[1]),
+      parseInt(datePathMatch[2]) - 1,
+      parseInt(datePathMatch[3])
+    );
+  } else if (dateCompactMatch) {
+    urlDate = new Date(
+      parseInt(dateCompactMatch[1]),
+      parseInt(dateCompactMatch[2]) - 1,
+      parseInt(dateCompactMatch[3])
+    );
+  }
+  
+  if (!urlDate) {
+    // 没有日期路径，可能是新生成的资源，不缓存失败
+    return false;
+  }
+  
+  // 如果 URL 日期是今天，不认为是过期的（可能还在处理中）
+  const today = new Date();
+  const isToday = urlDate.getFullYear() === today.getFullYear() &&
+                  urlDate.getMonth() === today.getMonth() &&
+                  urlDate.getDate() === today.getDate();
+  
+  return !isToday;
+}
+
+function isUrlRecentlyFailed(url: string): boolean {
+  const failedAt = failedUrlCache.get(url);
+  if (!failedAt) return false;
+  if (Date.now() - failedAt > FAILED_URL_TTL) {
+    failedUrlCache.delete(url);
+    return false;
+  }
+  return true;
+}
+
+function markUrlAsFailed(url: string): void {
+  // 只缓存"过期"的 URL 失败状态
+  if (!isLikelyExpiredUrl(url)) {
+    return;
+  }
+  
+  // 清理过期条目
+  if (failedUrlCache.size >= MAX_FAILED_URL_CACHE_SIZE) {
+    const now = Date.now();
+    for (const [key, timestamp] of failedUrlCache) {
+      if (now - timestamp > FAILED_URL_TTL) {
+        failedUrlCache.delete(key);
+      }
+    }
+    // 如果仍然太大，删除最旧的一半
+    if (failedUrlCache.size >= MAX_FAILED_URL_CACHE_SIZE) {
+      const entries = Array.from(failedUrlCache.entries());
+      entries.sort((a, b) => a[1] - b[1]);
+      const toDelete = entries.slice(0, Math.floor(entries.length / 2));
+      for (const [key] of toDelete) {
+        failedUrlCache.delete(key);
+      }
+    }
+  }
+  failedUrlCache.set(url, Date.now());
+}
+
 sw.addEventListener('fetch', (event: FetchEvent) => {
   const url = new URL(event.request.url);
   const startTime = Date.now();
@@ -2326,6 +2400,12 @@ sw.addEventListener('fetch', (event: FetchEvent) => {
     return; // 直接返回，让浏览器处理
   }
 
+  // 放行 GitHub API 请求，让主线程的缓存机制生效
+  // SW 拦截会导致每次都显示两个请求条目，且可能影响主线程缓存
+  if (url.hostname === 'api.github.com') {
+    return; // 静默放行，让浏览器直接处理
+  }
+
   // 拦截视频请求以支持 Range 请求
   if (isVideoRequest(url, event.request)) {
     // console.log('Service Worker: Intercepting video request:', url.href);
@@ -2406,6 +2486,21 @@ sw.addEventListener('fetch', (event: FetchEvent) => {
 
   // 拦截外部图片请求（非同源且为图片格式）
   if (url.origin !== location.origin && isImageRequest(url, event.request)) {
+    // 检查是否是最近失败的 URL，避免重复请求
+    if (isUrlRecentlyFailed(event.request.url)) {
+      addDebugLog({
+        type: 'fetch',
+        url: event.request.url,
+        method: event.request.method,
+        requestType: 'image',
+        details: 'Skipped: recently failed URL (cached 404)',
+        status: 404,
+        duration: 0,
+      });
+      event.respondWith(new Response('', { status: 404, statusText: 'Not Found (cached)' }));
+      return;
+    }
+
     // console.log('Service Worker: Intercepting external image request:', url.href);
     const startTime = Date.now();
     const debugId = addDebugLog({
@@ -2419,6 +2514,10 @@ sw.addEventListener('fetch', (event: FetchEvent) => {
     event.respondWith(
       handleImageRequest(event.request)
         .then((response) => {
+          // 如果是 404，标记为失败 URL
+          if (response.status === 404) {
+            markUrlAsFailed(event.request.url);
+          }
           updateDebugLog(debugId, {
             status: response.status,
             statusText: response.statusText,
@@ -2430,6 +2529,8 @@ sw.addEventListener('fetch', (event: FetchEvent) => {
           return response;
         })
         .catch((error) => {
+          // 网络错误也标记为失败
+          markUrlAsFailed(event.request.url);
           updateDebugLog(debugId, {
             error: String(error),
             duration: Date.now() - startTime,
@@ -2964,7 +3065,23 @@ async function handleVideoRequest(request: Request): Promise<Response> {
         return createThumbnailResponse(blob);
       }
       
-      // 预览图不存在，回退到原视频（继续正常流程）
+      // 预览图不存在，返回透明占位图（1x1 透明 PNG）而不是原视频
+      // 因为视频的 poster 属性需要图片，返回视频会导致无法预览
+      const transparentPng = new Uint8Array([
+        0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d,
+        0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+        0x08, 0x06, 0x00, 0x00, 0x00, 0x1f, 0x15, 0xc4, 0x89, 0x00, 0x00, 0x00,
+        0x0a, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9c, 0x63, 0x00, 0x01, 0x00, 0x00,
+        0x05, 0x00, 0x01, 0x0d, 0x0a, 0x2d, 0xb4, 0x00, 0x00, 0x00, 0x00, 0x49,
+        0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82
+      ]);
+      return new Response(transparentPng, {
+        status: 200,
+        headers: {
+          'Content-Type': 'image/png',
+          'Cache-Control': 'no-cache',
+        },
+      });
     }
 
     // 检查是否有相同视频正在下载

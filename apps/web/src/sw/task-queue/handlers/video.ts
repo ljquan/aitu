@@ -17,9 +17,13 @@ import {
   pollVideoUntilComplete,
   fetchImageWithCache,
   parseSize,
-  cropImageToAspectRatio,
+  fitImageToCanvas,
 } from '../utils/media-generation-utils';
 import type { LLMReferenceImage } from '../llm-api-logger';
+
+const DURATION_IN_MODEL_PREFIX = 'sora-2-';
+const durationEncodedInModel = (model?: string | null) =>
+  Boolean(model && model.startsWith(DURATION_IN_MODEL_PREFIX));
 
 /**
  * Video generation response types
@@ -137,11 +141,14 @@ export class VideoHandler implements TaskHandler {
 
     // Build form data
     const formData = new FormData();
-    formData.append('model', params.model || 'veo3');
+    const model = (params.model as string) || 'veo3';
+    const durationParam = (params as any).seconds ?? params.duration;
+
+    formData.append('model', model);
     formData.append('prompt', params.prompt);
 
-    if (params.duration) {
-      formData.append('seconds', String(params.duration));
+    if (durationParam && !durationEncodedInModel(model)) {
+      formData.append('seconds', String(durationParam));
     }
 
     if (params.size) {
@@ -171,12 +178,12 @@ export class VideoHandler implements TaskHandler {
           // 使用通用函数从缓存获取图片
           let blob = await fetchImageWithCache(url, signal);
           if (blob) {
-            // 如果指定了目标尺寸，裁剪图片到匹配的宽高比
+            // 如果指定了目标尺寸，将图片适配到精确的目标尺寸（居中放置，主色调填充背景）
             if (targetSize) {
-              blob = await cropImageToAspectRatio(blob, targetSize.width, targetSize.height);
+              blob = await fitImageToCanvas(blob, targetSize.width, targetSize.height);
             }
             
-            // 获取裁剪后的图片信息用于日志
+            // 获取处理后的图片信息用于日志
             try {
               const info = await getImageInfo(blob, signal);
               referenceImageInfos.push({
@@ -186,7 +193,7 @@ export class VideoHandler implements TaskHandler {
                 height: info.height,
               });
             } catch (err) {
-              console.warn(`[VideoHandler] Failed to get cropped image info for log`, err);
+              console.warn(`[VideoHandler] Failed to get processed image info for log`, err);
               referenceImageInfos.push({ url, size: blob.size, width: 0, height: 0 });
             }
             
@@ -210,13 +217,12 @@ export class VideoHandler implements TaskHandler {
     const { startLLMApiLog, completeLLMApiLog, failLLMApiLog } = await import('../llm-api-logger');
     
     const startTime = Date.now();
-    const model = (params.model as string) || 'veo3';
     
     // 构建请求参数的日志表示（FormData 无法直接序列化）
     const requestParamsForLog = {
       model,
       prompt: params.prompt,
-      ...(params.duration && { seconds: params.duration }),
+      ...(durationParam && !durationEncodedInModel(model) && { seconds: durationParam }),
       ...(params.size && { size: params.size }),
       ...(refUrls.length > 0 && { input_reference: `[${refUrls.length} images]` }),
     };

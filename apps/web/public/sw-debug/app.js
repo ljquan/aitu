@@ -68,6 +68,7 @@ import {
   batchDeleteLLMApiLogs,
   onFilterChange as onLLMApiFilterChange,
 } from './llmapi-logs.js';
+import { initGistManagement } from './gist-management.js';
 import {
   loadCrashLogs,
   handleClearCrashLogs,
@@ -608,8 +609,9 @@ function handleClearLogs() {
 /**
  * Switch active tab
  * @param {string} tabName 
+ * @param {boolean} updateUrl - Whether to update URL parameter (default: true)
  */
-function switchTab(tabName) {
+function switchTab(tabName, updateUrl = true) {
   state.activeTab = tabName;
   document.querySelectorAll('.tab').forEach(t => {
     t.classList.toggle('active', t.dataset.tab === tabName);
@@ -617,6 +619,13 @@ function switchTab(tabName) {
   document.querySelectorAll('.tab-content').forEach(c => {
     c.classList.toggle('active', c.id === tabName + 'Tab');
   });
+  
+  // Update URL parameter
+  if (updateUrl) {
+    const url = new URL(window.location.href);
+    url.searchParams.set('tab', tabName);
+    window.history.replaceState({}, '', url.toString());
+  }
   
   // Update error dots (hide dot for active tab)
   updateErrorDots();
@@ -631,6 +640,8 @@ function switchTab(tabName) {
     loadLLMApiLogs();
   } else if (tabName === 'crash') {
     loadCrashLogs();
+  } else if (tabName === 'gist') {
+    // Gist data is loaded manually via refresh button
   }
 }
 
@@ -813,7 +824,7 @@ function setupEventListeners() {
     }
 
     // Number keys 1-5 to switch tabs
-    const tabMap = { '1': 'fetch', '2': 'console', '3': 'postmessage', '4': 'llmapi', '5': 'crash' };
+    const tabMap = { '1': 'fetch', '2': 'console', '3': 'postmessage', '4': 'llmapi', '5': 'crash', '6': 'gist' };
     if (tabMap[e.key] && !e.ctrlKey && !e.metaKey && !e.altKey) {
       switchTab(tabMap[e.key]);
     }
@@ -1138,9 +1149,20 @@ async function init() {
   
   // Setup event listeners (always needed, even in analysis mode)
   setupEventListeners();
+  initGistManagement();
+  
+  // Check URL parameters
+  const urlParams = new URLSearchParams(window.location.search);
+  
+  // Activate tab from URL parameter (valid tabs: fetch, console, postmessage, llmapi, gist, crash)
+  const validTabs = ['fetch', 'console', 'postmessage', 'llmapi', 'gist', 'crash'];
+  const tabParam = urlParams.get('tab');
+  if (tabParam && validTabs.includes(tabParam)) {
+    // Use setTimeout to ensure DOM is ready
+    setTimeout(() => switchTab(tabParam, false), 0);
+  }
   
   // Check if analysis mode should be auto-enabled (e.g., via URL parameter)
-  const urlParams = new URLSearchParams(window.location.search);
   if (urlParams.has('analysis')) {
     state.isAnalysisMode = true;
     updateAnalysisModeUI();
@@ -1218,6 +1240,27 @@ async function init() {
   });
   
 }
+
+// ==================== Global Helper Functions ====================
+
+/**
+ * 切换 base64 图片预览的显示/隐藏
+ * 该函数暴露给 window 用于 inline onclick 调用
+ * @param {string} previewId - 预览元素的 ID
+ */
+window.toggleBase64Preview = function(previewId) {
+  const previewEl = document.getElementById(previewId);
+  if (previewEl) {
+    const isHidden = previewEl.style.display === 'none';
+    previewEl.style.display = isHidden ? 'inline-block' : 'none';
+    
+    // 更新 toggle 按钮的样式
+    const toggleEl = previewEl.parentElement?.querySelector('.base64-preview-toggle');
+    if (toggleEl) {
+      toggleEl.classList.toggle('expanded', isHidden);
+    }
+  }
+};
 
 // Start the app
 init();

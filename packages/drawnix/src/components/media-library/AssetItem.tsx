@@ -5,7 +5,7 @@
  */
 
 import { memo, useCallback, useState } from 'react';
-import { Image as ImageIcon, Video as VideoIcon, Plus } from 'lucide-react';
+import { Image as ImageIcon, Video as VideoIcon, Plus, Cloud } from 'lucide-react';
 import { Checkbox, Tooltip } from 'tdesign-react';
 import { formatDate, formatFileSize } from '../../utils/asset-utils';
 import { useAssetSize } from '../../hooks/useAssetSize';
@@ -22,10 +22,11 @@ export interface AssetItemProps {
   onDoubleClick?: (asset: Asset) => void;
   onPreview?: (asset: Asset) => void;
   isInSelectionMode?: boolean;
+  isSynced?: boolean; // 是否已同步到 Gist
 }
 
 export const AssetItem = memo<AssetItemProps>(
-  ({ asset, viewMode, isSelected, onSelect, onDoubleClick, onPreview, isInSelectionMode }) => {
+  ({ asset, viewMode, isSelected, onSelect, onDoubleClick, onPreview, isInSelectionMode, isSynced }) => {
     // 获取实际文件大小（支持从缓存获取）
     const displaySize = useAssetSize(asset.id, asset.url, asset.size);
     const [isHovered, setIsHovered] = useState(false);
@@ -120,7 +121,6 @@ export const AssetItem = memo<AssetItemProps>(
               className="asset-item__video"
               muted
               preload="metadata"
-              poster={thumbnailUrl || undefined}
             />
           )}
 
@@ -132,6 +132,13 @@ export const AssetItem = memo<AssetItemProps>(
               </div>
               {asset.source === 'AI_GENERATED' && (
                 <div className="asset-item__ai-badge">AI</div>
+              )}
+              {isSynced && (
+                <Tooltip content="已同步到云端" theme="light" showArrow={false}>
+                  <div className="asset-item__synced-badge">
+                    <Cloud size={10} />
+                  </div>
+                </Tooltip>
               )}
             </div>
           )}
@@ -195,6 +202,15 @@ export const AssetItem = memo<AssetItemProps>(
           <div className="asset-item__ai-badge asset-item__ai-badge--list">AI</div>
         )}
 
+        {/* 列表模式：已同步标识 */}
+        {isListMode && isSynced && (
+          <Tooltip content="已同步到云端" theme="light" showArrow={false}>
+            <div className="asset-item__synced-badge asset-item__synced-badge--list">
+              <Cloud size={12} />
+            </div>
+          </Tooltip>
+        )}
+
         {/* 列表模式：插入按钮 */}
         {isListMode && isHovered && !isInSelectionMode && onDoubleClick && (
           <Tooltip content="插入到画布" theme="light" showArrow={false}>
@@ -218,7 +234,8 @@ export const AssetItem = memo<AssetItemProps>(
       prevProps.viewMode === nextProps.viewMode &&
       prevProps.isSelected === nextProps.isSelected &&
       prevProps.isInSelectionMode === nextProps.isInSelectionMode &&
-      prevProps.onDoubleClick === nextProps.onDoubleClick
+      prevProps.onDoubleClick === nextProps.onDoubleClick &&
+      prevProps.isSynced === nextProps.isSynced
     );
   },
 );

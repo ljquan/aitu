@@ -28,7 +28,7 @@ Opentu (开图) is an open-source whiteboard application built on the Plait fram
 ## Development Commands
 
 **Essential Commands:**
-- `npm start` - Start development server (serves web app at localhost:4200)
+- `npm start` - Start development server (serves web app at localhost:7200)
 - `npm run build` - Build all packages
 - `npm run build:web` - Build only the web application
 - `npm test` - Run all tests
@@ -911,6 +911,56 @@ const isExpired = Date.now() - cacheTime > 12 * 60 * 60 * 1000;
 ```
 
 **原因**: 本项目的 Service Worker 在每次访问缓存图片时会更新 `sw-cache-date` 以延长缓存时间（见 `sw/index.ts` 第 1732 行）。如果需要判断"原始缓存时间"，应该从 IndexedDB (`drawnix-unified-cache`) 的 `cachedAt` 字段获取，该字段不会因访问而更新。
+
+#### GitHub Gist API 批量上传大小限制
+**场景**: 通过 GitHub Gist API 批量上传媒体文件时
+
+❌ **错误示例**:
+```typescript
+// 错误：一次性上传所有文件，可能导致请求体过大返回 422 错误
+const filesToUpdate: Record<string, string> = {};
+for (const item of items) {
+  const content = await prepareMediaForUpload(item);  // 每个文件可能几 MB
+  filesToUpdate[`media_${item.id}.json`] = content;
+}
+// 如果 items 有 10 个，每个 2MB，总共 20MB，会导致 422 Unprocessable Content
+await gitHubApiService.updateGistFiles(filesToUpdate, gistId);
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：检查总大小，超过限制时分批上传
+const MAX_BATCH_SIZE = 8 * 1024 * 1024; // 8MB
+const totalSize = Object.values(filesToUpdate).reduce((sum, content) => sum + content.length, 0);
+
+if (totalSize > MAX_BATCH_SIZE) {
+  // 分批上传
+  await uploadInBatches(filesToUpdate, gistId, MAX_BATCH_SIZE);
+} else {
+  await gitHubApiService.updateGistFiles(filesToUpdate, gistId);
+}
+
+async function uploadInBatches(files: Record<string, string>, gistId: string, maxSize: number) {
+  let currentBatch: Record<string, string> = {};
+  let currentSize = 0;
+
+  for (const [filename, content] of Object.entries(files)) {
+    if (currentSize + content.length > maxSize && Object.keys(currentBatch).length > 0) {
+      await gitHubApiService.updateGistFiles(currentBatch, gistId);
+      currentBatch = {};
+      currentSize = 0;
+    }
+    currentBatch[filename] = content;
+    currentSize += content.length;
+  }
+
+  if (Object.keys(currentBatch).length > 0) {
+    await gitHubApiService.updateGistFiles(currentBatch, gistId);
+  }
+}
+```
+
+**原因**: GitHub Gist API 对单次请求体大小有限制（约 10MB），超过限制会返回 422 Unprocessable Content 错误。当批量上传多个 Base64 编码的媒体文件时，很容易超过这个限制。应该监控总上传大小，必要时分批上传。参考 `shard-sync-service.ts` 的 `uploadInBatches` 实现。
 
 #### 素材库数据来源与备份恢复
 **场景**: 实现备份导出/导入功能时，需要考虑素材库的数据来源

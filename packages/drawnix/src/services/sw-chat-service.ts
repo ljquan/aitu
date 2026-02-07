@@ -144,19 +144,12 @@ export async function sendChatMessage(
     });
 
     // Ensure SW client is initialized
+    // 配置已由 SettingsManager 同步到 IndexedDB，SW 直接读取
     if (!swChannelClient.isInitialized()) {
       await settingsManager.waitForInitialization();
       await swChannelClient.initialize();
-      await swChannelClient.init({
-        geminiConfig: {
-          apiKey: settings.apiKey,
-          baseUrl: settings.baseUrl,
-          modelName: settings.chatModel,
-        },
-        videoConfig: {
-          baseUrl: 'https://api.tu-zi.com',
-        },
-      });
+      // 配置从 IndexedDB 读取，无需传递
+      await swChannelClient.init({});
     }
 
     // Ensure event handlers are set up

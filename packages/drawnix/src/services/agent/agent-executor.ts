@@ -56,8 +56,21 @@ export function buildStructuredUserMessage(context: AgentExecutionContext): stri
   parts.push('## 生成配置');
   parts.push('');
   const modelStatus = context.model.isExplicit ? '(用户指定)' : '(默认)';
-  parts.push(`- **模型**: ${context.model.id} ${modelStatus}`);
-  parts.push(`- **类型**: ${context.model.type === 'image' ? '图片生成' : '视频生成'}`);
+  // 根据模式类型生成不同的描述
+  const typeLabels: Record<string, string> = { text: 'Agent 智能模式', image: '图片生成', video: '视频生成' };
+  const typeLabel = typeLabels[context.model.type] || 'Agent 智能模式';
+  parts.push(`- **模式**: ${typeLabel}`);
+  // Agent 模式下显示文本模型，图片/视频模式显示当前模型
+  if (context.model.type === 'text') {
+    parts.push(`- **文本模型**: ${context.model.id} ${modelStatus}`);
+  } else {
+    parts.push(`- **当前模型**: ${context.model.id} ${modelStatus}`);
+  }
+  // 添加默认模型信息，告诉 AI 不需要传 model 参数
+  if (context.defaultModels) {
+    parts.push(`- **图片生成模型**: ${context.defaultModels.image}`);
+    parts.push(`- **视频生成模型**: ${context.defaultModels.video}`);
+  }
   parts.push(`- **数量**: ${context.params.count}`);
   // 始终传递配置的尺寸，但标注为默认值，让 AI 判断是否使用
   // 优先级：用户指令中的尺寸描述 > 下拉框选择的尺寸 > 模型默认尺寸
@@ -291,14 +304,15 @@ class AgentExecutor {
       // 获取全局设置的文本模型
       const globalSettings = geminiSettings.get();
       const textModel = globalSettings.textModelName;
-      // console.log('[AgentExecutor] Using text model from global settings:', textModel);
+      console.log('[AgentExecutor] 使用文本模型:', textModel, ', hasApiKey:', !!globalSettings.apiKey);
 
       while (iterations < maxIterations) {
         iterations++;
-        // console.log(`[AgentExecutor] Iteration ${iterations}/${maxIterations}`);
+        console.log(`[AgentExecutor] 迭代 ${iterations}/${maxIterations}, 即将调用 sendChat...`);
 
         // 调用 LLM，使用全局设置的文本模型
         let fullResponse = '';
+        const t0 = Date.now();
         const response = await defaultGeminiClient.sendChat(
           messages,
           (accumulatedContent) => {
@@ -309,13 +323,14 @@ class AgentExecutor {
           signal,
           textModel // 使用全局设置的文本模型
         );
+        console.log(`[AgentExecutor] sendChat 返回, 耗时: ${Date.now() - t0}ms`);
 
         // 获取完整响应
         if (response.choices && response.choices.length > 0) {
           fullResponse = response.choices[0].message.content || fullResponse;
         }
 
-        // console.log('[AgentExecutor] LLM response:', fullResponse.substring(0, 200));
+        console.log('[AgentExecutor] LLM 响应长度:', fullResponse.length, ', 前100字:', fullResponse.substring(0, 100));
 
         // 解析工具调用
         const toolCalls = parseToolCalls(fullResponse);
