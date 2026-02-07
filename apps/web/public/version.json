@@ -1,8 +1,6 @@
 {
-  "version": "0.5.87",
-  "buildTime": "2026-02-07T14:30:42.100Z",
+  "version": "0.5.88",
+  "buildTime": "2026-02-07T15:30:12.820Z",
   "gitCommit": "unknown",
-  "changelog": [
-    "enhance logging and error handling in WorkflowEngine"
-  ]
+  "changelog": []
 }
