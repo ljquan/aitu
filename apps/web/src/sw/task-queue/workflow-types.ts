@@ -13,14 +13,8 @@ import type { TaskStatus, TaskExecutionPhase, GeminiConfig, VideoAPIConfig } fro
 
 /**
  * Workflow step status
- * - pending: 等待执行
- * - running: 正在执行
- * - completed: 执行完成
- * - failed: 执行失败
- * - skipped: 跳过
- * - pending_main_thread: 等待主线程执行（需要访问 Canvas/DOM 的工具）
  */
-export type WorkflowStepStatus = 'pending' | 'running' | 'completed' | 'failed' | 'skipped' | 'pending_main_thread';
+export type WorkflowStepStatus = 'pending' | 'running' | 'completed' | 'failed' | 'skipped';
 
 /**
  * Workflow step execution options (batch generation etc.)
@@ -109,12 +103,6 @@ export interface Workflow {
   error?: string;
   /** Source context (for debugging) */
   context?: WorkflowContext;
-  /**
-   * 发起工作流的画布 ID
-   * 用于多画布场景下隔离工作流执行
-   * pending_main_thread 步骤只在发起画布所在的页面执行
-   */
-  initiatorBoardId?: string;
 }
 
 /**

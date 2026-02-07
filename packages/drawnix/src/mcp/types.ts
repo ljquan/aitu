@@ -229,18 +229,10 @@ export interface AgentExecutionContext {
   model: {
     /** 模型 ID */
     id: string;
-    /** 生成类型: text = agent 模式, image = 图片模式, video = 视频模式 */
-    type: 'text' | 'image' | 'video';
+    /** 生成类型 */
+    type: 'image' | 'video';
     /** 是否为用户显式选择 */
     isExplicit: boolean;
-  };
-
-  /** 系统配置的默认模型（用于 AI 分析时参考） */
-  defaultModels?: {
-    /** 默认图片模型 */
-    image: string;
-    /** 默认视频模型 */
-    video: string;
   };
 
   /** 参数配置 */

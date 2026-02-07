@@ -51,60 +51,6 @@
 | Vercel | [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fljquan%2Faitu&project-name=aitu&repository-name=aitu) |
 | Netlify | [![Deploy to Netlify](https://www.netlify.com/img/deploy/button.svg)](https://app.netlify.com/start/deploy?repository=https://github.com/ljquan/aitu) |
 
-### 本地开发
-
-#### 环境要求
-- Node.js >= 16.0.0
-- npm >= 8.0.0
-
-#### 安装步骤
-
-```bash
-# 克隆仓库
-git clone https://github.com/ljquan/aitu.git
-cd aitu
-
-# 安装依赖
-npm install
-
-# 启动开发服务器
-npm start
-```
-
-启动成功后，访问 `http://localhost:7200` 即可看到应用。
-
-#### 可用命令
-
-```bash
-# 开发
-npm start                    # 启动开发服务器
-npm test                     # 运行测试
-npm run build                # 构建所有包
-npm run build:web            # 仅构建 web 应用
-
-# 版本管理
-npm run version:patch        # 版本号 +0.0.1
-npm run version:minor        # 版本号 +0.1.0
-npm run version:major        # 版本号 +1.0.0
-
-# 发布
-npm run release             # 发布补丁版本
-npm run release:minor       # 发布小版本
-npm run release:major       # 发布大版本
-```
-
-### 🐳 Docker 部署
-
-```bash
-# 拉取镜像
-docker pull ljquan/aitu:latest
-
-# 运行容器
-docker run -d -p 8080:80 ljquan/aitu:latest
-```
-
-访问 `http://localhost:8080` 即可使用。
-
 
 ## AI 创作能力 🔥
 - **AI 图片生成** - 支持多种图片生成模型
@@ -206,6 +152,88 @@ aitu/
 - **packages/react-board**: Plait 框架的 React 适配层
 - **packages/react-text**: 文本编辑和渲染组件
 
+## 应用
+
+[*https://opentu.ai*](https://opentu.ai) 是 *开图* 的在线应用。
+
+近期会高频迭代应用功能，持续优化用户体验。
+
+
+## 🚀 快速开始
+
+### 在线体验
+直接访问 [opentu.ai](https://opentu.ai) 立即开始使用，无需安装任何软件。
+
+### 一键部署
+
+点击下方按钮，即可将 Opentu 部署到你自己的服务器：
+
+| 平台 | 一键部署 |
+| :--- | :--- |
+| Vercel | [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fljquan%2Faitu&project-name=aitu&repository-name=aitu) |
+| Netlify | [![Deploy to Netlify](https://www.netlify.com/img/deploy/button.svg)](https://app.netlify.com/start/deploy?repository=https://github.com/ljquan/aitu) |
+
+### 本地开发
+
+#### 环境要求
+- Node.js >= 16.0.0
+- npm >= 8.0.0
+
+#### 安装步骤
+
+```bash
+# 克隆仓库
+git clone https://github.com/ljquan/aitu.git
+cd aitu
+
+# 安装依赖
+npm install
+
+# 启动开发服务器
+npm start
+```
+
+启动成功后，访问 `http://localhost:4200` 即可看到应用。
+
+#### 可用命令
+
+```bash
+# 开发
+npm start                    # 启动开发服务器
+npm test                     # 运行测试
+npm run build                # 构建所有包
+npm run build:web            # 仅构建 web 应用
+
+# 版本管理
+npm run version:patch        # 版本号 +0.0.1
+npm run version:minor        # 版本号 +0.1.0
+npm run version:major        # 版本号 +1.0.0
+
+# 发布
+npm run release             # 发布补丁版本
+npm run release:minor       # 发布小版本
+npm run release:major       # 发布大版本
+```
+
+### 📚 开发文档
+
+详细的开发文档位于 [`docs/`](./docs/) 目录：
+
+- **[版本控制](./docs/VERSION_CONTROL.md)** - 版本管理和发布流程
+- **[部署指南](./docs/CFPAGE-DEPLOY.md)** - Cloudflare Pages 部署
+- **[PWA 配置](./docs/PWA_ICONS.md)** - PWA 图标生成指南
+
+### 🧪 测试
+
+```bash
+# 运行所有测试
+npm test
+
+# 运行特定项目测试
+nx test drawnix
+nx test react-board
+```
+
 
 ## 📖 使用说明
 
@@ -246,6 +274,17 @@ const editor = withFreehand(
 );
 ```
 
+### 🐳 Docker 部署
+
+```bash
+# 拉取镜像
+docker pull ljquan/aitu:latest
+
+# 运行容器
+docker run -d -p 8080:80 ljquan/aitu:latest
+```
+
+访问 `http://localhost:8080` 即可使用。
 
 ## 🏗️ 技术架构
 
@@ -376,7 +415,7 @@ npm install
 #### 开发服务器启动失败
 ```bash
 # 检查端口占用
-lsof -i :7200
+lsof -i :4200
 
 # 指定其他端口
 npm start -- --port 3000

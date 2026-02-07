@@ -6,35 +6,22 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 16px;
+  padding: 12px;
   background: #fff;
   border-radius: 12px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
   border: 1px solid var(--color-border);
 }
 
-.feedback-qrcode-grid {
-  display: flex;
-  gap: 16px;
-}
-
-.feedback-qrcode-item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-
 .feedback-qrcode-image {
-  width: 160px;
-  height: 160px;
+  max-width: 300px;
   border-radius: 8px;
-  object-fit: contain;
+  object-fit: cover;
 }
 
 .feedback-qrcode-text {
   margin-top: 8px;
   font-size: 13px;
   color: #666;
-  font-weight: 500;
 }
 

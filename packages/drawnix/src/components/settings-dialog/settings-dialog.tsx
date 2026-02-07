@@ -12,11 +12,12 @@ import {
   VIDEO_MODEL_SELECT_OPTIONS,
   TEXT_MODEL_SELECT_OPTIONS,
   getDefaultImageModel,
-  getDefaultVideoModel,
-  getDefaultTextModel,
+  DEFAULT_VIDEO_MODEL,
+  DEFAULT_TEXT_MODEL,
   VIDEO_MODELS,
   TEXT_MODELS,
 } from '../../constants/model-config';
+
 // 为了向后兼容，重新导出这些常量
 export { IMAGE_MODEL_GROUPED_SELECT_OPTIONS as IMAGE_MODEL_GROUPED_OPTIONS } from '../../constants/model-config';
 export { VIDEO_MODEL_SELECT_OPTIONS as VIDEO_MODEL_OPTIONS } from '../../constants/model-config';
@@ -41,28 +42,20 @@ export const SettingsDialog = ({
       setApiKey(config.apiKey || '');
       setBaseUrl(config.baseUrl || 'https://api.tu-zi.com/v1');
       setImageModelName(config.imageModelName || getDefaultImageModel());
-      setVideoModelName(config.videoModelName || getDefaultVideoModel());
-      setTextModelName(config.textModelName || getDefaultTextModel());
+      setVideoModelName(config.videoModelName || DEFAULT_VIDEO_MODEL);
+      setTextModelName(config.textModelName || DEFAULT_TEXT_MODEL);
     }
   }, [appState.openSettings]);
 
-  const handleSave = async () => {
-    const trimmedApiKey = apiKey.trim();
-    const trimmedBaseUrl = baseUrl.trim() || 'https://api.tu-zi.com/v1';
-    const trimmedImageModel = imageModelName.trim() || getDefaultImageModel();
-    const trimmedVideoModel = videoModelName.trim() || getDefaultVideoModel();
-    const trimmedTextModel = textModelName.trim() || getDefaultTextModel();
-    
-    // 使用全局设置管理器更新配置（必须等待完成）
-    await geminiSettings.update({
-      apiKey: trimmedApiKey,
-      baseUrl: trimmedBaseUrl,
-      imageModelName: trimmedImageModel,
-      videoModelName: trimmedVideoModel,
-      textModelName: trimmedTextModel,
+  const handleSave = () => {
+    // 使用全局设置管理器更新配置
+    geminiSettings.update({
+      apiKey: apiKey.trim(),
+      baseUrl: baseUrl.trim() || 'https://api.tu-zi.com/v1',
+      imageModelName: imageModelName.trim() || getDefaultImageModel(),
+      videoModelName: videoModelName.trim() || DEFAULT_VIDEO_MODEL,
+      textModelName: textModelName.trim() || DEFAULT_TEXT_MODEL,
     });
-
-    // 配置随任务传递，无需同步到 SW
 
     // 关闭弹窗
     setAppState({ ...appState, openSettings: false });

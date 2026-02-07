@@ -512,7 +512,7 @@ const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) =>
         minimizable={false}
         className="winbox-ai-generation winbox-ai-image-generation"
         container={container}
-        autoMaximize={imageDialogAutoMaximize || isMobile}
+        autoMaximize={imageDialogAutoMaximize}
       >
         {appState.openDialogTypes.has(DialogType.aiImageGeneration) && (
           imageGenerationMode === 'batch' ? (
@@ -548,7 +548,6 @@ const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) =>
         minimizable={false}
         className="winbox-ai-generation winbox-ai-video-generation"
         container={container}
-        autoMaximize={isMobile}
       >
         {appState.openDialogTypes.has(DialogType.aiVideoGeneration) && (
           <AIVideoGeneration

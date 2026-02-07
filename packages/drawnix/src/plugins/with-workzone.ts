@@ -26,7 +26,6 @@ import type { PlaitWorkZone, WorkZoneCreateOptions } from '../types/workzone.typ
 import { DEFAULT_WORKZONE_SIZE } from '../types/workzone.types';
 import { WorkZoneContent } from '../components/workzone-element/WorkZoneContent';
 import { ToolProviderWrapper } from '../components/toolbox-drawer/ToolProviderWrapper';
-import { workflowStatusSyncService } from '../services/workflow-status-sync';
 
 /**
  * 判断是否为 WorkZone 元素
@@ -42,14 +41,10 @@ export class WorkZoneComponent extends CommonElementFlavour<PlaitWorkZone, Plait
   private g: SVGGElement | null = null;
   private container: HTMLElement | null = null;
   private reactRoot: Root | null = null;
-  private statusSyncUnsubscribe: (() => void) | null = null;
   activeGenerator!: ActiveGenerator<PlaitWorkZone>;
 
   initialize(): void {
     super.initialize();
-
-    // 订阅工作流状态同步
-    this.setupStatusSync();
 
     // 创建选中状态生成器
     this.activeGenerator = createActiveGenerator(this.board, {
@@ -138,6 +133,8 @@ export class WorkZoneComponent extends CommonElementFlavour<PlaitWorkZone, Plait
    * 当 SW 中的工作流已完成/失败/不存在时更新 UI
    */
   private handleWorkflowStateChange = (workflowId: string, status: 'completed' | 'failed', error?: string): void => {
+    console.log(`[WorkZoneComponent] 🔄 Workflow state change: ${workflowId} -> ${status}`, error);
+    
     // 更新 workflow 状态
     const updatedWorkflow = {
       ...this.element.workflow,
@@ -225,58 +222,10 @@ export class WorkZoneComponent extends CommonElementFlavour<PlaitWorkZone, Plait
   }
 
   /**
-   * 设置工作流状态同步
-   * 通过轮询 IndexedDB 获取最新状态，确保 UI 与数据同步
-   */
-  private setupStatusSync(): void {
-    const workflowId = this.element.workflow.id;
-    
-    // 检查工作流是否需要同步（运行中或有 pending 步骤）
-    const needsSync = 
-      this.element.workflow.status === 'running' || 
-      this.element.workflow.status === 'pending' ||
-      this.element.workflow.steps.some(s => 
-        s.status === 'running' || s.status === 'pending'
-      );
-    
-    if (!needsSync) return;
-
-    this.statusSyncUnsubscribe = workflowStatusSyncService.subscribe(workflowId, (change) => {
-      // 更新 WorkZone 的 workflow 数据
-      WorkZoneTransforms.updateWorkflow(this.board, this.element.id, {
-        status: change.currentStatus as PlaitWorkZone['workflow']['status'],
-        steps: change.steps.map(s => ({
-          id: s.id,
-          mcp: s.mcp,
-          args: s.args,
-          description: s.description,
-          status: s.status as 'pending' | 'running' | 'completed' | 'failed' | 'skipped',
-          result: s.result,
-          error: s.error,
-          duration: s.duration,
-          options: s.options,
-        })),
-      });
-
-      // 如果工作流完成，取消订阅
-      if (change.currentStatus === 'completed' || change.currentStatus === 'failed' || change.currentStatus === 'cancelled') {
-        this.statusSyncUnsubscribe?.();
-        this.statusSyncUnsubscribe = null;
-      }
-    });
-  }
-
-  /**
    * 销毁
    */
   destroy(): void {
     // console.log('[WorkZone] destroy() called for:', this.element?.id);
-
-    // 取消状态同步订阅
-    if (this.statusSyncUnsubscribe) {
-      this.statusSyncUnsubscribe();
-      this.statusSyncUnsubscribe = null;
-    }
 
     // 先从 DOM 中移除 SVG 元素（同步）
     if (this.g && this.g.parentNode) {

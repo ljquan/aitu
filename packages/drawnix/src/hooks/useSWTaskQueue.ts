@@ -15,7 +15,6 @@ import { swTaskQueueService } from '../services/sw-task-queue-service';
 import { swChannelClient } from '../services/sw-channel';
 import type { SWTask } from '../services/sw-channel';
 import { geminiSettings } from '../utils/settings-manager';
-import { taskStorageReader } from '../services/task-storage-reader';
 
 interface UseSWTaskQueueOptions {
   /** Auto-initialize on mount */
@@ -63,21 +62,25 @@ export function useSWTaskQueue(
   const syncTasks = useCallback(async () => {
     if (!isSupported) return [];
     
-    try {
-      if (await taskStorageReader.isAvailable()) {
-        const tasks = await taskStorageReader.getAllTasks();
-        const allTasks = tasks as unknown as SWTask[];
-        
-        if (allTasks.length > 0 && onTasksSyncRef.current) {
-          onTasksSyncRef.current(allTasks);
-        }
-        return allTasks;
-      }
-    } catch (error) {
-      console.warn('[useSWTaskQueue] Failed to read from IndexedDB:', error);
+    // Use paginated API to avoid postMessage size limits (1MB max)
+    const allTasks: SWTask[] = [];
+    const pageSize = 50;
+    let offset = 0;
+    let hasMore = true;
+    
+    while (hasMore) {
+      const result = await swChannelClient.listTasksPaginated({ offset, limit: pageSize });
+      if (!result.success) break;
+      
+      allTasks.push(...(result.tasks || []));
+      hasMore = result.hasMore;
+      offset += pageSize;
     }
     
-    return [];
+    if (allTasks.length > 0 && onTasksSyncRef.current) {
+      onTasksSyncRef.current(allTasks);
+    }
+    return allTasks;
   }, [isSupported]);
 
   const initialize = useCallback(async (): Promise<boolean> => {
@@ -103,18 +106,24 @@ export function useSWTaskQueue(
         return false;
       }
 
-      // Sync tasks from IndexedDB
-      try {
-        if (await taskStorageReader.isAvailable()) {
-          const tasks = await taskStorageReader.getAllTasks();
-          const allTasks = tasks as unknown as SWTask[];
-          
-          if (allTasks.length > 0 && onTasksSyncRef.current) {
-            onTasksSyncRef.current(allTasks);
-          }
-        }
-      } catch (error) {
-        console.warn('[useSWTaskQueue] Failed to sync tasks from IndexedDB:', error);
+      // Sync tasks from SW (tasks are persisted in SW's IndexedDB)
+      // Use paginated API to avoid postMessage size limits
+      const allTasks: SWTask[] = [];
+      const pageSize = 50;
+      let offset = 0;
+      let hasMore = true;
+      
+      while (hasMore) {
+        const result = await swChannelClient.listTasksPaginated({ offset, limit: pageSize });
+        if (!result.success) break;
+        
+        allTasks.push(...(result.tasks || []));
+        hasMore = result.hasMore;
+        offset += pageSize;
+      }
+      
+      if (allTasks.length > 0 && onTasksSyncRef.current) {
+        onTasksSyncRef.current(allTasks);
       }
 
       setInitialized(true);
@@ -149,8 +158,7 @@ export function useSWTaskQueue(
           modelName: settings.chatModel,
         },
         videoConfig: {
-          baseUrl: settings.baseUrl,
-          apiKey: settings.apiKey,
+          baseUrl: 'https://api.tu-zi.com',
         },
       });
     };

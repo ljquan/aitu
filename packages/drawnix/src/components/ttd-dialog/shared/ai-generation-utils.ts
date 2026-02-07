@@ -9,9 +9,7 @@ export const isInvalidTokenError = (errorMessage: string): boolean => {
   return message.includes('invalid token') || 
          message.includes('invalid api key') ||
          message.includes('unauthorized') ||
-         message.includes('401') ||
-         // 检测 API 返回的 rix_api_error 类型的 token 错误
-         (message.includes('rix_api_error') && message.includes('invalid'));
+         message.includes('api_error') && message.includes('invalid');
 };
 
 export const notifyGenerationStateChange = (
@@ -36,7 +34,7 @@ export const handleApiKeyError = async (errorMessage: string, language: 'zh' | '
   try {
     const newApiKey = await promptForApiKey();
     if (newApiKey) {
-      // promptForApiKey 内部已经更新了 geminiSettings 并同步到 SW
+      geminiSettings.update({ apiKey: newApiKey });
       return null; // Success, no error
     } else {
       return language === 'zh' 

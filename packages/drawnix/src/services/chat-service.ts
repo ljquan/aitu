@@ -11,8 +11,10 @@ import type { GeminiMessage } from '../utils/gemini-api/types';
 import type { ChatMessage, StreamEvent } from '../types/chat.types';
 import { MessageRole } from '../types/chat.types';
 import { analytics } from '../utils/posthog-analytics';
+import { shouldUseSWTaskQueue } from './task-queue';
 import { swChannelClient } from './sw-channel';
 import type { ChatStartParams, ChatMessage as SWChatMessage, ChatAttachment } from './sw-channel';
+import { geminiSettings, settingsManager } from '../utils/settings-manager';
 
 // Current abort controller for cancellation
 let currentAbortController: AbortController | null = null;
@@ -146,25 +148,19 @@ function convertToSWMessages(messages: ChatMessage[]): { swMessages: SWChatMessa
 
 /** Convert File attachments to SW ChatAttachment format */
 async function convertAttachmentsToSW(files: File[]): Promise<ChatAttachment[]> {
-  // 过滤出图片文件
-  const imageFiles = files.filter(file => file.type.startsWith('image/'));
+  const attachments: ChatAttachment[] = [];
   
-  if (imageFiles.length === 0) {
-    return [];
-  }
-  
-  // 并行转换所有文件
-  const attachments = await Promise.all(
-    imageFiles.map(async (file) => {
+  for (const file of files) {
+    if (file.type.startsWith('image/')) {
       const base64 = await fileToBase64(file);
-      return {
-        type: 'image' as const,
+      attachments.push({
+        type: 'image',
         name: file.name,
         mimeType: file.type,
         data: base64,
-      };
-    })
-  );
+      });
+    }
+  }
   
   return attachments;
 }
@@ -193,11 +189,35 @@ export async function sendChatMessage(
   temporaryModel?: string, // 临时模型（仅在当前会话中使用，不影响全局设置）
   systemPrompt?: string // 系统提示词（包含 MCP 工具定义等）
 ): Promise<string> {
-  // 尝试使用 SW 模式
-  const useSW = await swChannelClient.initializeChannel();
-  
-  if (useSW) {
-    return sendChatMessageViaSW(messages, newContent, attachments, onStream, temporaryModel, systemPrompt);
+  // Check if we should use SW mode
+  if (shouldUseSWTaskQueue()) {
+    // Ensure SW client is initialized before using
+    if (!swChannelClient.isInitialized()) {
+      const settings = geminiSettings.get();
+      if (settings.apiKey && settings.baseUrl) {
+        try {
+          await settingsManager.waitForInitialization();
+          await swChannelClient.initialize();
+          await swChannelClient.init({
+            geminiConfig: {
+              apiKey: settings.apiKey,
+              baseUrl: settings.baseUrl,
+              modelName: settings.chatModel,
+            },
+            videoConfig: {
+              baseUrl: settings.baseUrl,
+            },
+          });
+        } catch (error) {
+          console.error('[ChatService] SW client initialization failed:', error);
+        }
+      }
+    }
+    
+    // Use SW mode if initialized successfully
+    if (swChannelClient.isInitialized()) {
+      return sendChatMessageViaSW(messages, newContent, attachments, onStream, temporaryModel, systemPrompt);
+    }
   }
   
   // Fallback to direct mode

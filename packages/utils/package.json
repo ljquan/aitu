@@ -13,8 +13,8 @@
     "lint": "eslint src --ext .ts,.tsx",
     "typecheck": "tsc --noEmit"
   },
+  "dependencies": {},
   "devDependencies": {
-    "fake-indexeddb": "^6.2.5",
     "vite": "^6.4.1",
     "vite-plugin-dts": "^4.3.0"
   }

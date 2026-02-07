@@ -5,7 +5,7 @@ import { Node } from 'slate';
 import { Freehand } from '../plugins/freehand/type';
 import { PenPath } from '../plugins/pen/type';
 import { SAME_ROW_THRESHOLD } from '../components/ttd-dialog/shared/size-constants';
-import { trimImageWhiteAndTransparentBorder } from '@aitu/utils';
+import { trimImageWhiteAndTransparentBorder } from './image-border-utils';
 import { isFillConfig, ImageFillConfig } from '../types/fill.types';
 import { generateFillDefId } from './fill-renderer';
 

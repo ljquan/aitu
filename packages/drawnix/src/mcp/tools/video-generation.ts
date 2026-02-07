@@ -13,7 +13,7 @@ import { taskQueueService } from '../../services/task-queue';
 import { TaskType } from '../../types/task.types';
 import type { VideoModel } from '../../types/video.types';
 import { VIDEO_MODEL_CONFIGS } from '../../constants/video-model-config';
-import { getDefaultVideoModel } from '../../constants/model-config';
+import { DEFAULT_VIDEO_MODEL } from '../../constants/model-config';
 import { geminiSettings } from '../../utils/settings-manager';
 
 /**
@@ -22,7 +22,7 @@ import { geminiSettings } from '../../utils/settings-manager';
  */
 export function getCurrentVideoModel(): string {
   const settings = geminiSettings.get();
-  return settings?.videoModelName || getDefaultVideoModel();
+  return settings?.videoModelName || DEFAULT_VIDEO_MODEL;
 }
 
 /**
@@ -226,7 +226,6 @@ function executeQueue(params: VideoGenerationParams, options: MCPExecuteOptions)
           duration: parseInt(seconds || modelConfig.defaultDuration, 10),
           model,
           uploadedImages: uploadedImages && uploadedImages.length > 0 ? uploadedImages : undefined,
-          referenceImages: referenceImages && referenceImages.length > 0 ? referenceImages : undefined,
           // 使用工作流传入的批量参数
           batchId,
           batchIndex,
@@ -248,7 +247,6 @@ function executeQueue(params: VideoGenerationParams, options: MCPExecuteOptions)
             duration: parseInt(seconds || modelConfig.defaultDuration, 10),
             model,
             uploadedImages: uploadedImages && uploadedImages.length > 0 ? uploadedImages : undefined,
-            referenceImages: referenceImages && referenceImages.length > 0 ? referenceImages : undefined,
             // 批量参数
             batchId: batchId,
             batchIndex: i + 1,
@@ -319,8 +317,8 @@ export const videoGenerationTool: MCPTool = {
       },
       model: {
         type: 'string',
-        description: `视频生成模型，默认使用 ${getDefaultVideoModel()}`,
-        default: getDefaultVideoModel(),
+        description: `视频生成模型，默认使用 ${DEFAULT_VIDEO_MODEL}`,
+        default: DEFAULT_VIDEO_MODEL,
       },
       seconds: {
         type: 'string',
@@ -401,15 +399,15 @@ export const videoGenerationTool: MCPTool = {
   },
 
   execute: async (params: Record<string, unknown>, options?: MCPExecuteOptions): Promise<MCPResult> => {
-    console.log('[VideoGenerationTool] execute called with mode:', options?.mode);
     const typedParams = params as unknown as VideoGenerationParams;
     const mode = options?.mode || 'async';
 
     if (mode === 'queue') {
-      // 队列模式：直接使用 taskQueueService
-      // taskQueueService 会根据 SW 可用性自动选择正确的服务
-      // - SW 模式：任务提交到 SW 后台执行
-      // - 降级模式：任务在主线程立即执行
+      // 确保 SW 任务队列已初始化
+      const { shouldUseSWTaskQueue, swTaskQueueService } = await import('../../services/task-queue');
+      if (shouldUseSWTaskQueue()) {
+        await swTaskQueueService.initialize();
+      }
       return executeQueue(typedParams, options || {});
     }
 

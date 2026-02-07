@@ -18,7 +18,7 @@ import { DEFAULT_IMAGE_FILL } from '../../types/fill.types';
 import { MediaLibraryModal } from '../media-library/MediaLibraryModal';
 import { AssetType, SelectionMode } from '../../types/asset.types';
 import type { Asset } from '../../types/asset.types';
-import { compressImageBlob, getCompressionStrategy } from '@aitu/utils';
+import { compressImageBlob, getCompressionStrategy } from '../../utils/image-compression-core';
 import './image-fill-panel.scss';
 
 export interface ImageFillPanelProps {

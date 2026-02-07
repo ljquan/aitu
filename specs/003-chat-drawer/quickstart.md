@@ -16,7 +16,7 @@ npm install
 
 # 启动开发服务器
 npm start
-# 访问 http://localhost:7200
+# 访问 http://localhost:4200
 ```
 
 ### 开发工作流

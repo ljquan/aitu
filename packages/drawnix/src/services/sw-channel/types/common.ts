@@ -68,23 +68,16 @@ import type {
 
 /**
  * 初始化参数
- * 
- * 配置参数现在是可选的：
- * - 主线程会自动同步配置到 IndexedDB
- * - SW 从 IndexedDB 读取配置
- * - 传递配置仅用于兼容旧版本或强制覆盖
  */
 export interface InitParams {
-  /** @deprecated 配置现在从 IndexedDB 读取，此参数仅用于兼容旧版本 */
-  geminiConfig?: {
+  geminiConfig: {
     apiKey: string;
     baseUrl: string;
     modelName?: string;
     /** Text model for ai_analyze (e.g., 'deepseek-v3.2') */
     textModelName?: string;
   };
-  /** @deprecated 配置现在从 IndexedDB 读取，此参数仅用于兼容旧版本 */
-  videoConfig?: {
+  videoConfig: {
     baseUrl: string;
     apiKey?: string;
   };
@@ -154,7 +147,6 @@ export interface SWUpdatedEvent {
 
 /**
  * SW 请求配置事件
- * @deprecated 配置现在同步到 IndexedDB，SW 直接读取，不再需要请求主线程
  */
 export interface SWRequestConfigEvent {
   reason: string;
@@ -216,6 +208,7 @@ export interface MCPToolResultEvent {
 export interface SWMethods extends Methods {
   // 初始化
   'init': (params: InitParams) => InitResult;
+  'updateConfig': (params: Partial<InitParams>) => InitResult;
 
   // 任务操作
   'task:create': (params: TaskCreateParams) => TaskCreateResult;
@@ -290,7 +283,7 @@ export interface SWEvents {
   'sw:newVersionReady': SWNewVersionReadyEvent;
   'sw:activated': SWActivatedEvent;
   'sw:updated': SWUpdatedEvent;
-  // Note: 'sw:requestConfig' 已移除 - 配置现在同步到 IndexedDB，SW 直接读取
+  'sw:requestConfig': SWRequestConfigEvent;
   // Thumbnail events
   'thumbnail:videoRequest': ThumbnailVideoRequestEvent;
   // MCP events

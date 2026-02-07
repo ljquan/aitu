@@ -68,14 +68,10 @@ function getDeviceType(): 'mobile' | 'tablet' | 'desktop' {
   }
 }
 
-/** 上报字段最大长度，控制 payload 体积避免 413 */
-const MAX_STRING_LENGTH = 200;
-
 /**
- * Collect page view data (user_agent 截断以减小请求体)
+ * Collect page view data
  */
 function collectPageViewData(): PageViewData {
-  const ua = navigator.userAgent;
   return {
     page_url: window.location.href,
     page_path: window.location.pathname,
@@ -86,7 +82,7 @@ function collectPageViewData(): PageViewData {
     screen_width: window.screen.width,
     screen_height: window.screen.height,
     device_type: getDeviceType(),
-    user_agent: ua.length > MAX_STRING_LENGTH ? ua.slice(0, MAX_STRING_LENGTH) : ua,
+    user_agent: navigator.userAgent,
     language: navigator.language,
     timestamp: Date.now(),
   };
@@ -102,7 +98,7 @@ function collectPagePerformanceData(): PagePerformanceData | null {
   }
 
   const data: PagePerformanceData = {
-    page_url: window.location.pathname,
+    page_url: window.location.href,
     page_path: window.location.pathname,
     timestamp: Date.now(),
   };

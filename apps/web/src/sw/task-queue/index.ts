@@ -27,7 +27,6 @@ export {
   getWorkflowExecutor,
   getChatWorkflowHandler,
   resendPendingToolRequests,
-  ensureWorkflowHandlerInitialized,
 } from './workflow-handler';
 
 // Export storage

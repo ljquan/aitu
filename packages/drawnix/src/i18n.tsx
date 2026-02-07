@@ -87,11 +87,6 @@ export interface Translations {
   'menu.version': string;
   'menu.more': string;
   'menu.userManual': string;
-  'menu.cleanInvalidLinks': string;
-  'menu.cleanInvalidLinks.scanning': string;
-  'menu.cleanInvalidLinks.success': string;
-  'menu.cleanInvalidLinks.noInvalid': string;
-  'menu.cleanInvalidLinks.error': string;
   
   // Dialog translations
   'dialog.mermaid.title': string;
@@ -275,11 +270,6 @@ const translations: Record<Language, Translations> = {
     'menu.version': '版本',
     'menu.more': '更多',
     'menu.userManual': '用户手册',
-    'menu.cleanInvalidLinks': '清除失效媒体',
-    'menu.cleanInvalidLinks.scanning': '正在扫描失效媒体...',
-    'menu.cleanInvalidLinks.success': '已清除 {count} 个失效媒体',
-    'menu.cleanInvalidLinks.noInvalid': '未发现失效媒体',
-    'menu.cleanInvalidLinks.error': '清除失败',
     
     // Dialog translations
     'dialog.mermaid.title': 'Mermaid 转 Drawnix',
@@ -460,11 +450,6 @@ const translations: Record<Language, Translations> = {
     'menu.version': 'Version',
     'menu.more': 'More',
     'menu.userManual': 'User Manual',
-    'menu.cleanInvalidLinks': 'Clean Invalid Media',
-    'menu.cleanInvalidLinks.scanning': 'Scanning invalid media...',
-    'menu.cleanInvalidLinks.success': 'Cleaned {count} invalid media',
-    'menu.cleanInvalidLinks.noInvalid': 'No invalid media found',
-    'menu.cleanInvalidLinks.error': 'Clean failed',
     
     // Dialog translations
     'dialog.mermaid.title': 'Mermaid to Drawnix',

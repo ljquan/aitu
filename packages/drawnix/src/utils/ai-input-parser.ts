@@ -14,7 +14,7 @@ import {
   getImageModelDefaults,
   getVideoModelDefaults,
   getDefaultImageModel as getSystemDefaultImageModel,
-  getDefaultVideoModel as getSystemDefaultVideoModel,
+  DEFAULT_VIDEO_MODEL,
 } from '../constants/model-config';
 import type { ImageDimensions } from '../mcp/types';
 
@@ -132,7 +132,7 @@ function getDefaultImageModel(): string {
  */
 function getDefaultVideoModel(): string {
   const settings = geminiSettings.get();
-  return settings?.videoModelName || getSystemDefaultVideoModel();
+  return settings?.videoModelName || DEFAULT_VIDEO_MODEL;
 }
 
 /**

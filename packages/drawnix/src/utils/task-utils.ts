@@ -110,6 +110,51 @@ export function getTaskElapsedTime(task: Task): number {
 }
 
 /**
+ * Gets a human-readable relative time string
+ * 
+ * @param timestamp - Unix timestamp in milliseconds
+ * @returns Human-readable relative time (e.g., "2 minutes ago")
+ * 
+ * @example
+ * getRelativeTime(Date.now() - 120000) // Returns "2 minutes ago"
+ * getRelativeTime(Date.now() - 3600000) // Returns "1 hour ago"
+ */
+export function getRelativeTime(timestamp: number): string {
+  const elapsed = Date.now() - timestamp;
+  const seconds = Math.floor(elapsed / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+  
+  if (days > 0) {
+    return `${days} ${days === 1 ? 'day' : 'days'} ago`;
+  } else if (hours > 0) {
+    return `${hours} ${hours === 1 ? 'hour' : 'hours'} ago`;
+  } else if (minutes > 0) {
+    return `${minutes} ${minutes === 1 ? 'minute' : 'minutes'} ago`;
+  } else {
+    return `${seconds} ${seconds === 1 ? 'second' : 'seconds'} ago`;
+  }
+}
+
+/**
+ * Truncates a string to a maximum length with ellipsis
+ *
+ * @param str - The string to truncate
+ * @param maxLength - Maximum length before truncation
+ * @returns Truncated string
+ *
+ * @example
+ * truncateString("A very long prompt text", 10) // Returns "A very lon..."
+ */
+export function truncateString(str: string, maxLength: number): string {
+  if (str.length <= maxLength) {
+    return str;
+  }
+  return str.substring(0, maxLength) + '...';
+}
+
+/**
  * Formats a timestamp to a localized date-time string
  *
  * @param timestamp - Unix timestamp in milliseconds

@@ -22,7 +22,6 @@ import {
   ValidationError,
 } from '../types/workspace.types';
 import { workspaceStorageService } from './workspace-storage-service';
-import { logDebug, logWarning, logError } from './github-sync/sync-log-service';
 
 /**
  * Generate UUID v4
@@ -246,26 +245,17 @@ class WorkspaceService {
     const folder = this.folders.get(id);
     if (!folder) throw new Error(`Folder ${id} not found`);
 
-    // Delete all child folders recursively (并行处理)
+    // Delete all child folders recursively
     const childFolders = this.getFolderChildren(id);
-    if (childFolders.length > 0) {
-      await Promise.all(childFolders.map(child => this.deleteFolder(child.id)));
+    for (const child of childFolders) {
+      await this.deleteFolder(child.id);
     }
 
-    // Move boards to root (并行处理)
+    // Move boards to root
     const boards = this.getBoardsInFolder(id);
-    if (boards.length > 0) {
-      await Promise.all(boards.map(async board => {
-        board.folderId = null;
-        // 同步更新所有相关的 Map
-        this.boards.set(board.id, board);
-        const metadata = this.boardMetadata.get(board.id);
-        if (metadata) {
-          metadata.folderId = null;
-          metadata.updatedAt = Date.now();
-        }
-        await workspaceStorageService.saveBoard(board);
-      }));
+    for (const board of boards) {
+      board.folderId = null;
+      await workspaceStorageService.saveBoard(board);
     }
 
     this.folders.delete(id);
@@ -280,23 +270,18 @@ class WorkspaceService {
     const folder = this.folders.get(id);
     if (!folder) throw new Error(`Folder ${id} not found`);
 
-    // Delete all boards in this folder (并行处理)
+    // Delete all boards in this folder
     const boards = this.getBoardsInFolder(id);
-    if (boards.length > 0) {
-      await Promise.all(boards.map(async board => {
-        // 同步删除所有相关的 Map
-        this.boards.delete(board.id);
-        this.boardMetadata.delete(board.id);
-        this.loadedBoards.delete(board.id);
-        await workspaceStorageService.deleteBoard(board.id);
-        this.emit('boardDeleted', board);
-      }));
+    for (const board of boards) {
+      this.boards.delete(board.id);
+      await workspaceStorageService.deleteBoard(board.id);
+      this.emit('boardDeleted', board);
     }
 
-    // Delete all child folders recursively (with their contents) (并行处理)
+    // Delete all child folders recursively (with their contents)
     const childFolders = this.getFolderChildren(id);
-    if (childFolders.length > 0) {
-      await Promise.all(childFolders.map(child => this.deleteFolderWithContents(child.id)));
+    for (const child of childFolders) {
+      await this.deleteFolderWithContents(child.id);
     }
 
     // Delete the folder itself
@@ -511,17 +496,22 @@ class WorkspaceService {
     const board = this.boards.get(id);
     if (!board) throw new Error(`Board ${id} not found`);
 
+    console.log('[WorkspaceService] deleteBoard called:', id, board.name);
+
     // 异步同步删除到远程回收站（不阻塞本地删除）
     import('./github-sync').then(({ syncEngine }) => {
+      console.log('[WorkspaceService] Syncing board deletion to remote (async)...');
       syncEngine.syncBoardDeletion(id).then((result) => {
-        if (!result.success) {
-          logWarning('Failed to sync deletion to remote', { error: result.error });
+        if (result.success) {
+          console.log('[WorkspaceService] Board synced to remote recycle bin:', id);
+        } else {
+          console.warn('[WorkspaceService] Failed to sync deletion to remote:', result.error);
         }
       }).catch((err) => {
-        logWarning('Could not sync deletion to remote', { error: String(err) });
+        console.warn('[WorkspaceService] Could not sync deletion to remote:', err);
       });
     }).catch((err) => {
-      logWarning('Could not load syncEngine', { error: String(err) });
+      console.warn('[WorkspaceService] Could not load syncEngine:', err);
     });
 
     // Clear current if this board is active
@@ -534,6 +524,7 @@ class WorkspaceService {
     this.boardMetadata.delete(id);
     this.loadedBoards.delete(id);
     await workspaceStorageService.deleteBoard(id);
+    console.log('[WorkspaceService] Emitting boardDeleted event for:', id);
     this.emit('boardDeleted', board);
   }
 
@@ -811,30 +802,22 @@ class WorkspaceService {
 
   /**
    * Batch delete multiple boards
-   * 使用 Promise.all 并行删除，提升性能
    */
   async deleteBoardsBatch(ids: string[]): Promise<void> {
-    // 分批处理，每批最多 5 个，避免过载
-    const batchSize = 5;
-    for (let i = 0; i < ids.length; i += batchSize) {
-      const batch = ids.slice(i, i + batchSize);
-      await Promise.all(batch.map(id => this.deleteBoard(id)));
+    for (const id of ids) {
+      await this.deleteBoard(id);
     }
   }
 
   /**
    * Batch move multiple boards to a folder
-   * 使用 Promise.all 并行移动，提升性能
    */
   async moveBoardsBatch(
     ids: string[],
     targetFolderId: string | null
   ): Promise<void> {
-    // 分批处理，每批最多 5 个，避免过载
-    const batchSize = 5;
-    for (let i = 0; i < ids.length; i += batchSize) {
-      const batch = ids.slice(i, i + batchSize);
-      await Promise.all(batch.map(id => this.moveBoard(id, targetFolderId)));
+    for (const id of ids) {
+      await this.moveBoard(id, targetFolderId);
     }
   }
 
@@ -843,18 +826,13 @@ class WorkspaceService {
 
     // 检查元数据是否存在
     const metadata = this.boardMetadata.get(boardId);
-    if (!metadata) {
-      throw new Error(`Board ${boardId} not found`);
-    }
+    if (!metadata) throw new Error(`Board ${boardId} not found`);
 
     // 按需加载画板内容
     let board = this.loadedBoards.get(boardId);
-
     if (!board) {
       const loadedBoard = await workspaceStorageService.loadBoard(boardId);
-      if (!loadedBoard) {
-        throw new Error(`Board ${boardId} not found in storage`);
-      }
+      if (!loadedBoard) throw new Error(`Board ${boardId} not found in storage`);
       board = loadedBoard;
       this.loadedBoards.set(boardId, board);
       // 同步更新 boards Map（向后兼容）
@@ -926,10 +904,6 @@ class WorkspaceService {
     }
 
     await workspaceStorageService.saveBoard(board);
-    
-    // 触发 boardUpdated 事件，让同步引擎感知变更
-    // 注意：之前这里没有 emit，导致画布变更不会触发自动同步
-    this.emit('boardUpdated', board);
   }
 
   /**
@@ -1106,63 +1080,10 @@ class WorkspaceService {
     return this.events$.asObservable();
   }
 
-  // 需要同步的事件类型
-  private static readonly SYNC_TRIGGER_EVENTS: WorkspaceEvent['type'][] = [
-    'boardCreated',
-    'boardUpdated',
-    'boardDeleted',
-    'folderCreated',
-    'folderUpdated',
-    'folderDeleted',
-  ];
-
   private emit(type: WorkspaceEvent['type'], payload?: unknown): void {
     const event = { type, payload, timestamp: Date.now() };
-    try {
-      this.events$.next(event);
-    } catch (error) {
-      console.error('[WorkspaceService] emit() error:', type, error);
-    }
-
-    // 直接触发同步标记（作为 RxJS 订阅的后备方案）
-    // 这样即使订阅回调没有执行，也能触发自动同步
-    if (WorkspaceService.SYNC_TRIGGER_EVENTS.includes(type)) {
-      this.triggerSyncMarkDirty(type, payload);
-    }
-  }
-
-  /**
-   * 触发同步引擎标记脏数据（防抖处理）
-   * 使用动态 import 避免循环依赖
-   */
-  private triggerSyncMarkDirty(eventType: WorkspaceEvent['type'], payload?: unknown): void {
-    // 使用动态 import 避免循环依赖
-    import('./github-sync/sync-engine').then(({ syncEngine }) => {
-      import('./github-sync/token-service').then(({ tokenService }) => {
-        // 只在已配置 token 时才触发
-        if (!tokenService.hasToken()) {
-          return;
-        }
-        
-        logDebug('Triggering syncEngine.markDirty()', { eventType });
-        syncEngine.markDirty();
-        
-        // 如果是画板删除，还需要记录本地删除
-        if (eventType === 'boardDeleted') {
-          const boardId = (payload as { id?: string })?.id;
-          if (boardId && typeof boardId === 'string') {
-            logDebug('Recording local deletion for board', { boardId });
-            syncEngine.recordLocalDeletion(boardId).then(() => {
-              return syncEngine.syncBoardDeletion(boardId);
-            }).catch(err => {
-              logError('Failed to sync board deletion', err instanceof Error ? err : new Error(String(err)));
-            });
-          }
-        }
-      });
-    }).catch(err => {
-      logError('Failed to import sync modules', err instanceof Error ? err : new Error(String(err)));
-    });
+    console.log('[WorkspaceService] emit() called:', type, 'observers:', this.events$.observers.length);
+    this.events$.next(event);
   }
 
   // ========== Initialization ==========

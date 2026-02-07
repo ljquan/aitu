@@ -237,58 +237,6 @@ class ToolboxService {
   }
 
   /**
-   * 获取自定义工具的更新时间
-   */
-  async getUpdatedAt(): Promise<number> {
-    try {
-      const storage = await localforage.getItem<CustomToolsStorage>(
-        ToolboxService.STORAGE_KEY
-      );
-      return storage?.updatedAt || 0;
-    } catch {
-      return 0;
-    }
-  }
-
-  /**
-   * 导入自定义工具（用于同步）
-   * 合并远程工具，基于 ID 去重，使用较新的版本
-   */
-  async importTools(tools: ToolDefinition[]): Promise<{ imported: number; skipped: number }> {
-    let imported = 0;
-    let skipped = 0;
-
-    for (const tool of tools) {
-      const existingIndex = this.customTools.findIndex(t => t.id === tool.id);
-      
-      if (existingIndex === -1) {
-        // 新工具，直接添加
-        this.customTools.push(tool);
-        imported++;
-      } else {
-        // 已存在，跳过（本地优先）
-        skipped++;
-      }
-    }
-
-    if (imported > 0) {
-      await this.saveCustomTools();
-    }
-
-    return { imported, skipped };
-  }
-
-  /**
-   * 导出自定义工具（用于同步）
-   */
-  exportTools(): { tools: ToolDefinition[]; updatedAt: number } {
-    return {
-      tools: [...this.customTools],
-      updatedAt: Date.now(),
-    };
-  }
-
-  /**
    * 验证工具定义
    */
   private validateToolDefinition(tool: Partial<ToolDefinition>): void {

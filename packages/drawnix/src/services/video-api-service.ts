@@ -8,12 +8,6 @@
 import { geminiSettings } from '../utils/settings-manager';
 import type { VideoModel, UploadedVideoImage } from '../types/video.types';
 import { unifiedCacheService } from './unified-cache-service';
-import {
-  startLLMApiLog,
-  completeLLMApiLog,
-  failLLMApiLog,
-  updateLLMApiLogMetadata,
-} from './media-executor/llm-api-logger';
 
 // Re-export VideoModel for backward compatibility
 export type { VideoModel };
@@ -83,22 +77,24 @@ class VideoAPIService {
   async submitVideoGeneration(params: VideoGenerationParams): Promise<VideoSubmitResponse> {
     const settings = geminiSettings.get();
     const apiKey = settings.apiKey;
-    const startTime = Date.now();
 
     if (!apiKey) {
       throw new Error('API Key 未配置，请先配置 API Key');
     }
 
-    // 开始记录 LLM API 调用（降级模式直接调用）
-    const referenceCount = params.inputReferences?.length || (params.inputReference ? 1 : 0);
-    const logId = startLLMApiLog({
-      endpoint: '/v1/videos',
-      model: params.model,
-      taskType: 'video',
-      prompt: params.prompt,
-      hasReferenceImages: referenceCount > 0,
-      referenceImageCount: referenceCount,
-    });
+    // Log request parameters
+    // console.log('[VideoAPI] ========== Video Generation Request ==========');
+    // console.log('[VideoAPI] Request params:', {
+    //   model: params.model,
+    //   prompt: params.prompt,
+    //   seconds: params.seconds,
+    //   size: params.size,
+    //   inputReferencesCount: params.inputReferences?.length || 0,
+    //   hasLegacyInputReference: !!params.inputReference,
+    // });
+    // console.log('[VideoAPI] Full prompt:');
+    // console.log(params.prompt);
+    // console.log('[VideoAPI] ===============================================');
 
     const formData = new FormData();
     formData.append('model', params.model);
@@ -130,11 +126,13 @@ class VideoAPIService {
         const fieldName = 'input_reference';
         // console.log('[VideoAPI] Using field name:', fieldName, 'for model:', params.model, 'slot:', imageRef.slot);
 
-        // 处理图片：虚拟路径和远程 URL 都需要转换为 base64/blob
-        // 使用 getImageForAI 统一处理，它会自动处理虚拟路径和远程 URL
-        const imageData = await unifiedCacheService.getImageForAI(imageRef.url);
-        const processedUrl = imageData.value;
-        // console.log(`[VideoAPI] Image processed: ${imageData.type === 'base64' ? 'converted to base64' : 'using URL'}`);
+        // 检查缓存时间，超过1天的图片转为base64
+        let processedUrl = imageRef.url;
+        if (imageRef.url.startsWith('http')) {
+          const imageData = await unifiedCacheService.getImageForAI(imageRef.url);
+          processedUrl = imageData.value;
+          // console.log(`[VideoAPI] Image processed: ${imageData.type === 'base64' ? 'converted to base64' : 'using URL'}`);
+        }
 
         // Convert to blob and append
         if (processedUrl.startsWith('data:')) {
@@ -150,17 +148,19 @@ class VideoAPIService {
           // console.log('[VideoAPI] Appending blob:', { fieldName, blobSize: blob.size, fileName: imageRef.name || 'image.png' });
           formData.append(fieldName, blob, imageRef.name || 'image.png');
         } else {
-          console.warn('[VideoAPI] Unknown URL format after processing, skipping:', processedUrl?.substring(0, 50));
+          // console.log('[VideoAPI] Unknown URL format, skipping');
         }
       }
     }
     // Legacy single image support
     else if (params.inputReference) {
-      // 处理图片：虚拟路径和远程 URL 都需要转换为 base64/blob
-      // 使用 getImageForAI 统一处理，它会自动处理虚拟路径和远程 URL
-      const imageData = await unifiedCacheService.getImageForAI(params.inputReference);
-      const processedUrl = imageData.value;
-      // console.log(`[VideoAPI] Legacy image processed: ${imageData.type === 'base64' ? 'converted to base64' : 'using URL'}`);
+      // 检查缓存时间，超过1天的图片转为base64
+      let processedUrl = params.inputReference;
+      if (params.inputReference.startsWith('http')) {
+        const imageData = await unifiedCacheService.getImageForAI(params.inputReference);
+        processedUrl = imageData.value;
+        // console.log(`[VideoAPI] Legacy image processed: ${imageData.type === 'base64' ? 'converted to base64' : 'using URL'}`);
+      }
 
       if (processedUrl.startsWith('data:')) {
         const response = await fetch(processedUrl);
@@ -170,8 +170,6 @@ class VideoAPIService {
         const response = await fetch(processedUrl);
         const blob = await response.blob();
         formData.append('input_reference', blob, 'reference.png');
-      } else {
-        console.warn('[VideoAPI] Unknown URL format after processing, skipping:', processedUrl?.substring(0, 50));
       }
     }
 
@@ -199,12 +197,6 @@ class VideoAPIService {
     if (!response.ok) {
       const errorText = await response.text();
       console.error('[VideoAPI] Submit failed:', response.status, errorText);
-      const duration = Date.now() - startTime;
-      failLLMApiLog(logId, {
-        httpStatus: response.status,
-        duration,
-        errorMessage: errorText.substring(0, 500),
-      });
       const error = new Error(`视频生成提交失败: ${response.status} - ${errorText}`);
       (error as any).apiErrorBody = errorText;
       (error as any).httpStatus = response.status;
@@ -212,35 +204,6 @@ class VideoAPIService {
     }
 
     const result = await response.json();
-    const duration = Date.now() - startTime;
-    
-    // 记录视频提交成功（此时视频尚未生成完成，只是提交成功）
-    // 使用 updateLLMApiLogMetadata 更新 remoteId，保持 pending 状态
-    updateLLMApiLogMetadata(logId, {
-      remoteId: result.id,
-      httpStatus: response.status,
-    });
-    
-    // 如果提交时已经失败（如内容政策违规）
-    if (result.status === 'failed') {
-      const errorMessage = typeof result.error === 'string' 
-        ? result.error 
-        : result.error?.message || 'Video generation failed';
-      failLLMApiLog(logId, {
-        httpStatus: response.status,
-        duration,
-        errorMessage,
-      });
-    } else {
-      // 提交成功，但视频还在生成中，记录为成功（API 调用成功）
-      completeLLMApiLog(logId, {
-        httpStatus: response.status,
-        duration,
-        resultType: 'video',
-        remoteId: result.id,
-      });
-    }
-    
     // console.log('[VideoAPI] Submit response:', JSON.stringify(result, null, 2));
     return result;
   }

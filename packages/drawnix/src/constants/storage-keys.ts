@@ -144,10 +144,7 @@ export const IDB_DATABASES = {
     },
   },
 
-  /**
-   * 任务队列（主线程）
-   * @deprecated 已废弃，仅用于历史数据迁移。新代码请使用 SW_TASK_QUEUE。
-   */
+  /** 任务队列（主线程，已废弃） */
   TASK_QUEUE: {
     NAME: 'aitu-task-queue',
     VERSION: 1,

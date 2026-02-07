@@ -73,6 +73,7 @@ export const aiAnalyzeTool: MCPTool = {
 
   execute: async (params: Record<string, unknown>, options?: MCPExecuteOptions): Promise<MCPResult> => {
     const { context, textModel } = params as unknown as AIAnalyzeParams;
+    debugger;
 
     if (!context) {
       return {
@@ -86,11 +87,11 @@ export const aiAnalyzeTool: MCPTool = {
     const generatedSteps: WorkflowStepInfo[] = [];
 
     try {
-      console.log('[AIAnalyzeTool] 开始分析:', {
-        userInstruction: context.userInstruction?.substring(0, 50),
-        model: context.model,
-        textModel,
-      });
+      // console.log('[AIAnalyzeTool] Starting analysis with context:', {
+      //   userInstruction: context.userInstruction?.substring(0, 50),
+      //   model: context.model,
+      //   hasSelection: context.selection && Object.values(context.selection).some(arr => arr?.length > 0),
+      // });
 
       const result = await agentExecutor.execute(context, {
         model: textModel || context.model.id,

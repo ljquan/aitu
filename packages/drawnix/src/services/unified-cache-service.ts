@@ -454,25 +454,13 @@ class UnifiedCacheService {
         }
       }
 
-      // 6. 获取图片 blob
-      // 对于虚拟 URL，直接从 Cache API 读取（不依赖 SW）
-      // 对于普通 URL，通过 fetch 获取
-      let blob: Blob | null = null;
-      
-      if (isVirtualUrl) {
-        // 虚拟路径：直接从 Cache API 读取，不依赖 SW 拦截
-        blob = await this.getCachedBlob(url);
-        if (!blob) {
-          throw new Error(`Virtual URL not found in cache: ${url}`);
-        }
-      } else {
-        // 普通 URL：通过 fetch 获取
-        const response = await fetch(url);
-        if (!response.ok) {
-          throw new Error(`Failed to fetch image: ${response.status}`);
-        }
-        blob = await response.blob();
+      // 6. 从 Cache API 获取图片（通过 fetch）
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch image: ${response.status}`);
       }
+
+      let blob = await response.blob();
 
       // 7. 如果图片过大，进行压缩
       if (blob.size > maxSize && blob.type.startsWith('image/')) {

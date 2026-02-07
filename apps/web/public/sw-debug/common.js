@@ -140,98 +140,7 @@ export function getSpeedClass(duration) {
 }
 
 /**
- * 检测字符串是否是 base64 图片数据
- * @param {string} str - 要检测的字符串
- * @returns {boolean}
- */
-function isBase64Image(str) {
-  if (!str || typeof str !== 'string') return false;
-  return str.startsWith('data:image/') && str.includes('base64,');
-}
-
-/**
- * 从 base64 图片数据中提取信息
- * @param {string} base64Str - base64 图片字符串
- * @returns {{mimeType: string, size: number}}
- */
-function getBase64ImageInfo(base64Str) {
-  const match = base64Str.match(/^data:image\/([^;]+);base64,(.*)$/);
-  if (!match) return { mimeType: 'unknown', size: 0 };
-  
-  const mimeType = match[1];
-  const base64Data = match[2];
-  // 估算原始文件大小（base64 会增加约 33% 的大小）
-  const size = Math.round((base64Data.length * 3) / 4);
-  
-  return { mimeType, size };
-}
-
-/**
- * 生成唯一的图片预览 ID
- */
-let imagePreviewCounter = 0;
-function generateImagePreviewId() {
-  return `img-preview-${Date.now()}-${++imagePreviewCounter}`;
-}
-
-/**
- * 将 base64 图片替换为可点击的预览组件 HTML
- * @param {string} base64Str - base64 图片字符串
- * @returns {string} - HTML 字符串
- */
-function createBase64ImagePreview(base64Str) {
-  const { mimeType, size } = getBase64ImageInfo(base64Str);
-  const sizeText = formatBytes(size);
-  const previewId = generateImagePreviewId();
-  
-  // 创建一个可展开的图片预览组件
-  return `<span class="base64-image-preview" data-preview-id="${previewId}">
-    <span class="base64-preview-toggle" onclick="toggleBase64Preview('${previewId}')" title="点击展开/收起图片预览">
-      🖼️ [image/${mimeType}, ${sizeText}]
-    </span>
-    <span class="base64-preview-image" id="${previewId}" style="display: none;">
-      <img src="${escapeHtml(base64Str)}" style="max-width: 200px; max-height: 200px; border-radius: 4px; margin: 8px 0; cursor: pointer; border: 1px solid var(--border-color);" onclick="window.open(this.src)" title="点击查看原图">
-    </span>
-  </span>`;
-}
-
-/**
- * 递归处理对象，将 base64 图片字符串替换为占位符，并收集图片信息
- * @param {any} obj - 要处理的对象
- * @param {Map} imageMap - 存储图片信息的 Map
- * @param {string} path - 当前路径
- * @returns {any} - 处理后的对象
- */
-function processObjectForBase64(obj, imageMap, path = '') {
-  if (obj === null || obj === undefined) return obj;
-  
-  if (typeof obj === 'string') {
-    if (isBase64Image(obj)) {
-      const placeholder = `__BASE64_IMAGE_${imageMap.size}__`;
-      imageMap.set(placeholder, obj);
-      return placeholder;
-    }
-    return obj;
-  }
-  
-  if (Array.isArray(obj)) {
-    return obj.map((item, index) => processObjectForBase64(item, imageMap, `${path}[${index}]`));
-  }
-  
-  if (typeof obj === 'object') {
-    const result = {};
-    for (const [key, value] of Object.entries(obj)) {
-      result[key] = processObjectForBase64(value, imageMap, `${path}.${key}`);
-    }
-    return result;
-  }
-  
-  return obj;
-}
-
-/**
  * Format and syntax highlight JSON string
- * 支持将 base64 图片替换为可预览的图片组件
  * @param {string} jsonStr - JSON string to format
  * @returns {string} - HTML with syntax highlighting
  */
@@ -241,33 +150,15 @@ export function formatJsonWithHighlight(jsonStr) {
   try {
     // Try to parse and re-stringify with indentation
     const parsed = JSON.parse(jsonStr);
-    
-    // 收集并替换 base64 图片
-    const imageMap = new Map();
-    const processedObj = processObjectForBase64(parsed, imageMap);
-    
-    const formatted = JSON.stringify(processedObj, null, 2);
+    const formatted = JSON.stringify(parsed, null, 2);
     
     // Apply syntax highlighting
-    let highlighted = escapeHtml(formatted)
+    return escapeHtml(formatted)
       .replace(/"([^"]+)":/g, '<span class="json-key">"$1"</span>:')
       .replace(/: "([^"]*)"/g, ': <span class="json-string">"$1"</span>')
       .replace(/: (\d+\.?\d*)/g, ': <span class="json-number">$1</span>')
       .replace(/: (true|false)/g, ': <span class="json-boolean">$1</span>')
       .replace(/: (null)/g, ': <span class="json-null">$1</span>');
-    
-    // 将占位符替换为图片预览组件
-    for (const [placeholder, base64Str] of imageMap) {
-      const escapedPlaceholder = escapeHtml(placeholder);
-      const imagePreviewHtml = createBase64ImagePreview(base64Str);
-      // 替换 JSON 字符串中的占位符（可能被包裹在引号中）
-      highlighted = highlighted.replace(
-        new RegExp(`"${escapedPlaceholder}"`, 'g'),
-        imagePreviewHtml
-      );
-    }
-    
-    return highlighted;
   } catch {
     // If not valid JSON, just escape and return
     return escapeHtml(jsonStr);

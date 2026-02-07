@@ -75,8 +75,6 @@ export interface SWTask {
   type: TaskType;
   status: TaskStatus;
   params: GenerationParams;
-  /** 任务执行配置 */
-  config: TaskConfig;
   createdAt: number;
   updatedAt: number;
   startedAt?: number;
@@ -94,25 +92,12 @@ export interface SWTask {
 // ============================================================================
 
 /**
- * 任务执行配置
- * 每次任务创建时由应用层传递，SW 不维护配置状态
- */
-export interface TaskConfig {
-  apiKey: string;
-  baseUrl: string;
-  modelName?: string;
-  textModelName?: string;
-}
-
-/**
  * 任务创建请求参数
  */
 export interface TaskCreateParams {
   taskId: string;
   taskType: TaskType;
   params: GenerationParams;
-  /** 任务执行配置，每次创建任务时传递 */
-  config: TaskConfig;
 }
 
 /**

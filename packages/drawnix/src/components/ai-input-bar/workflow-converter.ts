@@ -327,8 +327,6 @@ export function convertAgentFlowToWorkflow(
       id: `${workflowId}-step-analyze`,
       mcp: 'ai_analyze',
       args: {
-        // 主线程 MCP 工具必需：Agent 执行上下文
-        context: agentContext,
         // 传递预构建的 messages（SW 直接使用，不重复生成提示词）
         messages,
         // 传递参考图片 URL（用于占位符替换）

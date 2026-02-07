@@ -376,7 +376,7 @@ class AssetStorageService {
 
   /**
    * Get All Assets
-   * 获取所有素材 - 使用分批并行加载优化性能
+   * 获取所有素材 - 使用并行加载优化性能
    * 只返回 Cache Storage 中实际存在的素材
    */
   async getAllAssets(): Promise<Asset[]> {
@@ -405,41 +405,35 @@ class AssetStorageService {
         }
       }
 
-      // 分批并行加载素材，每批最多 20 个
-      const batchSize = 20;
-      const allAssets: Asset[] = [];
-      
-      for (let i = 0; i < keys.length; i += batchSize) {
-        const batchKeys = keys.slice(i, i + batchSize);
-        const loadPromises = batchKeys.map(async (key) => {
-          try {
-            const stored = (await this.store!.getItem(key)) as StoredAsset | null;
-            if (!stored) return null;
+      // 并行加载所有素材
+      const loadPromises = keys.map(async (key) => {
+        try {
+          const stored = (await this.store!.getItem(key)) as StoredAsset | null;
+          if (!stored) return null;
 
-            // 验证 Cache Storage 中是否有实际数据
-            // 只检查 /asset-library/ 前缀的本地上传素材
-            if (stored.url.startsWith('/asset-library/')) {
-              if (validCacheUrls.size > 0 && !validCacheUrls.has(stored.url)) {
-                // Cache Storage 中没有实际数据，跳过此素材
-                console.warn(`[AssetStorageService] Asset not in Cache Storage, skipping: ${stored.url}`);
-                return null;
-              }
+          // 验证 Cache Storage 中是否有实际数据
+          // 只检查 /asset-library/ 前缀的本地上传素材
+          if (stored.url.startsWith('/asset-library/')) {
+            if (validCacheUrls.size > 0 && !validCacheUrls.has(stored.url)) {
+              // Cache Storage 中没有实际数据，跳过此素材
+              console.warn(`[AssetStorageService] Asset not in Cache Storage, skipping: ${stored.url}`);
+              return null;
             }
-
-            // 直接使用存储的 URL
-            return storedAssetToAsset(stored);
-          } catch (err) {
-            console.error(`[AssetStorageService] Failed to load asset ${key}:`, err);
-            return null;
           }
-        });
 
-        const results = await Promise.all(loadPromises);
-        allAssets.push(...results.filter((asset): asset is Asset => asset !== null));
-      }
+          // 直接使用存储的 URL
+          return storedAssetToAsset(stored);
+        } catch (err) {
+          console.error(`[AssetStorageService] Failed to load asset ${key}:`, err);
+          return null;
+        }
+      });
 
-      // console.log(`[AssetStorageService] Loaded ${allAssets.length} assets`);
-      return allAssets;
+      const results = await Promise.all(loadPromises);
+      const assets = results.filter((asset): asset is Asset => asset !== null);
+
+      // console.log(`[AssetStorageService] Loaded ${assets.length} assets`);
+      return assets;
     } catch (error: any) {
       console.error('[AssetStorageService] Error loading assets:', error);
       throw new AssetStorageError(
