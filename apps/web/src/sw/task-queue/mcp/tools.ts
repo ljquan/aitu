@@ -120,6 +120,8 @@ export const generateImageTool: SWMCPTool = {
 
 /**
  * Generate video using Video API
+ *
+ * Note: Video API requires multipart/form-data format, not JSON.
  */
 export const generateVideoTool: SWMCPTool = {
   name: 'generate_video',
@@ -152,13 +154,12 @@ export const generateVideoTool: SWMCPTool = {
     try {
       onProgress?.(0, TaskExecutionPhase.SUBMITTING);
 
-      // Prepare request body
-      const requestBody: Record<string, unknown> = {
-        model,
-        prompt,
-        seconds,
-        size,
-      };
+      // Build FormData (Video API requires multipart/form-data, not JSON)
+      const formData = new FormData();
+      formData.append('model', model);
+      formData.append('prompt', prompt);
+      formData.append('seconds', seconds);
+      formData.append('size', size);
 
       // Handle reference images - 合并所有来源
       const refUrls: string[] = [];
@@ -173,27 +174,37 @@ export const generateVideoTool: SWMCPTool = {
         refUrls.push(inputReference);
       }
 
-      if (refUrls.length > 0) {
-        if (refUrls.length === 1) {
-          requestBody.input_reference = refUrls[0];
-        } else {
-          requestBody.input_references = refUrls;
+      // Convert reference image URLs to blobs and append to FormData
+      for (let i = 0; i < refUrls.length; i++) {
+        const url = refUrls[i];
+        try {
+          // Fetch image and convert to blob
+          const imageResponse = await fetch(url);
+          if (imageResponse.ok) {
+            const blob = await imageResponse.blob();
+            const fileName = `reference_${i}.png`;
+            formData.append('input_reference', blob, fileName);
+          } else {
+            console.warn(`[SW:generateVideo] Failed to fetch reference image ${i}:`, url);
+          }
+        } catch (err) {
+          console.warn(`[SW:generateVideo] Error fetching reference image ${i}:`, err);
         }
       }
 
       // Submit video generation request (using debugFetch for logging)
       const { debugFetch: debugFetchVideo } = await import('../debug-fetch');
-      const submitResponse = await debugFetchVideo(`${videoConfig.baseUrl}/videos/generations`, {
+      const submitResponse = await debugFetchVideo(`${videoConfig.baseUrl}/videos`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
+          // Don't set Content-Type - browser will auto-set multipart/form-data with boundary
           ...(videoConfig.apiKey ? { Authorization: `Bearer ${videoConfig.apiKey}` } : {}),
         },
-        body: JSON.stringify(requestBody),
+        body: formData,
         signal,
       }, {
-        label: `🎬 提交视频生成 (${videoConfig.model || 'default'})`,
-        logRequestBody: true,
+        label: `🎬 提交视频生成 (${model})`,
+        logRequestBody: false, // FormData can't be easily logged
         logResponseBody: true,
       });
 
