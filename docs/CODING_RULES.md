@@ -6684,6 +6684,41 @@ export const healthDataFetcher = HealthDataFetcher.getInstance();
 
 **原因**: 外部接口数据通常有刷新周期（如 5 分钟），在刷新周期内重复请求是浪费。单例模式可以：1) 设置最小调用间隔避免频繁请求；2) 复用进行中的 Promise 防止并发请求；3) 统一管理缓存，所有调用方共享数据。
 
+#### 第三方统计与 Session Replay 对主线程与请求体的影响
+
+**场景**: 接入第三方统计/监控（如 PostHog）或开启 Session Replay（如 rrweb）时。
+
+**要点**:
+- 开启 Session Replay 前需评估：主线程开销（wheel、mousemove、setInterval 等）、单次上报体体积（易触发 413 Content Too Large）。
+- 默认建议关闭或按采样开启；若开启，需配置限流、单批大小与 413 错误处理（如 on_xhr_error / on_request_error 中识别 413 后丢弃或有限重试并打 debug 日志），避免无限重试加重主线程与网络负担。
+- 统计上报须遵循「统计上报旁路化」：初始化与上报在 requestIdleCallback 或 setTimeout 中执行，不在主路径上做脱敏与网络请求；失败静默不向上抛。
+
+❌ **错误示例**:
+```javascript
+// 错误：默认开启 Session Recording，导致 wheel/setInterval 卡顿与 413
+posthog.init('phc_xxx', {
+  api_host: 'https://us.i.posthog.com',
+  // 未设置 disable_session_recording，rrweb 默认录制
+});
+```
+
+✅ **正确示例**:
+```javascript
+// 正确：默认关闭 Session Recording，并处理 413 避免重试风暴
+posthog.init('phc_xxx', {
+  api_host: 'https://us.i.posthog.com',
+  disable_session_recording: true,
+  rate_limiting: { events_per_second: 10, events_burst_limit: 30 },
+  on_xhr_error: function(err) {
+    if (err && (err.statusCode ?? err.status) === 413) {
+      console.debug('[PostHog] 413 Content Too Large, batch dropped');
+    }
+  },
+});
+```
+
+**原因**: Session Replay（rrweb）在滚轮、鼠标移动和定时器中录制 DOM/输入，会直接占用主线程并产生大量数据，单次 flush 易超服务端限制导致 413；413 响应常不带 CORS 头，浏览器会先报 CORS。关闭或按采样开启、并处理 413 可消除卡顿与报错。
+
 #### 无效配置下的数据不应被持久化或执行
 
 **场景**: 用户在未配置 API Key 时创建了任务，后来配置了 API Key，这些旧任务不应被执行。

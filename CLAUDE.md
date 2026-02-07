@@ -160,6 +160,7 @@ Service Worker (后台执行)
 19. **避免过度设计**：优先使用简单的 interface + service 模式；只在有明确需求时才添加 Repository、Strategy 等抽象层
 20. **重构先问问题**：重构前明确要解决的实际问题；验证方案是否真的解决问题而非增加复杂度
 21. **统计上报旁路化**：统计/监控的初始化与上报须在 requestIdleCallback 或 setTimeout 中执行，不在主路径上做脱敏与网络请求；失败静默不向上抛
+22. **第三方 Session Replay**：默认关闭或按采样开启，避免主线程卡顿（wheel/setInterval）与 413；若开启需配置限流与 413 错误处理
 
 ### Service Worker 规则
 
