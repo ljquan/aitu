@@ -1,8 +1,8 @@
 {
-  "version": "0.5.82",
-  "buildTime": "2026-02-07T02:44:20.964Z",
+  "version": "0.5.83",
+  "buildTime": "2026-02-07T03:12:02.648Z",
   "gitCommit": "unknown",
   "changelog": [
-    "improve Service Worker channel validation for streaming API calls"
+    "enhance logging and error handling in AI analysis and agent execution"
   ]
 }

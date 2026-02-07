@@ -1,3 +1,18 @@
+## 0.5.83 (2026-02-07)
+
+### 🚀 Features
+
+- enhance logging and error handling in AI analysis and agent execution ([cc03ce1c](https://github.com/ljquan/aitu/commit/cc03ce1c))
+
+### 🔧 Chores
+
+- bump version to 0.5.82 ([692f0eff](https://github.com/ljquan/aitu/commit/692f0eff))
+
+### ❤️  Thank You
+
+- liquid <ljquan@qq.com>
+- liquidliang <ljquan@qq.com>
+
 ## 0.5.82 (2026-02-07)
 
 ### 🚀 Features
