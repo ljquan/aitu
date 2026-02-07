@@ -11,32 +11,23 @@ import {
   getDebugStatus,
   getFetchLogs,
   clearFetchLogs as clearFetchLogsRPC,
-  getConsoleLogs as getConsoleLogsRPC,
+  getConsoleLogs,
   clearConsoleLogs as clearConsoleLogsRPC,
   getPostMessageLogs,
   clearPostMessageLogs as clearPostMessageLogsRPC,
-  getLLMApiLogs as getLLMApiLogsRPC,
+  getLLMApiLogs,
   getLLMApiLogById as getLLMApiLogByIdRPC,
   clearLLMApiLogs as clearLLMApiLogsRPC,
   deleteLLMApiLogs as deleteLLMApiLogsRPC,
-  getCrashSnapshots as getCrashSnapshotsRPC,
+  getCrashSnapshots,
   clearCrashSnapshots as clearCrashSnapshotsRPC,
-  getCacheStats as getCacheStatsRPC,
+  getCacheStats,
   enableDebugMode,
   disableDebugMode,
   sendHeartbeat,
   sendNativeMessage,
   SW_EVENTS,
 } from './duplex-client.js';
-
-// 直接读取 IndexedDB/Cache Storage（避免 RPC 通信开销和不稳定性）
-import {
-  getConsoleLogsDirect,
-  getLLMApiLogsDirect,
-  getLLMApiLogByIdDirect,
-  getCrashSnapshotsDirect,
-  getCacheStatsDirect,
-} from './debug-storage-reader.js';
 
 /** @type {Function|null} PostMessage log callback */
 let postMessageLogCallback = null;
@@ -383,27 +374,19 @@ export async function clearConsoleLogs() {
 }
 
 /**
- * Request all console logs from IndexedDB (直接读取，避免 RPC)
+ * Request all console logs from IndexedDB (uses duplex RPC)
  */
 export async function loadConsoleLogs() {
+  await ensureDuplexInitialized();
+  
   try {
-    // 优先直接从 IndexedDB 读取
-    const result = await getConsoleLogsDirect(1000);
+    const result = await getConsoleLogs(1000);
     if (messageHandlers['SW_DEBUG_CONSOLE_LOGS']) {
       messageHandlers['SW_DEBUG_CONSOLE_LOGS'](result);
     }
   } catch (error) {
-    console.error('[SW Communication] Failed to load console logs directly, falling back to RPC:', error);
-    // Fallback to RPC
-    try {
-      await ensureDuplexInitialized();
-      const result = await getConsoleLogsRPC(1000);
-      if (messageHandlers['SW_DEBUG_CONSOLE_LOGS']) {
-        messageHandlers['SW_DEBUG_CONSOLE_LOGS'](result);
-      }
-    } catch (rpcError) {
-      console.error('[SW Communication] RPC fallback also failed:', rpcError);
-    }
+    console.error('[SW Communication] Failed to load console logs:', error);
+    sendNativeMessage('SW_DEBUG_GET_CONSOLE_LOGS', { limit: 1000 });
   }
 }
 
@@ -442,27 +425,21 @@ export async function clearPostMessageLogs() {
 }
 
 /**
- * Load LLM API logs (直接从 IndexedDB 读取，避免 RPC)
+ * Load LLM API logs from SW (uses duplex RPC with pagination)
  * @param {number} page - 页码，默认 1
  * @param {number} pageSize - 每页条数，默认 20
  * @param {object} filter - 过滤条件 { taskType?, status? }
  */
 export async function loadLLMApiLogs(page = 1, pageSize = 20, filter = {}) {
+  await ensureDuplexInitialized();
+  
   try {
-    // 优先直接从 IndexedDB 读取
-    const result = await getLLMApiLogsDirect(page, pageSize, filter);
+    const result = await getLLMApiLogs(page, pageSize, filter);
     return result;
   } catch (error) {
-    console.error('[SW Communication] Failed to load LLM API logs directly, falling back to RPC:', error);
-    // Fallback to RPC
-    try {
-      await ensureDuplexInitialized();
-      const result = await getLLMApiLogsRPC(page, pageSize, filter);
-      return result;
-    } catch (rpcError) {
-      console.error('[SW Communication] RPC fallback also failed:', rpcError);
-      return null;
-    }
+    console.error('[SW Communication] Failed to load LLM API logs:', error);
+    sendNativeMessage('SW_DEBUG_GET_LLM_API_LOGS');
+    return null;
   }
 }
 
@@ -506,49 +483,33 @@ export async function deleteLLMApiLogsInSW(logIds) {
  * @returns {Promise<object|null>}
  */
 export async function getLLMApiLogByIdInSW(logId) {
+  await ensureDuplexInitialized();
+  
   try {
-    // 优先直接从 IndexedDB 读取
-    const log = await getLLMApiLogByIdDirect(logId);
-    return log;
+    const result = await getLLMApiLogByIdRPC(logId);
+    return result?.log || null;
   } catch (error) {
-    console.error('[SW Communication] Failed to get LLM API log by ID directly, falling back to RPC:', error);
-    // Fallback to RPC
-    try {
-      await ensureDuplexInitialized();
-      const result = await getLLMApiLogByIdRPC(logId);
-      return result?.log || null;
-    } catch (rpcError) {
-      console.error('[SW Communication] RPC fallback also failed:', rpcError);
-      return null;
-    }
+    console.error('[SW Communication] Failed to get LLM API log by ID:', error);
+    return null;
   }
 }
 
 /**
- * Load crash snapshots (直接从 IndexedDB 读取，避免 RPC)
+ * Load crash snapshots from SW (uses duplex RPC)
  */
 export async function loadCrashSnapshots() {
+  await ensureDuplexInitialized();
+  
   try {
-    // 优先直接从 IndexedDB 读取
-    const result = await getCrashSnapshotsDirect();
+    const result = await getCrashSnapshots();
     if (messageHandlers['SW_DEBUG_CRASH_SNAPSHOTS']) {
       messageHandlers['SW_DEBUG_CRASH_SNAPSHOTS'](result);
     }
     return result;
   } catch (error) {
-    console.error('[SW Communication] Failed to load crash snapshots directly, falling back to RPC:', error);
-    // Fallback to RPC
-    try {
-      await ensureDuplexInitialized();
-      const result = await getCrashSnapshotsRPC();
-      if (messageHandlers['SW_DEBUG_CRASH_SNAPSHOTS']) {
-        messageHandlers['SW_DEBUG_CRASH_SNAPSHOTS'](result);
-      }
-      return result;
-    } catch (rpcError) {
-      console.error('[SW Communication] RPC fallback also failed:', rpcError);
-      return null;
-    }
+    console.error('[SW Communication] Failed to load crash snapshots:', error);
+    sendNativeMessage('SW_DEBUG_GET_CRASH_SNAPSHOTS');
+    return null;
   }
 }
 
@@ -570,30 +531,21 @@ export async function clearCrashSnapshotsInSW() {
 }
 
 /**
- * Request cache stats (直接从 Cache Storage 读取，避免 RPC)
+ * Request cache stats from SW (uses duplex RPC)
  */
 export async function loadCacheStats() {
+  await ensureDuplexInitialized();
+  
   try {
-    // 优先直接从 Cache Storage 读取
-    const result = await getCacheStatsDirect();
+    const result = await getCacheStats();
     if (messageHandlers['SW_DEBUG_CACHE_STATS']) {
       messageHandlers['SW_DEBUG_CACHE_STATS'](result);
     }
     return result;
   } catch (error) {
-    console.error('[SW Communication] Failed to load cache stats directly, falling back to RPC:', error);
-    // Fallback to RPC
-    try {
-      await ensureDuplexInitialized();
-      const result = await getCacheStatsRPC();
-      if (messageHandlers['SW_DEBUG_CACHE_STATS']) {
-        messageHandlers['SW_DEBUG_CACHE_STATS'](result);
-      }
-      return result;
-    } catch (rpcError) {
-      console.error('[SW Communication] RPC fallback also failed:', rpcError);
-      return null;
-    }
+    console.error('[SW Communication] Failed to load cache stats:', error);
+    sendNativeMessage('SW_DEBUG_GET_CACHE_STATS');
+    return null;
   }
 }
 

@@ -114,11 +114,13 @@ export const ThumbnailQueue: React.FC<ThumbnailQueueProps> = ({
           <div className="thumbnail-queue__thumb">
             {isVideo ? (
               <>
-                  <video
+                {/* 视频使用预览图作为 poster */}
+                <video
                   src={item.url}
                   className="thumbnail-queue__video"
                   muted
                   preload="metadata"
+                  poster={thumbnailUrl}
                 />
                 <div className="thumbnail-queue__video-icon">
                   <Play size={16} />

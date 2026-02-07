@@ -9,7 +9,9 @@
  */
 
 import { useEffect, useRef } from 'react';
-import { taskQueueService, legacyTaskQueueService, shouldUseSWTaskQueue } from '../services/task-queue';
+import { taskQueueService as legacyTaskQueueService } from '../services/task-queue-service';
+import { swTaskQueueService } from '../services/sw-task-queue-service';
+import { shouldUseSWTaskQueue } from '../services/task-queue';
 import { generationAPIService } from '../services/generation-api-service';
 import { characterAPIService } from '../services/character-api-service';
 import { characterStorageService } from '../services/character-storage-service';
@@ -18,6 +20,11 @@ import { Task, TaskStatus, TaskType } from '../types/task.types';
 import { CharacterStatus } from '../types/character.types';
 import { isTaskTimeout } from '../utils/task-utils';
 import { isAsyncImageModel } from '../constants/model-config';
+
+// Get the appropriate task queue service
+const taskQueueService = shouldUseSWTaskQueue()
+  ? swTaskQueueService
+  : legacyTaskQueueService;
 
 /**
  * 从 API 错误体中提取原始错误消息

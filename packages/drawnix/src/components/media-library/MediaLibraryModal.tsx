@@ -15,7 +15,7 @@ import type {
   Asset,
 } from '../../types/asset.types';
 import { AssetType, AssetSource, SelectionMode } from '../../types/asset.types';
-import { downloadFile } from '@aitu/utils';
+import { downloadFile } from '../../utils/download-utils';
 import { useDrawnix } from '../../hooks/use-drawnix';
 import { removeElementsByAssetId, removeElementsByAssetUrl, isCacheUrl } from '../../utils/asset-cleanup';
 import { isZipFile, extractMediaFromZip } from '../../utils/zip-utils';

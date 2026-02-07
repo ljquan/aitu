@@ -18,7 +18,7 @@ import { MediaLibraryModal } from '../../media-library/MediaLibraryModal';
 import { SelectionMode, AssetType, AssetSource } from '../../../types/asset.types';
 import type { Asset } from '../../../types/asset.types';
 import { useAssets } from '../../../contexts/AssetContext';
-import { compressImageBlob, getCompressionStrategy } from '@aitu/utils';
+import { compressImageBlob, getCompressionStrategy } from '../../../utils/image-compression-core';
 import './MultiImageUpload.scss';
 
 interface MultiImageUploadProps {

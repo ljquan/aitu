@@ -227,42 +227,23 @@ export const Drawnix: React.FC<DrawnixProps> = ({
   }, []);
 
   // 预加载画布中使用的字体（当 value 变化时）
-  // 延迟执行以避免阻塞首屏渲染
   useEffect(() => {
     if (value && value.length > 0) {
-      const preloadFonts = () => {
-        fontManagerService.preloadBoardFonts(value).then(() => {
-          // 字体加载完成后，强制重新渲染
-          // PlaitBoard 没有 redraw 方法，字体加载后会自动应用
-        }).catch(error => {
-          console.warn('Failed to preload board fonts:', error);
-        });
-      };
-
-      // 延迟字体预加载，优先渲染画布
-      if ('requestIdleCallback' in window) {
-        (window as Window).requestIdleCallback(preloadFonts, { timeout: 2000 });
-      } else {
-        setTimeout(preloadFonts, 300);
-      }
+      fontManagerService.preloadBoardFonts(value).then(() => {
+        // 字体加载完成后，强制重新渲染
+        // PlaitBoard 没有 redraw 方法，字体加载后会自动应用
+      }).catch(error => {
+        console.warn('Failed to preload board fonts:', error);
+      });
     }
   }, [value]);
 
   // Initialize video recovery service to restore expired blob URLs
-  // 延迟执行以避免阻塞首屏渲染
   useEffect(() => {
     if (board) {
-      const initVideoRecovery = () => {
-        import('./services/video-recovery-service').then(({ initVideoRecoveryService }) => {
-          initVideoRecoveryService(board);
-        });
-      };
-
-      if ('requestIdleCallback' in window) {
-        (window as Window).requestIdleCallback(initVideoRecovery, { timeout: 3000 });
-      } else {
-        setTimeout(initVideoRecovery, 500);
-      }
+      import('./services/video-recovery-service').then(({ initVideoRecoveryService }) => {
+        initVideoRecoveryService(board);
+      });
     }
   }, [board]);
 
@@ -296,23 +277,18 @@ export const Drawnix: React.FC<DrawnixProps> = ({
     if (board && value && value.length > 0) {
       const restoreWorkZones = async () => {
         const { WorkZoneTransforms } = await import('./plugins/with-workzone');
+        const { shouldUseSWTaskQueue } = await import('./services/task-queue');
         const { TaskStatus } = await import('./types/task.types');
 
-        // Initialize SW service (fire-and-forget, 不阻塞应用启动)
-        // SW 可用性由服务内部管理，即使 SW 不可用也能正常工作
-        const { swTaskQueueService } = await import('./services/sw-task-queue-service');
-        
-        // 使用 Promise.race 设置超时，避免 SW 初始化阻塞应用启动
-        const SW_INIT_TIMEOUT = 5000; // 5秒超时
+        // In SW mode, ensure tasks are synced from SW first
         let swInitialized = false;
-        try {
-          swInitialized = await Promise.race([
-            swTaskQueueService.initialize(),
-            new Promise<boolean>((resolve) => setTimeout(() => resolve(false), SW_INIT_TIMEOUT))
-          ]);
-        } catch {
-          // SW 初始化失败，继续使用降级模式
-          console.warn('[Drawnix] SW initialization failed, using fallback mode');
+        if (shouldUseSWTaskQueue()) {
+          const { swTaskQueueService } = await import('./services/sw-task-queue-service');
+          // Wait for SW to be initialized and tasks synced
+          swInitialized = await swTaskQueueService.initialize();
+          if (swInitialized) {
+            await swTaskQueueService.syncTasksFromSW();
+          }
         }
 
         // Query all chat workflows from SW (only if SW is initialized)
@@ -334,9 +310,6 @@ export const Drawnix: React.FC<DrawnixProps> = ({
           // Also query regular workflows
           const { workflowSubmissionService } = await import('./services/workflow-submission-service');
           activeWorkflows = await workflowSubmissionService.queryAllWorkflows();
-        } else {
-          // SW 不可用时，从 IndexedDB 直接同步任务状态
-          await swTaskQueueService.syncFromIndexedDB();
         }
         
         const activeWorkflowIds = new Set(activeWorkflows.map(w => w.id));
@@ -350,19 +323,6 @@ export const Drawnix: React.FC<DrawnixProps> = ({
 
         for (const workzone of workzones) {
           const swWorkflow = activeWorkflows.find(w => w.id === workzone.workflow.id);
-          
-          // 检查工作流是否已完成，如果是则自动删除 WorkZone
-          // 注意：需要确保没有 pending/running 步骤（AI 分析可能会添加后续步骤）
-          const workflowStatus = swWorkflow?.status || workzone.workflow.status;
-          const stepsToCheck = swWorkflow?.steps || workzone.workflow.steps;
-          const hasPendingOrRunningSteps = stepsToCheck.some(
-            step => step.status === 'running' || step.status === 'pending' || step.status === 'pending_main_thread'
-          );
-          
-          if (workflowStatus === 'completed' && !hasPendingOrRunningSteps) {
-            WorkZoneTransforms.removeWorkZone(board, workzone.id);
-            continue;
-          }
           
           const hasRunningSteps = workzone.workflow.steps.some(
             step => step.status === 'running' || step.status === 'pending'
@@ -428,18 +388,9 @@ export const Drawnix: React.FC<DrawnixProps> = ({
                 // If SW workflow completed, we'll receive workflow:completed event
                 return step;
               }
-              // For media generation steps (generate_image, generate_video, etc.),
-              // they may be pending and need to be resumed via fallback engine
-              const mediaGenerationSteps = ['generate_image', 'generate_video', 'generate_grid_image', 'generate_inspiration_board'];
-              if (mediaGenerationSteps.includes(step.mcp)) {
-                // Keep status for fallback engine to resume
-                // The WorkZoneContent claim logic will trigger fallback resume
-                return step;
-              }
-              
               // For other steps without taskId (like insert_mindmap, insert_mermaid),
               // they are synchronous and should have completed before refresh
-              // If they're still running, mark as failed (pending is ok, will be skipped)
+              // If they're still running/pending, mark as failed
               if (step.status === 'running') {
                 return {
                   ...step,
@@ -503,26 +454,9 @@ export const Drawnix: React.FC<DrawnixProps> = ({
         }
       };
 
-      // 使用 requestIdleCallback 延迟执行 WorkZone 恢复逻辑
-      // 避免阻塞首屏渲染
-      const scheduleRestore = () => {
-        if ('requestIdleCallback' in window) {
-          (window as Window).requestIdleCallback(() => {
-            restoreWorkZones().catch(error => {
-              console.error('[Drawnix] Failed to restore WorkZones:', error);
-            });
-          }, { timeout: 2000 }); // 最多延迟 2 秒
-        } else {
-          // Safari 不支持 requestIdleCallback，使用 setTimeout 兜底
-          setTimeout(() => {
-            restoreWorkZones().catch(error => {
-              console.error('[Drawnix] Failed to restore WorkZones:', error);
-            });
-          }, 500);
-        }
-      };
-
-      scheduleRestore();
+      restoreWorkZones().catch(error => {
+        console.error('[Drawnix] Failed to restore WorkZones:', error);
+      });
     }
   }, [board]); // Only run once when board is initialized
 

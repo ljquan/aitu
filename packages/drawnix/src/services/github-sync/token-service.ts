@@ -3,7 +3,6 @@
  * 负责 Token 的安全存储、验证和管理
  */
 
-import { logDebug, logInfo, logSuccess, logWarning, logError } from './sync-log-service';
 import { CryptoUtils } from '../../utils/crypto-utils';
 
 /** Token 存储键 */
@@ -42,7 +41,7 @@ class TokenService {
       // 清除验证状态缓存
       localStorage.removeItem(TOKEN_VALIDATED_KEY);
     } catch (error) {
-      logError('TokenService] Failed to save token:', error);
+      console.error('[TokenService] Failed to save token:', error);
       throw new Error('保存 Token 失败');
     }
   }
@@ -67,7 +66,7 @@ class TokenService {
       this.cachedToken = token;
       return token;
     } catch (error) {
-      logError('TokenService] Failed to get token:', error);
+      console.error('[TokenService] Failed to get token:', error);
       // 解密失败，可能是数据损坏，清除存储
       this.clearToken();
       return null;
@@ -154,63 +153,8 @@ class TokenService {
 
       return isValid;
     } catch (error) {
-      logError('TokenService] Token validation failed:', error);
+      console.error('[TokenService] Token validation failed:', error);
       return false;
-    }
-  }
-
-  // 缓存用户信息，避免重复请求
-  private cachedUserInfo: { login: string; name: string | null; avatar_url: string } | null = null;
-
-  /**
-   * 验证 Token 并获取用户信息（一次请求完成两个目的）
-   * 比分别调用 validateToken + getUserInfo 更高效
-   */
-  async validateAndGetUserInfo(token?: string): Promise<{
-    isValid: boolean;
-    userInfo: { login: string; name: string | null; avatar_url: string } | null;
-  }> {
-    const tokenToValidate = token || await this.getToken();
-    
-    if (!tokenToValidate) {
-      return { isValid: false, userInfo: null };
-    }
-
-    // 检查缓存
-    if (!token && this.tokenValidated && this.cachedToken === tokenToValidate && this.cachedUserInfo) {
-      return { isValid: true, userInfo: this.cachedUserInfo };
-    }
-
-    try {
-      const response = await fetch('https://api.github.com/user', {
-        headers: {
-          'Authorization': `Bearer ${tokenToValidate}`,
-          'Accept': 'application/vnd.github.v3+json',
-        },
-      });
-
-      if (!response.ok) {
-        return { isValid: false, userInfo: null };
-      }
-
-      const data = await response.json();
-      const userInfo = {
-        login: data.login,
-        name: data.name,
-        avatar_url: data.avatar_url,
-      };
-
-      // 缓存结果
-      if (!token) {
-        this.tokenValidated = true;
-        this.cachedUserInfo = userInfo;
-        localStorage.setItem(TOKEN_VALIDATED_KEY, 'true');
-      }
-
-      return { isValid: true, userInfo };
-    } catch (error) {
-      logError('TokenService] Token validation failed:', error);
-      return { isValid: false, userInfo: null };
     }
   }
 
@@ -218,13 +162,33 @@ class TokenService {
    * 获取 Token 关联的 GitHub 用户信息
    */
   async getUserInfo(): Promise<{ login: string; name: string | null; avatar_url: string } | null> {
-    // 使用缓存
-    if (this.cachedUserInfo && this.tokenValidated) {
-      return this.cachedUserInfo;
+    const token = await this.getToken();
+    if (!token) {
+      return null;
     }
 
-    const result = await this.validateAndGetUserInfo();
-    return result.userInfo;
+    try {
+      const response = await fetch('https://api.github.com/user', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/vnd.github.v3+json',
+        },
+      });
+
+      if (!response.ok) {
+        return null;
+      }
+
+      const data = await response.json();
+      return {
+        login: data.login,
+        name: data.name,
+        avatar_url: data.avatar_url,
+      };
+    } catch (error) {
+      console.error('[TokenService] Failed to get user info:', error);
+      return null;
+    }
   }
 
   /**
@@ -254,7 +218,7 @@ class TokenService {
       // 如果没有 scope 头，通过响应状态判断
       return response.ok;
     } catch (error) {
-      logError('TokenService] Failed to check gist scope:', error);
+      console.error('[TokenService] Failed to check gist scope:', error);
       return false;
     }
   }

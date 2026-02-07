@@ -11,17 +11,13 @@ export interface ApiAuthErrorDetail {
 }
 
 /**
- * 检查错误信息是否包含认证错误
- * 支持检测：401 状态码、Invalid Token、Unauthorized、Authentication 失败、rix_api_error
+ * 检查错误信息是否包含 401 认证错误
  */
 export function isAuthError(error: string): boolean {
-  const lowerError = error.toLowerCase();
   return error.includes('401') || 
-         lowerError.includes('invalid token') ||
-         lowerError.includes('unauthorized') ||
-         lowerError.includes('authentication') ||
-         // 检测 API 返回的 rix_api_error 类型的 token 错误
-         (lowerError.includes('rix_api_error') && lowerError.includes('invalid'));
+         error.toLowerCase().includes('invalid token') ||
+         error.toLowerCase().includes('unauthorized') ||
+         error.toLowerCase().includes('authentication');
 }
 
 /**

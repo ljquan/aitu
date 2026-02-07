@@ -15,7 +15,6 @@ import {
   mergeImagePromptHistory,
 } from '../prompt-storage-service';
 import { swTaskQueueService } from '../sw-task-queue-service';
-import { logDebug, logInfo, logSuccess, logWarning, logError } from './sync-log-service';
 import { TaskStatus, TaskType, Task } from '../../types/task.types';
 import { DRAWNIX_DEVICE_ID_KEY } from '../../constants/storage';
 import { VERSIONS } from '../../constants';
@@ -27,23 +26,12 @@ import {
   TasksData,
   SYNC_VERSION,
   SYNC_FILES,
-  SYNC_FILES_PAGED,
   BoardSyncInfo,
   PromptTombstone,
   TaskTombstone,
-  TaskIndex,
-  TaskPage,
-  WorkflowIndex,
-  WorkflowPage,
-  TaskSyncFormat,
-  detectTaskSyncFormat,
 } from './types';
-import { taskSyncService, convertTasksToPagedFormat, migrateFromLegacyFormat } from './task-sync-service';
-import { workflowSyncService, convertWorkflowsToPagedFormat } from './workflow-sync-service';
-import { workflowStorageReader } from '../workflow-storage-reader';
 import type { Board, BoardMetadata, Folder } from '../../types/workspace.types';
 import { cryptoService, isEncryptedData } from './crypto-service';
-import { yieldToMain } from '@aitu/utils';
 
 /**
  * 计算字符串的简单校验和
@@ -126,8 +114,8 @@ class DataSerializer {
     const videoPromptHistory = getVideoPromptHistory();
     const imagePromptHistory = getImagePromptHistory();
 
-    // 从 SW 获取所有已完成的任务（而非内存中的分页数据）
-    const allTasks = await swTaskQueueService.getAllTasksFromSW();
+    // 收集已完成的任务
+    const allTasks = swTaskQueueService.getAllTasks();
     const completedTasks = allTasks.filter(
       task => task.status === TaskStatus.COMPLETED &&
         (task.type === TaskType.IMAGE || task.type === TaskType.VIDEO)
@@ -137,7 +125,6 @@ class DataSerializer {
     const boardsIndex: Record<string, BoardSyncInfo> = {};
     const boardsMap = new Map<string, BoardData>();
 
-    let processedCount = 0;
     for (const board of boards) {
       const boardJson = JSON.stringify(board.elements);
       boardsIndex[board.id] = {
@@ -146,11 +133,6 @@ class DataSerializer {
         checksum: calculateChecksum(boardJson),
       };
       boardsMap.set(board.id, board);
-      // 每处理 5 个画板让出主线程，避免 UI 阻塞
-      processedCount++;
-      if (processedCount % 5 === 0) {
-        await yieldToMain();
-      }
     }
 
     // 构建工作区数据
@@ -178,6 +160,7 @@ class DataSerializer {
         },
       },
       boards: boardsIndex,
+      syncedMedia: {},
     };
 
     return {
@@ -192,57 +175,6 @@ class DataSerializer {
       tasks: {
         completedTasks,
       },
-    };
-  }
-
-  /**
-   * 收集所有需要同步的数据（分页格式）
-   * 用于新的分页同步模式
-   */
-  async collectSyncDataPaged(): Promise<{
-    manifest: SyncManifest;
-    workspace: WorkspaceData;
-    boards: Map<string, BoardData>;
-    prompts: PromptsData;
-    taskIndex: TaskIndex;
-    taskPages: TaskPage[];
-    workflowIndex: WorkflowIndex;
-    workflowPages: WorkflowPage[];
-  }> {
-    // 收集基础数据
-    const baseData = await this.collectSyncData();
-
-    // 转换任务为分页格式
-    const { index: taskIndex, pages: taskPages } = convertTasksToPagedFormat(
-      baseData.tasks.completedTasks
-    );
-
-    // 收集并转换工作流为分页格式
-    const workflows = await workflowStorageReader.getAllWorkflows();
-    const terminalWorkflows = workflows.filter(w => 
-      w.status === 'completed' || w.status === 'failed' || w.status === 'cancelled'
-    );
-    const { index: workflowIndex, pages: workflowPages } = convertWorkflowsToPagedFormat(
-      terminalWorkflows
-    );
-
-    logDebug('DataSerializer: Collected paged sync data', {
-      boards: baseData.boards.size,
-      taskPages: taskPages.length,
-      taskItems: taskIndex.items.length,
-      workflowPages: workflowPages.length,
-      workflowItems: workflowIndex.items.length,
-    });
-
-    return {
-      manifest: baseData.manifest,
-      workspace: baseData.workspace,
-      boards: baseData.boards,
-      prompts: baseData.prompts,
-      taskIndex,
-      taskPages,
-      workflowIndex,
-      workflowPages,
     };
   }
 
@@ -288,15 +220,15 @@ class DataSerializer {
     // 序列化提示词
     files[SYNC_FILES.PROMPTS] = JSON.stringify(data.prompts, null, 2);
 
-    // 注意：不再生成 tasks.json，改用分页格式同步
-    // 任务同步由 taskSyncService.syncTasks() 单独处理
+    // 序列化任务
+    files[SYNC_FILES.TASKS] = JSON.stringify(data.tasks, null, 2);
 
     return files;
   }
 
   /**
    * 序列化为 Gist 文件格式（加密版本）
-   * 所有文件都加密（包括 manifest）
+   * manifest 不加密（需要用于版本检测），其他文件加密
    * @param data 要序列化的数据
    * @param gistId Gist ID，用于派生加密密钥
    * @param customPassword 自定义加密密码（可选，优先使用）
@@ -314,119 +246,32 @@ class DataSerializer {
   ): Promise<Record<string, string>> {
     const files: Record<string, string> = {};
 
-    // manifest 也加密
-    const manifestJson = JSON.stringify(data.manifest);
-    files[SYNC_FILES.MANIFEST] = await cryptoService.encrypt(manifestJson, gistId, customPassword);
+    // manifest 不加密（需要检查版本兼容性）
+    // 但标记为已加密存储，以及是否使用自定义密码
+    const manifestWithEncryptionFlag = {
+      ...data.manifest,
+      encrypted: true, // 标记使用加密存储
+      customPassword: !!customPassword, // 标记是否使用自定义密码
+    };
+    files[SYNC_FILES.MANIFEST] = JSON.stringify(manifestWithEncryptionFlag, null, 2);
 
     // 加密 workspace
     const workspaceJson = JSON.stringify(data.workspace);
     files[SYNC_FILES.WORKSPACE] = await cryptoService.encrypt(workspaceJson, gistId, customPassword);
 
     // 加密每个画板
-    let boardProcessedCount = 0;
     for (const [boardId, board] of data.boards) {
       const boardJson = JSON.stringify(board);
       files[SYNC_FILES.boardFile(boardId)] = await cryptoService.encrypt(boardJson, gistId, customPassword);
-      // 每处理 3 个画板让出主线程，避免 UI 阻塞
-      boardProcessedCount++;
-      if (boardProcessedCount % 3 === 0) {
-        await yieldToMain();
-      }
     }
 
     // 加密提示词
     const promptsJson = JSON.stringify(data.prompts);
     files[SYNC_FILES.PROMPTS] = await cryptoService.encrypt(promptsJson, gistId, customPassword);
 
-    // 注意：不再生成 tasks.json，改用分页格式同步
-    // 任务同步由 taskSyncService.syncTasks() 单独处理
-
-    return files;
-  }
-
-  /**
-   * 序列化为 Gist 文件格式（分页加密版本）
-   * 使用分页格式存储任务和工作流
-   */
-  async serializeToGistFilesPagedEncrypted(
-    data: {
-      manifest: SyncManifest;
-      workspace: WorkspaceData;
-      boards: Map<string, BoardData>;
-      prompts: PromptsData;
-      taskIndex: TaskIndex;
-      taskPages: TaskPage[];
-      workflowIndex: WorkflowIndex;
-      workflowPages: WorkflowPage[];
-    },
-    gistId: string,
-    customPassword?: string
-  ): Promise<Record<string, string>> {
-    const files: Record<string, string> = {};
-
-    // manifest 加密
-    const manifestJson = JSON.stringify(data.manifest);
-    files[SYNC_FILES.MANIFEST] = await cryptoService.encrypt(manifestJson, gistId, customPassword);
-
-    // 加密 workspace
-    const workspaceJson = JSON.stringify(data.workspace);
-    files[SYNC_FILES.WORKSPACE] = await cryptoService.encrypt(workspaceJson, gistId, customPassword);
-
-    // 加密每个画板
-    let pagedBoardCount = 0;
-    for (const [boardId, board] of data.boards) {
-      const boardJson = JSON.stringify(board);
-      files[SYNC_FILES.boardFile(boardId)] = await cryptoService.encrypt(boardJson, gistId, customPassword);
-      // 每处理 3 个画板让出主线程，避免 UI 阻塞
-      pagedBoardCount++;
-      if (pagedBoardCount % 3 === 0) {
-        await yieldToMain();
-      }
-    }
-
-    // 加密提示词
-    const promptsJson = JSON.stringify(data.prompts);
-    files[SYNC_FILES.PROMPTS] = await cryptoService.encrypt(promptsJson, gistId, customPassword);
-
-    // 加密任务索引
-    const taskIndexJson = JSON.stringify(data.taskIndex);
-    files[SYNC_FILES_PAGED.TASK_INDEX] = await cryptoService.encrypt(taskIndexJson, gistId, customPassword);
-
-    // 加密任务分页
-    let taskPageCount = 0;
-    for (const page of data.taskPages) {
-      const pageJson = JSON.stringify(page);
-      const filename = SYNC_FILES_PAGED.taskPageFile(page.pageId);
-      files[filename] = await cryptoService.encrypt(pageJson, gistId, customPassword);
-      // 每处理 3 个分页让出主线程
-      taskPageCount++;
-      if (taskPageCount % 3 === 0) {
-        await yieldToMain();
-      }
-    }
-
-    // 加密工作流索引
-    const workflowIndexJson = JSON.stringify(data.workflowIndex);
-    files[SYNC_FILES_PAGED.WORKFLOW_INDEX] = await cryptoService.encrypt(workflowIndexJson, gistId, customPassword);
-
-    // 加密工作流分页
-    let workflowPageCount = 0;
-    for (const page of data.workflowPages) {
-      const pageJson = JSON.stringify(page);
-      const filename = SYNC_FILES_PAGED.workflowPageFile(page.pageId);
-      files[filename] = await cryptoService.encrypt(pageJson, gistId, customPassword);
-      // 每处理 3 个分页让出主线程
-      workflowPageCount++;
-      if (workflowPageCount % 3 === 0) {
-        await yieldToMain();
-      }
-    }
-
-    logDebug('DataSerializer: Serialized paged files', {
-      totalFiles: Object.keys(files).length,
-      taskPages: data.taskPages.length,
-      workflowPages: data.workflowPages.length,
-    });
+    // 加密任务
+    const tasksJson = JSON.stringify(data.tasks);
+    files[SYNC_FILES.TASKS] = await cryptoService.encrypt(tasksJson, gistId, customPassword);
 
     return files;
   }
@@ -454,7 +299,7 @@ class DataSerializer {
       try {
         result.manifest = JSON.parse(files[SYNC_FILES.MANIFEST]);
       } catch (e) {
-        logWarning('DataSerializer: Failed to parse manifest:', e);
+        console.warn('[DataSerializer] Failed to parse manifest:', e);
       }
     }
 
@@ -463,7 +308,7 @@ class DataSerializer {
       try {
         result.workspace = JSON.parse(files[SYNC_FILES.WORKSPACE]);
       } catch (e) {
-        logWarning('DataSerializer: Failed to parse workspace:', e);
+        console.warn('[DataSerializer] Failed to parse workspace:', e);
       }
     }
 
@@ -472,7 +317,7 @@ class DataSerializer {
       if (filename.startsWith('board_') && filename.endsWith('.json')) {
         try {
           const board: BoardData = JSON.parse(content);
-          logDebug(`DataSerializer: Parsed board ${filename}:`, {
+          console.log(`[DataSerializer] Parsed board ${filename}:`, {
             id: board.id,
             name: board.name,
             elements: board.elements?.length || 0,
@@ -481,7 +326,7 @@ class DataSerializer {
           });
           result.boards.set(board.id, board);
         } catch (e) {
-          logWarning(`DataSerializer: Failed to parse board ${filename}:`, e);
+          console.warn(`[DataSerializer] Failed to parse board ${filename}:`, e);
         }
       }
     }
@@ -491,11 +336,18 @@ class DataSerializer {
       try {
         result.prompts = JSON.parse(files[SYNC_FILES.PROMPTS]);
       } catch (e) {
-        logWarning('DataSerializer: Failed to parse prompts:', e);
+        console.warn('[DataSerializer] Failed to parse prompts:', e);
       }
     }
 
-    // 注意：tasks 使用分页格式同步，不再解析 tasks.json
+    // 解析任务
+    if (files[SYNC_FILES.TASKS]) {
+      try {
+        result.tasks = JSON.parse(files[SYNC_FILES.TASKS]);
+      } catch (e) {
+        console.warn('[DataSerializer] Failed to parse tasks:', e);
+      }
+    }
 
     return result;
   }
@@ -519,17 +371,6 @@ class DataSerializer {
     prompts: PromptsData | null;
     tasks: TasksData | null;
   }> {
-    logDebug('DataSerializer: ========== deserializeFromGistFilesWithDecryption START ==========');
-    logDebug('DataSerializer: Input files:', {
-      fileCount: Object.keys(files).length,
-      fileNames: Object.keys(files),
-      fileSizes: Object.fromEntries(
-        Object.entries(files).map(([k, v]) => [k, v?.length || 0])
-      ),
-    });
-    logDebug('DataSerializer: gistId:', gistId?.substring(0, 8) + '...');
-    logDebug('DataSerializer: customPassword:', customPassword ? '***SET***' : 'NOT SET');
-    
     const result = {
       manifest: null as SyncManifest | null,
       workspace: null as WorkspaceData | null,
@@ -538,66 +379,46 @@ class DataSerializer {
       tasks: null as TasksData | null,
     };
 
-    // 解析 manifest（也加密了）
+    // 解析 manifest（不加密）
     if (files[SYNC_FILES.MANIFEST]) {
-      logDebug('DataSerializer: Parsing manifest, encrypted:', isEncryptedData(files[SYNC_FILES.MANIFEST]));
       try {
-        const manifestContent = await cryptoService.decryptOrPassthrough(files[SYNC_FILES.MANIFEST], gistId, customPassword);
-        result.manifest = JSON.parse(manifestContent);
-        logDebug('DataSerializer: Manifest parsed successfully:', {
-          version: result.manifest?.version,
-          boardsCount: result.manifest?.boards ? Object.keys(result.manifest.boards).length : 0,
-          boardIds: result.manifest?.boards ? Object.keys(result.manifest.boards) : [],
-        });
+        result.manifest = JSON.parse(files[SYNC_FILES.MANIFEST]);
       } catch (e) {
-        // 重新抛出解密错误
-        if (e instanceof Error && e.name === 'DecryptionError') {
-          throw e;
-        }
-        logWarning('DataSerializer: Failed to parse manifest:', e);
+        console.warn('[DataSerializer] Failed to parse manifest:', e);
       }
-    } else {
-      logWarning('DataSerializer: Manifest file NOT FOUND in input files!');
     }
 
-    logDebug('DataSerializer: Deserializing with customPassword:', !!customPassword);
+    // 检查是否使用加密存储
+    const manifestExt = result.manifest as SyncManifest & { encrypted?: boolean; customPassword?: boolean } | null;
+    const isEncrypted = manifestExt?.encrypted === true;
+    const needsCustomPassword = manifestExt?.customPassword === true;
+    console.log('[DataSerializer] Deserializing with encryption:', isEncrypted, 'customPassword:', needsCustomPassword);
 
     // 解析 workspace
     if (files[SYNC_FILES.WORKSPACE]) {
-      logDebug('DataSerializer: Parsing workspace, encrypted:', isEncryptedData(files[SYNC_FILES.WORKSPACE]));
       try {
-        const content = await cryptoService.decryptOrPassthrough(files[SYNC_FILES.WORKSPACE], gistId, customPassword);
-        logDebug('DataSerializer: Workspace decrypted content length:', content.length);
+        const content = isEncrypted
+          ? await cryptoService.decryptOrPassthrough(files[SYNC_FILES.WORKSPACE], gistId, customPassword)
+          : files[SYNC_FILES.WORKSPACE];
         result.workspace = JSON.parse(content);
-        logDebug('DataSerializer: Workspace parsed successfully:', {
-          currentBoardId: result.workspace?.currentBoardId,
-          folders: result.workspace?.folders?.length || 0,
-          boardMetadata: result.workspace?.boardMetadata?.length || 0,
-          boardMetadataIds: result.workspace?.boardMetadata?.map(m => m.id) || [],
-        });
       } catch (e) {
         // 重新抛出解密错误
         if (e instanceof Error && e.name === 'DecryptionError') {
           throw e;
         }
-        logWarning('DataSerializer: Failed to parse workspace:', e);
+        console.warn('[DataSerializer] Failed to parse workspace:', e);
       }
-    } else {
-      logWarning('DataSerializer: Workspace file NOT FOUND in input files!');
     }
 
     // 解析画板
-    logDebug('DataSerializer: Parsing boards...');
-    let boardFilesFound = 0;
     for (const [filename, content] of Object.entries(files)) {
       if (filename.startsWith('board_') && filename.endsWith('.json')) {
-        boardFilesFound++;
-        logDebug('DataSerializer: Processing board file:', filename, 'length:', content?.length || 0);
         try {
-          const decryptedContent = await cryptoService.decryptOrPassthrough(content, gistId, customPassword);
-          logDebug('DataSerializer: Board', filename, 'decrypted, length:', decryptedContent.length);
+          const decryptedContent = isEncrypted
+            ? await cryptoService.decryptOrPassthrough(content, gistId, customPassword)
+            : content;
           const board: BoardData = JSON.parse(decryptedContent);
-          logDebug(`DataSerializer: Parsed board ${filename}:`, {
+          console.log(`[DataSerializer] Parsed board ${filename}:`, {
             id: board.id,
             name: board.name,
             elements: board.elements?.length || 0,
@@ -610,217 +431,42 @@ class DataSerializer {
           if (e instanceof Error && e.name === 'DecryptionError') {
             throw e;
           }
-          logWarning(`DataSerializer: Failed to parse board ${filename}:`, e);
+          console.warn(`[DataSerializer] Failed to parse board ${filename}:`, e);
         }
       }
     }
-    logDebug('DataSerializer: Board files found:', boardFilesFound, 'boards parsed:', result.boards.size);
 
     // 解析提示词
     if (files[SYNC_FILES.PROMPTS]) {
-      logDebug('DataSerializer: Parsing prompts, encrypted:', isEncryptedData(files[SYNC_FILES.PROMPTS]));
       try {
-        const content = await cryptoService.decryptOrPassthrough(files[SYNC_FILES.PROMPTS], gistId, customPassword);
+        const content = isEncrypted
+          ? await cryptoService.decryptOrPassthrough(files[SYNC_FILES.PROMPTS], gistId, customPassword)
+          : files[SYNC_FILES.PROMPTS];
         result.prompts = JSON.parse(content);
-        logDebug('DataSerializer: Prompts parsed successfully:', {
-          promptHistory: result.prompts?.promptHistory?.length || 0,
-          videoPromptHistory: result.prompts?.videoPromptHistory?.length || 0,
-          imagePromptHistory: result.prompts?.imagePromptHistory?.length || 0,
-        });
       } catch (e) {
         // 重新抛出解密错误
         if (e instanceof Error && e.name === 'DecryptionError') {
           throw e;
         }
-        logWarning('DataSerializer: Failed to parse prompts:', e);
+        console.warn('[DataSerializer] Failed to parse prompts:', e);
       }
-    } else {
-      logWarning('DataSerializer: Prompts file NOT FOUND in input files!');
     }
 
-    // 注意：tasks 使用分页格式同步，不再解析 tasks.json
-
-    logDebug('DataSerializer: ========== deserializeFromGistFilesWithDecryption END ==========');
-    logDebug('DataSerializer: Final result:', {
-      hasManifest: !!result.manifest,
-      hasWorkspace: !!result.workspace,
-      boardsCount: result.boards.size,
-      boardIds: Array.from(result.boards.keys()),
-      hasPrompts: !!result.prompts,
-      hasTasks: !!result.tasks,
-    });
-    
-    return result;
-  }
-
-  /**
-   * 从 Gist 文件反序列化（分页加密版本）
-   * 支持新的分页格式
-   */
-  async deserializeFromGistFilesPagedWithDecryption(
-    files: Record<string, string>,
-    gistId: string,
-    customPassword?: string
-  ): Promise<{
-    manifest: SyncManifest | null;
-    workspace: WorkspaceData | null;
-    boards: Map<string, BoardData>;
-    prompts: PromptsData | null;
-    taskIndex: TaskIndex | null;
-    taskPages: Map<number, TaskPage>;
-    workflowIndex: WorkflowIndex | null;
-    workflowPages: Map<number, WorkflowPage>;
-  }> {
-    logDebug('DataSerializer: ========== deserializeFromGistFilesPagedWithDecryption START ==========');
-    
-    const result = {
-      manifest: null as SyncManifest | null,
-      workspace: null as WorkspaceData | null,
-      boards: new Map<string, BoardData>(),
-      prompts: null as PromptsData | null,
-      taskIndex: null as TaskIndex | null,
-      taskPages: new Map<number, TaskPage>(),
-      workflowIndex: null as WorkflowIndex | null,
-      workflowPages: new Map<number, WorkflowPage>(),
-    };
-
-    // 解析 manifest
-    if (files[SYNC_FILES.MANIFEST]) {
+    // 解析任务
+    if (files[SYNC_FILES.TASKS]) {
       try {
-        const manifestContent = await cryptoService.decryptOrPassthrough(
-          files[SYNC_FILES.MANIFEST],
-          gistId,
-          customPassword
-        );
-        result.manifest = JSON.parse(manifestContent);
+        const content = isEncrypted
+          ? await cryptoService.decryptOrPassthrough(files[SYNC_FILES.TASKS], gistId, customPassword)
+          : files[SYNC_FILES.TASKS];
+        result.tasks = JSON.parse(content);
       } catch (e) {
-        if (e instanceof Error && e.name === 'DecryptionError') throw e;
-        logWarning('DataSerializer: Failed to parse manifest:', e);
-      }
-    }
-
-    // 解析 workspace
-    if (files[SYNC_FILES.WORKSPACE]) {
-      try {
-        const content = await cryptoService.decryptOrPassthrough(
-          files[SYNC_FILES.WORKSPACE],
-          gistId,
-          customPassword
-        );
-        result.workspace = JSON.parse(content);
-      } catch (e) {
-        if (e instanceof Error && e.name === 'DecryptionError') throw e;
-        logWarning('DataSerializer: Failed to parse workspace:', e);
-      }
-    }
-
-    // 解析画板
-    for (const [filename, content] of Object.entries(files)) {
-      if (filename.startsWith('board_') && filename.endsWith('.json')) {
-        try {
-          const decrypted = await cryptoService.decryptOrPassthrough(content, gistId, customPassword);
-          const board: BoardData = JSON.parse(decrypted);
-          result.boards.set(board.id, board);
-        } catch (e) {
-          if (e instanceof Error && e.name === 'DecryptionError') throw e;
-          logWarning(`DataSerializer: Failed to parse board ${filename}:`, e);
+        // 重新抛出解密错误
+        if (e instanceof Error && e.name === 'DecryptionError') {
+          throw e;
         }
+        console.warn('[DataSerializer] Failed to parse tasks:', e);
       }
     }
-
-    // 解析提示词
-    if (files[SYNC_FILES.PROMPTS]) {
-      try {
-        const content = await cryptoService.decryptOrPassthrough(
-          files[SYNC_FILES.PROMPTS],
-          gistId,
-          customPassword
-        );
-        result.prompts = JSON.parse(content);
-      } catch (e) {
-        if (e instanceof Error && e.name === 'DecryptionError') throw e;
-        logWarning('DataSerializer: Failed to parse prompts:', e);
-      }
-    }
-
-    // 解析任务（只支持分页格式）
-    // 解析任务索引
-    if (files[SYNC_FILES_PAGED.TASK_INDEX]) {
-      try {
-        const content = await cryptoService.decryptOrPassthrough(
-          files[SYNC_FILES_PAGED.TASK_INDEX],
-          gistId,
-          customPassword
-        );
-        result.taskIndex = JSON.parse(content);
-        logDebug('DataSerializer: Parsed task index:', {
-          items: result.taskIndex?.items?.length || 0,
-          pages: result.taskIndex?.pages?.length || 0,
-        });
-      } catch (e) {
-        if (e instanceof Error && e.name === 'DecryptionError') throw e;
-        logWarning('DataSerializer: Failed to parse task index:', e);
-      }
-    }
-
-    // 解析任务分页
-    for (const [filename, content] of Object.entries(files)) {
-      if (SYNC_FILES_PAGED.isTaskPageFile(filename)) {
-        try {
-          const decrypted = await cryptoService.decryptOrPassthrough(content, gistId, customPassword);
-          const page: TaskPage = JSON.parse(decrypted);
-          result.taskPages.set(page.pageId, page);
-        } catch (e) {
-          if (e instanceof Error && e.name === 'DecryptionError') throw e;
-          logWarning(`DataSerializer: Failed to parse task page ${filename}:`, e);
-        }
-      }
-    }
-
-    // 解析工作流索引
-    if (files[SYNC_FILES_PAGED.WORKFLOW_INDEX]) {
-      try {
-        const content = await cryptoService.decryptOrPassthrough(
-          files[SYNC_FILES_PAGED.WORKFLOW_INDEX],
-          gistId,
-          customPassword
-        );
-        result.workflowIndex = JSON.parse(content);
-        logDebug('DataSerializer: Parsed workflow index:', {
-          items: result.workflowIndex?.items?.length || 0,
-          pages: result.workflowIndex?.pages?.length || 0,
-        });
-      } catch (e) {
-        if (e instanceof Error && e.name === 'DecryptionError') throw e;
-        logWarning('DataSerializer: Failed to parse workflow index:', e);
-      }
-    }
-
-    // 解析工作流分页
-    for (const [filename, content] of Object.entries(files)) {
-      if (SYNC_FILES_PAGED.isWorkflowPageFile(filename)) {
-        try {
-          const decrypted = await cryptoService.decryptOrPassthrough(content, gistId, customPassword);
-          const page: WorkflowPage = JSON.parse(decrypted);
-          result.workflowPages.set(page.pageId, page);
-        } catch (e) {
-          if (e instanceof Error && e.name === 'DecryptionError') throw e;
-          logWarning(`DataSerializer: Failed to parse workflow page ${filename}:`, e);
-        }
-      }
-    }
-
-    logDebug('DataSerializer: ========== deserializeFromGistFilesPagedWithDecryption END ==========');
-    logDebug('DataSerializer: Paged result:', {
-      hasManifest: !!result.manifest,
-      hasWorkspace: !!result.workspace,
-      boardsCount: result.boards.size,
-      hasPrompts: !!result.prompts,
-      hasTaskIndex: !!result.taskIndex,
-      taskPagesCount: result.taskPages.size,
-      hasWorkflowIndex: !!result.workflowIndex,
-      workflowPagesCount: result.workflowPages.size,
-    });
 
     return result;
   }
@@ -848,27 +494,12 @@ class DataSerializer {
     tasksDeleted: number;
     remoteCurrentBoardId?: string | null;
   }> {
-    logDebug('DataSerializer: ========== applySyncData START ==========');
-    logDebug('DataSerializer: applySyncData called with:', {
+    console.log('[DataSerializer] applySyncData called with:', {
       hasWorkspace: !!data.workspace,
-      workspace: data.workspace ? {
-        currentBoardId: data.workspace.currentBoardId,
-        folders: data.workspace.folders?.length || 0,
-        boardMetadata: data.workspace.boardMetadata?.length || 0,
-        boardMetadataIds: data.workspace.boardMetadata?.map(m => m.id) || [],
-      } : 'NULL',
       boardsCount: data.boards.size,
       boardIds: Array.from(data.boards.keys()),
       hasPrompts: !!data.prompts,
-      prompts: data.prompts ? {
-        promptHistory: data.prompts.promptHistory?.length || 0,
-        videoPromptHistory: data.prompts.videoPromptHistory?.length || 0,
-        imagePromptHistory: data.prompts.imagePromptHistory?.length || 0,
-      } : 'NULL',
       hasTasks: !!data.tasks,
-      tasks: data.tasks ? {
-        completedTasks: data.tasks.completedTasks?.length || 0,
-      } : 'NULL',
       deletedBoardIds: data.deletedBoardIds?.length || 0,
       deletedPromptIds: data.deletedPromptIds?.length || 0,
       deletedTaskIds: data.deletedTaskIds?.length || 0,
@@ -883,16 +514,16 @@ class DataSerializer {
 
     // 应用文件夹
     if (data.workspace) {
-      logDebug('DataSerializer: Applying folders:', data.workspace.folders.length);
+      console.log('[DataSerializer] Applying folders:', data.workspace.folders.length);
       for (const folder of data.workspace.folders) {
         await workspaceStorageService.saveFolder(folder);
       }
     }
 
     // 应用画板
-    logDebug('DataSerializer: Applying boards...');
+    console.log('[DataSerializer] Applying boards...');
     for (const [boardId, board] of data.boards) {
-      logDebug(`DataSerializer: Saving board: ${boardId} - ${board.name}, elements: ${board.elements?.length || 0}`, {
+      console.log(`[DataSerializer] Saving board: ${boardId} - ${board.name}, elements: ${board.elements?.length || 0}`, {
         folderId: board.folderId,
         viewport: board.viewport,
         createdAt: board.createdAt,
@@ -902,76 +533,54 @@ class DataSerializer {
       
       // 验证保存成功
       const savedBoard = await workspaceStorageService.loadBoard(boardId);
-      logDebug(`DataSerializer: Verified saved board: ${boardId}`, {
+      console.log(`[DataSerializer] Verified saved board: ${boardId}`, {
         found: !!savedBoard,
         elements: savedBoard?.elements?.length || 0,
       });
       
       boardsApplied++;
     }
-    logDebug('DataSerializer: Boards applied:', boardsApplied);
+    console.log('[DataSerializer] Boards applied:', boardsApplied);
 
     // 删除画板（远程已标记为 tombstone 的）
     if (data.deletedBoardIds && data.deletedBoardIds.length > 0) {
-      logDebug('DataSerializer: Deleting boards:', data.deletedBoardIds);
+      console.log('[DataSerializer] Deleting boards:', data.deletedBoardIds);
       for (const boardId of data.deletedBoardIds) {
         try {
           await workspaceStorageService.deleteBoard(boardId);
           boardsDeleted++;
-          logDebug(`DataSerializer: Deleted board: ${boardId}`);
+          console.log(`[DataSerializer] Deleted board: ${boardId}`);
         } catch (e) {
-          logWarning(`DataSerializer: Failed to delete board ${boardId}:`, e);
+          console.warn(`[DataSerializer] Failed to delete board ${boardId}:`, e);
         }
       }
-      logDebug('DataSerializer: Boards deleted:', boardsDeleted);
+      console.log('[DataSerializer] Boards deleted:', boardsDeleted);
     }
 
     // 刷新工作区
     if (boardsApplied > 0) {
-      logDebug('DataSerializer: ========== RELOAD WORKSPACE START ==========');
-      logDebug('DataSerializer: Calling workspaceService.reload()...');
+      console.log('[DataSerializer] Reloading workspace...');
       await workspaceService.reload();
-      logDebug('DataSerializer: workspaceService.reload() completed');
       
       // 验证工作区加载状态
       const allBoards = workspaceService.getAllBoardMetadata();
-      logDebug('DataSerializer: Workspace reloaded, boards in memory:', {
+      console.log('[DataSerializer] Workspace reloaded, boards in memory:', {
         count: allBoards.length,
         ids: allBoards.map(b => b.id),
         names: allBoards.map(b => b.name),
       });
       
-      // 验证每个已保存的画板是否能从存储中加载
-      logDebug('DataSerializer: Verifying all saved boards in storage...');
-      for (const boardId of data.boards.keys()) {
-        const loadedBoard = await workspaceStorageService.loadBoard(boardId);
-        logDebug(`DataSerializer: VERIFY board ${boardId}:`, {
-          foundInStorage: !!loadedBoard,
-          name: loadedBoard?.name || 'N/A',
-          elements: loadedBoard?.elements?.length || 0,
-        });
-      }
-      
       // 如果有远程 currentBoardId，更新工作区状态
       if (data.workspace?.currentBoardId) {
-        logDebug('DataSerializer: Setting currentBoardId from remote:', data.workspace.currentBoardId);
+        console.log('[DataSerializer] Setting currentBoardId from remote:', data.workspace.currentBoardId);
         // 保存工作区状态（包括 currentBoardId）
         const currentState = workspaceService.getState();
-        logDebug('DataSerializer: Current state before update:', currentState);
         await workspaceStorageService.saveState({
           ...currentState,
           currentBoardId: data.workspace.currentBoardId,
         });
-        logDebug('DataSerializer: Saved workspace state with currentBoardId');
-        
-        // 验证保存成功
-        const verifyState = await workspaceStorageService.loadState();
-        logDebug('DataSerializer: VERIFY state after save:', {
-          currentBoardId: verifyState.currentBoardId,
-          match: verifyState.currentBoardId === data.workspace.currentBoardId,
-        });
+        console.log('[DataSerializer] Saved workspace state with currentBoardId');
       }
-      logDebug('DataSerializer: ========== RELOAD WORKSPACE END ==========');
     }
 
     // 应用提示词
@@ -990,39 +599,28 @@ class DataSerializer {
       }
     }
 
-    // 应用任务（合并远程和本地的已完成任务，基于 ID 去重）
-    logDebug('DataSerializer: Applying tasks...', {
+    // 应用任务（恢复已完成的任务记录到本地）
+    console.log('[DataSerializer] Applying tasks...', {
       hasTasks: !!data.tasks,
       completedTasksCount: data.tasks?.completedTasks?.length || 0,
     });
     
     if (data.tasks && data.tasks.completedTasks && data.tasks.completedTasks.length > 0) {
-      // 从 SW 获取所有本地任务（而非内存中的分页数据）
-      const localTasks = await swTaskQueueService.getAllTasksFromSW();
-      const localTaskMap = new Map(localTasks.map(t => [t.id, t]));
+      // 获取本地任务 ID 集合
+      const localTasks = swTaskQueueService.getAllTasks();
+      const localTaskIds = new Set(localTasks.map(t => t.id));
       
-      logDebug('DataSerializer: Local tasks:', {
+      console.log('[DataSerializer] Local tasks:', {
         count: localTasks.length,
-        ids: Array.from(localTaskMap.keys()).slice(0, 5), // 只显示前5个
+        ids: Array.from(localTaskIds).slice(0, 5), // 只显示前5个
       });
       
-      // 基于 ID 去重合并：远程任务优先（如果本地也有相同 ID 的任务，使用更新时间较新的）
-      const tasksToRestore: Task[] = [];
+      // 筛选出本地不存在的任务
+      const tasksToRestore = data.tasks.completedTasks.filter(
+        task => !localTaskIds.has(task.id)
+      );
       
-      for (const remoteTask of data.tasks.completedTasks) {
-        const localTask = localTaskMap.get(remoteTask.id);
-        
-        if (!localTask) {
-          // 本地不存在，需要恢复
-          tasksToRestore.push(remoteTask);
-        } else if (remoteTask.updatedAt && localTask.updatedAt && remoteTask.updatedAt > localTask.updatedAt) {
-          // 远程更新时间更新，使用远程版本
-          tasksToRestore.push(remoteTask);
-        }
-        // 如果本地版本更新或相同，保留本地版本（不需要额外操作）
-      }
-      
-      logDebug('DataSerializer: Tasks to restore after merge:', {
+      console.log('[DataSerializer] Tasks to restore:', {
         count: tasksToRestore.length,
         ids: tasksToRestore.slice(0, 5).map(t => t.id),
       });
@@ -1043,24 +641,23 @@ class DataSerializer {
           return task;
         });
         
-        logDebug('DataSerializer: Calling restoreTasks with', processedTasks.length, 'tasks');
+        console.log('[DataSerializer] Calling restoreTasks with', processedTasks.length, 'tasks');
         try {
           await swTaskQueueService.restoreTasks(processedTasks);
           tasksApplied = processedTasks.length;
-          logDebug('DataSerializer: Tasks restored:', tasksApplied);
+          console.log('[DataSerializer] Tasks restored:', tasksApplied);
         } catch (err) {
           // SW 可能未初始化或超时，跳过任务恢复但继续同步
-          logWarning('DataSerializer: Failed to restore tasks (SW may not be ready):', err);
+          console.warn('[DataSerializer] Failed to restore tasks (SW may not be ready):', err);
           tasksApplied = 0;
         }
       }
     } else {
-      logDebug('DataSerializer: No tasks to apply');
+      console.log('[DataSerializer] No tasks to apply');
     }
 
     const remoteCurrentBoardId = data.workspace?.currentBoardId || null;
-    logDebug('DataSerializer: ========== applySyncData END ==========');
-    logDebug('DataSerializer: applySyncData completed:', {
+    console.log('[DataSerializer] applySyncData completed:', {
       boardsApplied,
       promptsApplied,
       tasksApplied,
@@ -1072,18 +669,8 @@ class DataSerializer {
     
     // 最终验证：检查存储中的状态
     const savedState = await workspaceStorageService.loadState();
-    logDebug('DataSerializer: Final workspace state in storage:', {
+    console.log('[DataSerializer] Final workspace state in storage:', {
       currentBoardId: savedState.currentBoardId,
-      expected: remoteCurrentBoardId,
-      match: savedState.currentBoardId === remoteCurrentBoardId,
-    });
-    
-    // 列出存储中所有画板
-    const allBoardsInStorage = await workspaceStorageService.loadAllBoards();
-    logDebug('DataSerializer: Final boards in storage:', {
-      count: allBoardsInStorage.length,
-      ids: allBoardsInStorage.map(b => b.id),
-      names: allBoardsInStorage.map(b => b.name),
     });
     
     return {
@@ -1265,7 +852,7 @@ class DataSerializer {
             // 如果本地为空，总是使用远程版本
             // 这是一个保护机制：防止新设备初始化的空白画板（虽然 updatedAt 可能更新）
             // 覆盖了远程已有的内容画板（当 ID 意外冲突时）
-            logDebug(`Sync: Initial sync: Local board ${boardId} is empty, preferring remote version.`);
+            console.log(`[Sync] Initial sync: Local board ${boardId} is empty, preferring remote version.`);
             toDownload.push(boardId);
           } else if (board.updatedAt > remoteInfo.updatedAt) {
             toUpload.push(boardId);
@@ -1353,7 +940,7 @@ class DataSerializer {
     // 由于 manifest 中只存储了媒体信息，不存储任务列表
     // 所以任务的删除检测也需要在同步时处理
 
-    logDebug('DataSerializer: detectDeletions result:', {
+    console.log('[DataSerializer] detectDeletions result:', {
       deletedBoards: deletedBoards.length,
       deletedPrompts: deletedPrompts.length,
       deletedTasks: deletedTasks.length,

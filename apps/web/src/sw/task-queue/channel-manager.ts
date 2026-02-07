@@ -12,14 +12,12 @@
 import { ServiceWorkerChannel } from 'postmessage-duplex';
 import type { SWTaskQueue } from './queue';
 import { TaskStatus, TaskType, TaskExecutionPhase } from './types';
-import type { SWTask, GeminiConfig, VideoAPIConfig, TaskConfig } from './types';
+import type { SWTask, GeminiConfig, VideoAPIConfig } from './types';
 import {
   getWorkflowExecutor,
   handleMainThreadToolResponse,
   initWorkflowHandler,
-  updateWorkflowConfig,
   resendPendingToolRequests,
-  ensureWorkflowHandlerInitialized,
 } from './workflow-handler';
 import type { Workflow, MainThreadToolResponseMessage } from './workflow-types';
 import { taskQueueStorage, type StoredPendingToolRequest } from './storage';
@@ -50,7 +48,6 @@ interface TaskCreateParams {
   taskId: string;
   taskType: TaskType;
   params: SWTask['params'];
-  config: SWTask['config'];
 }
 
 // Thumbnail types
@@ -114,13 +111,6 @@ interface ChatStartParams {
   systemPrompt?: string;
 }
 
-// Executor types (媒体执行器 - SW 可选降级方案)
-interface ExecutorExecuteParams {
-  taskId: string;
-  type: 'image' | 'video' | 'ai_analyze';
-  params: Record<string, unknown>;
-}
-
 // ============================================================================
 // 通道管理器
 // ============================================================================
@@ -159,25 +149,10 @@ export class SWChannelManager {
       }
     });
     
-    // 定期清理断开的客户端和过期的待处理请求（每 60 秒）
+    // 定期清理断开的客户端（每 60 秒）
     setInterval(() => {
       this.cleanupDisconnectedClients().catch(() => {});
-      this.cleanupStalePendingRequests().catch(() => {});
     }, 60000);
-  }
-
-  /**
-   * 清理过期的待处理请求（超过 1 小时的请求）
-   */
-  private async cleanupStalePendingRequests(): Promise<void> {
-    try {
-      const deleted = await taskQueueStorage.cleanupStalePendingToolRequests();
-      if (deleted > 0) {
-        console.log(`[ChannelManager] Cleaned up ${deleted} stale pending tool requests`);
-      }
-    } catch (error) {
-      console.warn('[ChannelManager] Failed to cleanup stale pending requests:', error);
-    }
   }
 
   /**
@@ -320,22 +295,6 @@ export class SWChannelManager {
   }
 
   /**
-   * Check if a workflow has an active client channel
-   * Used for handler readiness detection before sending tool requests
-   */
-  hasWorkflowClientChannel(workflowId: string): boolean {
-    return this.workflowChannels.has(workflowId);
-  }
-
-  /**
-   * Check if there are any active client channels
-   * Used as fallback when workflow-specific channel is not available
-   */
-  hasAnyClientChannel(): boolean {
-    return this.channels.size > 0;
-  }
-
-  /**
    * 创建 RPC 订阅映射
    * 处理器直接返回响应值（Promise 或同步值）
    */
@@ -405,14 +364,6 @@ export class SWChannelManager {
       try {
         const result = await handler(data);
         
-        // 验证结果可以序列化（捕获序列化错误）
-        try {
-          JSON.stringify(result);
-        } catch (serializeError) {
-          console.error(`[SW wrapRpcHandler] ${methodName} result serialization failed:`, serializeError);
-          throw new Error(`Result serialization failed: ${serializeError}`);
-        }
-        
         // 更新请求日志的响应数据（不创建新的日志条目）
         if (shouldLog && requestId) {
           const logId = updateRequestWithResponse(
@@ -428,7 +379,6 @@ export class SWChannelManager {
         
         return result;
       } catch (error) {
-        console.error(`[SW wrapRpcHandler] ${methodName} error:`, error);
         // 更新请求日志的错误信息
         if (shouldLog && requestId) {
           const logId = updateRequestWithResponse(
@@ -454,6 +404,10 @@ export class SWChannelManager {
         RPC_METHODS.INIT, clientId, (data) => this.handleInit(data)
       ),
       
+      [RPC_METHODS.UPDATE_CONFIG]: this.wrapRpcHandler<Partial<{ geminiConfig: Partial<GeminiConfig>; videoConfig: Partial<VideoAPIConfig> }>, any>(
+        RPC_METHODS.UPDATE_CONFIG, clientId, (data) => this.handleUpdateConfig(data)
+      ),
+      
       // 任务操作
       [RPC_METHODS.TASK_CREATE]: this.wrapRpcHandler<TaskCreateParams, any>(
         RPC_METHODS.TASK_CREATE, clientId, (data) => this.handleTaskCreate(clientId, data)
@@ -475,13 +429,18 @@ export class SWChannelManager {
         RPC_METHODS.TASK_MARK_INSERTED, clientId, (data) => this.handleTaskMarkInserted(data.taskId)
       ),
       
+      [RPC_METHODS.TASK_IMPORT]: this.wrapRpcHandler<{ tasks: SWTask[] }, any>(
+        RPC_METHODS.TASK_IMPORT, clientId, (data) => this.handleTaskImport(data.tasks)
+      ),
+      
       // 任务查询
       [RPC_METHODS.TASK_GET]: this.wrapRpcHandler<{ taskId: string }, any>(
         RPC_METHODS.TASK_GET, clientId, (data) => this.handleTaskGet(data.taskId)
       ),
       
-      // Note: TASK_LIST_PAGINATED 已移除，主线程直接从 IndexedDB 读取任务数据
-      // 这避免了 postMessage 的 1MB 大小限制问题
+      [RPC_METHODS.TASK_LIST_PAGINATED]: this.wrapRpcHandler<{ offset?: number; limit?: number; type?: TaskType; status?: TaskStatus }, any>(
+        RPC_METHODS.TASK_LIST_PAGINATED, clientId, (data) => this.handleTaskListPaginated(data)
+      ),
       
       // Chat
       [RPC_METHODS.CHAT_START]: this.wrapRpcHandler<ChatStartParams, any>(
@@ -497,7 +456,7 @@ export class SWChannelManager {
       ),
       
       // Workflow
-      [RPC_METHODS.WORKFLOW_SUBMIT]: this.wrapRpcHandler<{ workflow: Workflow; config?: TaskConfig }, any>(
+      [RPC_METHODS.WORKFLOW_SUBMIT]: this.wrapRpcHandler<{ workflow: Workflow }, any>(
         RPC_METHODS.WORKFLOW_SUBMIT, clientId, (data) => this.handleWorkflowSubmit(clientId, data)
       ),
       
@@ -505,8 +464,18 @@ export class SWChannelManager {
         RPC_METHODS.WORKFLOW_CANCEL, clientId, (data) => this.handleWorkflowCancel(data.workflowId)
       ),
       
-      // Note: WORKFLOW_GET_STATUS 和 WORKFLOW_GET_ALL 已移除
-      // 主线程现在直接从 IndexedDB 读取工作流数据
+      [RPC_METHODS.WORKFLOW_GET_STATUS]: this.wrapRpcHandler<{ workflowId: string }, any>(
+        RPC_METHODS.WORKFLOW_GET_STATUS, clientId, (data) => this.handleWorkflowGetStatus(data.workflowId)
+      ),
+      
+      [RPC_METHODS.WORKFLOW_GET_ALL]: this.wrapRpcHandler<undefined, any>(
+        RPC_METHODS.WORKFLOW_GET_ALL, clientId, () => this.handleWorkflowGetAll()
+      ),
+      
+      // Deprecated: Use sendToolRequest() which receives response directly
+      [RPC_METHODS.WORKFLOW_RESPOND_TOOL]: this.wrapRpcHandler<MainThreadToolResponseMessage, any>(
+        RPC_METHODS.WORKFLOW_RESPOND_TOOL, clientId, (data) => this.handleToolResponse(data)
+      ),
       
       // 客户端声明接管工作流（用于页面刷新后恢复）
       [RPC_METHODS.WORKFLOW_CLAIM]: this.wrapRpcHandler<{ workflowId: string }, any>(
@@ -619,14 +588,6 @@ export class SWChannelManager {
         const data = this.unwrapRpcData<{ url: string }>(rawData);
         return this.handleCacheDelete(data);
       },
-
-      // Executor (媒体执行器 - SW 可选降级方案)
-      [RPC_METHODS.PING]: async () => {
-        return this.handlePing();
-      },
-      [RPC_METHODS.EXECUTOR_EXECUTE]: this.wrapRpcHandler<ExecutorExecuteParams, any>(
-        RPC_METHODS.EXECUTOR_EXECUTE, clientId, (data) => this.handleExecutorExecute(clientId, data)
-      ),
     };
   }
 
@@ -636,34 +597,30 @@ export class SWChannelManager {
 
   private workflowHandlerInitialized = false;
 
-  private async handleInit(data?: { geminiConfig?: GeminiConfig; videoConfig?: VideoAPIConfig }): Promise<{ success: boolean; error?: string }> {
+  private async handleInit(data: { geminiConfig: GeminiConfig; videoConfig: VideoAPIConfig }): Promise<{ success: boolean; error?: string }> {
+    if (!data || !data.geminiConfig || !data.videoConfig) {
+      console.error('[SWChannelManager] handleInit: Missing config data');
+      return { success: false, error: 'Missing config data' };
+    }
+
     try {
       // 先清理无效的客户端通道（避免向已关闭的页面广播）
       await this.cleanupDisconnectedClients();
       
-      // 初始化任务队列（不再传递配置，配置随任务传递）
-      await this.taskQueue?.initialize();
+      // 初始化任务队列
+      await this.taskQueue?.initialize(data.geminiConfig, data.videoConfig);
       
       // 初始化工作流处理器
-      // 优先使用传入的配置，否则从 IndexedDB 读取（主线程会自动同步配置到 IndexedDB）
-      const initialized = await ensureWorkflowHandlerInitialized(
-        this.sw,
-        data?.geminiConfig,
-        data?.videoConfig
-      );
-      
-      if (initialized) {
+      // 注意：不能只依赖 workflowHandlerInitialized 标志，因为 SW 空闲后模块级变量可能被重置
+      // 检查 workflowExecutor 是否存在，如果不存在则重新初始化
+      const executor = getWorkflowExecutor();
+      if (!executor) {
+        initWorkflowHandler(this.sw, data.geminiConfig, data.videoConfig);
         this.workflowHandlerInitialized = true;
-        
-        // 如果传入了配置，持久化到 IndexedDB（兼容旧客户端）
-        if (data?.geminiConfig && data?.videoConfig) {
-          taskQueueStorage.saveAllConfig(data.geminiConfig, data.videoConfig).catch((error) => {
-            console.warn('[SWChannelManager] Failed to persist config from init:', error);
-          });
-        }
       }
       
       // 重新发送待处理的工具请求（处理页面刷新场景）
+      // 获取发起初始化请求的客户端 ID
       const clientId = this.channels.keys().next().value as string | undefined;
       if (clientId) {
         resendPendingToolRequests(clientId);
@@ -676,21 +633,30 @@ export class SWChannelManager {
     }
   }
 
+  private async handleUpdateConfig(data: Partial<{ geminiConfig: Partial<GeminiConfig>; videoConfig: Partial<VideoAPIConfig> }>): Promise<{ success: boolean; error?: string }> {
+    try {
+      await this.taskQueue?.updateConfig(data?.geminiConfig, data?.videoConfig);
+      return { success: true };
+    } catch (error: any) {
+      return { success: false, error: error.message || 'Update config failed' };
+    }
+  }
+
   private async handleTaskCreate(clientId: string, data: TaskCreateParams): Promise<{ success: boolean; task?: SWTask; existingTaskId?: string; reason?: string }> {
     if (!data) {
       return { success: false, reason: 'Missing task data' };
     }
 
-    const { taskId, taskType, params, config } = data;
+    const { taskId, taskType, params } = data;
 
-    // 检查任务队列是否存在
+    // 检查任务队列是否存在并已初始化
     if (!this.taskQueue) {
       return { success: false, reason: 'not_initialized' };
     }
 
-    // 验证配置（配置随任务传递）
-    if (!config || !config.apiKey || !config.baseUrl) {
-      return { success: false, reason: 'NO_API_KEY' };
+    // 检查任务队列是否已初始化（有 API config）
+    if (!this.taskQueue.getGeminiConfig() || !this.taskQueue.getVideoConfig()) {
+      return { success: false, reason: 'not_initialized' };
     }
 
     // 检查重复任务（相同 taskId）
@@ -713,9 +679,9 @@ export class SWChannelManager {
       }
     }
 
-    // 创建任务（带配置）
+    // 创建任务
     try {
-      await this.taskQueue.submitTask(taskId, taskType, params, config, clientId);
+      await this.taskQueue.submitTask(taskId, taskType, params, clientId);
       const task = this.taskQueue.getTask(taskId);
 
       // 记录 taskId -> channel 映射，用于后续点对点通讯
@@ -758,6 +724,45 @@ export class SWChannelManager {
     });
   }
 
+  /**
+   * 导入任务（用于云同步恢复已完成的任务）
+   * 与 restoreTasks 不同，这个方法会保存所有任务（包括已完成的）
+   */
+  private async handleTaskImport(tasks: SWTask[]): Promise<{ success: boolean; imported: number; error?: string }> {
+    if (!tasks || !Array.isArray(tasks)) {
+      return { success: false, imported: 0, error: 'Invalid tasks array' };
+    }
+
+    if (!this.taskQueue) {
+      return { success: false, imported: 0, error: 'Task queue not initialized' };
+    }
+
+    try {
+      let imported = 0;
+      for (const task of tasks) {
+        // 检查任务是否已存在
+        const existingTask = this.taskQueue.getTask(task.id);
+        if (!existingTask) {
+          // 直接保存到存储（不触发队列处理）
+          await taskQueueStorage.saveTask(task);
+          // 添加到内存中的任务列表
+          this.taskQueue.importTask(task);
+          imported++;
+        }
+      }
+      
+      console.log(`[SWChannelManager] Imported ${imported} tasks`);
+      return { success: true, imported };
+    } catch (error) {
+      console.error('[SWChannelManager] Failed to import tasks:', error);
+      return { 
+        success: false, 
+        imported: 0, 
+        error: error instanceof Error ? error.message : 'Import failed' 
+      };
+    }
+  }
+
   private async handleTaskGet(taskId: string): Promise<{ success: boolean; task?: SWTask; error?: string }> {
     if (!taskId) {
       return { success: false, error: 'Missing taskId' };
@@ -774,8 +779,31 @@ export class SWChannelManager {
     return { success: true, task };
   }
 
-  // Note: handleTaskListPaginated 已移除
-  // 主线程现在直接从 IndexedDB 读取任务数据，避免 postMessage 的 1MB 大小限制问题
+  private async handleTaskListPaginated(data: { offset?: number; limit?: number; type?: TaskType; status?: TaskStatus }): Promise<{ success: boolean; tasks: SWTask[]; total: number; offset: number; hasMore: boolean }> {
+    const { offset = 0, limit = 20, type, status } = data || {};
+    
+    // 确保存储恢复完成后再获取任务
+    await this.taskQueue?.waitForStorageRestore();
+    
+    let tasks = this.taskQueue?.getAllTasks() || [];
+    
+    // 过滤
+    if (type !== undefined) {
+      tasks = tasks.filter(t => t.type === type);
+    }
+    if (status !== undefined) {
+      tasks = tasks.filter(t => t.status === status);
+    }
+    
+    // 按创建时间倒序
+    tasks.sort((a, b) => b.createdAt - a.createdAt);
+    
+    const total = tasks.length;
+    const paginatedTasks = tasks.slice(offset, offset + limit);
+    const hasMore = offset + limit < total;
+    
+    return { success: true, tasks: paginatedTasks, total, offset, hasMore };
+  }
 
   private async handleChatStart(clientId: string, data: ChatStartParams): Promise<{ success: boolean; chatId?: string; error?: string }> {
     if (!data?.chatId) {
@@ -842,49 +870,15 @@ export class SWChannelManager {
   // Workflow RPC 处理器
   // ============================================================================
 
-  private async handleWorkflowSubmit(clientId: string, data: { workflow: Workflow; config?: TaskConfig }): Promise<{ success: boolean; workflowId?: string; error?: string }> {
+  private async handleWorkflowSubmit(clientId: string, data: { workflow: Workflow }): Promise<{ success: boolean; workflowId?: string; error?: string }> {
     if (!data?.workflow) {
       return { success: false, error: 'Missing workflow data' };
     }
 
-    const { config } = data;
-    
-    // 验证配置
-    if (!config || !config.apiKey || !config.baseUrl) {
-      return { success: false, error: 'NO_API_KEY' };
-    }
-
     try {
-      // 从任务配置构建 executor 所需的配置
-      const geminiConfig: GeminiConfig = {
-        apiKey: config.apiKey,
-        baseUrl: config.baseUrl,
-        modelName: config.modelName,
-      };
-      const videoConfig: VideoAPIConfig = {
-        apiKey: config.apiKey,
-        baseUrl: config.baseUrl,
-      };
-      
-      // 持久化配置到 IndexedDB，确保 SW 重启后可恢复
-      // fire-and-forget，不阻塞工作流提交
-      taskQueueStorage.saveAllConfig(geminiConfig, videoConfig).catch((error) => {
-        console.warn('[SWChannelManager] Failed to persist config:', error);
-      });
-      
-      // 如果 executor 不存在，初始化它
-      let executor = getWorkflowExecutor();
+      const executor = getWorkflowExecutor();
       if (!executor) {
-        initWorkflowHandler(this.sw, geminiConfig, videoConfig);
-        executor = getWorkflowExecutor();
-        this.workflowHandlerInitialized = true;
-      } else {
-        // 更新现有 executor 的配置
-        updateWorkflowConfig(geminiConfig, videoConfig);
-      }
-
-      if (!executor) {
-        return { success: false, error: 'Failed to initialize workflow executor' };
+        return { success: false, error: 'Workflow executor not initialized' };
       }
 
       // 注册 workflow -> channel 映射，实现点对点通讯
@@ -920,8 +914,38 @@ export class SWChannelManager {
     }
   }
 
-  // Note: handleWorkflowGetStatus 和 handleWorkflowGetAll 已移除
-  // 主线程现在直接从 IndexedDB 读取工作流数据
+  private async handleWorkflowGetStatus(workflowId: string): Promise<{ success: boolean; workflow?: Workflow; error?: string }> {
+    if (!workflowId) {
+      return { success: false, error: 'Missing workflowId' };
+    }
+
+    try {
+      const executor = getWorkflowExecutor();
+      if (!executor) {
+        return { success: false, error: 'Workflow executor not initialized' };
+      }
+
+      const workflow = executor.getWorkflow(workflowId);
+      return { success: true, workflow };
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  }
+
+  private async handleWorkflowGetAll(): Promise<{ success: boolean; workflows: Workflow[] }> {
+    try {
+      const executor = getWorkflowExecutor();
+      if (!executor) {
+        return { success: true, workflows: [] };
+      }
+
+      const workflows = executor.getAllWorkflows();
+      return { success: true, workflows };
+    } catch (error: any) {
+      console.error('[SWChannelManager] Get all workflows failed:', error);
+      return { success: true, workflows: [] };
+    }
+  }
 
   /**
    * 客户端声明接管工作流
@@ -937,7 +961,10 @@ export class SWChannelManager {
     hasPendingToolRequest?: boolean;
     error?: string;
   }> {
+    console.log(`[SWChannelManager] 🔄 Workflow claim: ${workflowId} by client ${clientId.substring(0, 8)}...`);
+    
     if (!workflowId) {
+      console.log('[SWChannelManager] ❌ Claim failed: Missing workflowId');
       return { success: false, error: 'Missing workflowId' };
     }
 
@@ -953,17 +980,22 @@ export class SWChannelManager {
       // 如果 executor 不存在或找不到工作流，直接从 IndexedDB 查询
       // 这处理了 init RPC 还没完成的情况
       if (!workflow) {
+        console.log(`[SWChannelManager] Executor ${executor ? 'exists but workflow not in memory' : 'not available'}, checking IndexedDB...`);
         workflow = await taskQueueStorage.getWorkflow(workflowId);
       }
       
       if (!workflow) {
+        console.log(`[SWChannelManager] ❌ Claim failed: Workflow ${workflowId} not found in memory or IndexedDB`);
         return { success: false, error: 'Workflow not found' };
       }
+
+      console.log(`[SWChannelManager] ✓ Found workflow: status=${workflow.status}, steps=${workflow.steps.length}`);
 
       // 建立 workflowId -> ClientChannel 映射
       const clientChannel = this.channels.get(clientId);
       if (clientChannel) {
         this.workflowChannels.set(workflowId, clientChannel);
+        console.log(`[SWChannelManager] ✓ Mapped workflow ${workflowId} to client ${clientId.substring(0, 8)}...`);
       }
 
       // 检查是否有待处理的主线程工具请求
@@ -972,14 +1004,19 @@ export class SWChannelManager {
         (r: StoredPendingToolRequest) => r.workflowId === workflowId
       );
       const hasPendingToolRequest = workflowPendingRequests.length > 0;
+      
+      console.log(`[SWChannelManager] Pending tool requests: ${workflowPendingRequests.length}`, 
+        workflowPendingRequests.map((r: StoredPendingToolRequest) => ({ requestId: r.requestId, toolName: r.toolName })));
 
       // 如果工作流处于活跃状态且有待处理请求，重新发送
       // 注意：如果 executor 还不存在（init 未完成），这里不会重新发送
       // 待处理的请求会在 init 完成后通过 resendPendingToolRequests() 发送
       if ((workflow.status === 'running' || workflow.status === 'pending') && hasPendingToolRequest) {
+        console.log(`[SWChannelManager] 🔄 Will resend pending tool requests for workflow ${workflowId} after delay`);
         // 延迟重新发送待处理的工具请求，给主线程时间注册处理器
         // 这避免了时序问题：claim 完成后主线程的 registerToolRequestHandler 可能还没准备好
         setTimeout(() => {
+          console.log(`[SWChannelManager] 🔄 Resending pending tool requests for workflow ${workflowId} (delayed)`);
           this.resendPendingToolRequestsForWorkflow(workflowId);
         }, 500);
       }
@@ -1004,6 +1041,21 @@ export class SWChannelManager {
 
     // 调用 executor 的重新发送方法
     executor.resendPendingToolRequestsForWorkflow(workflowId);
+  }
+
+  /**
+   * Handle tool response from main thread via RPC
+   * @deprecated This handler is kept for backward compatibility.
+   * New code should use sendToolRequest() which receives response directly.
+   */
+  private async handleToolResponse(data: MainThreadToolResponseMessage): Promise<{ success: boolean; error?: string }> {
+    try {
+      await handleMainThreadToolResponse(data);
+      return { success: true };
+    } catch (error: any) {
+      console.error('[SWChannelManager] Tool response handling failed:', error);
+      return { success: false, error: error.message };
+    }
   }
 
   // ============================================================================
@@ -1583,189 +1635,6 @@ export class SWChannelManager {
   }
 
   // ============================================================================
-  // Executor 处理器（媒体执行器 - SW 可选降级方案）
-  // ============================================================================
-
-  /**
-   * 健康检查 - 用于检测 SW 是否可用
-   */
-  private async handlePing(): Promise<{ success: boolean }> {
-    return { success: true };
-  }
-
-  /**
-   * 执行媒体生成任务
-   *
-   * 接收执行请求后立即返回，任务在后台执行。
-   * 结果直接写入 IndexedDB 的 tasks 表。
-   */
-  private async handleExecutorExecute(
-    clientId: string,
-    data: ExecutorExecuteParams
-  ): Promise<{ success: boolean; error?: string }> {
-    if (!data || !data.taskId || !data.type) {
-      return { success: false, error: 'Missing required parameters' };
-    }
-
-    const { taskId, type, params } = data;
-
-    try {
-      // 异步执行任务（fire-and-forget）
-      // 不等待任务完成，立即返回
-      this.executeMediaTask(clientId, taskId, type, params).catch((error) => {
-        console.error(`[SWChannelManager] Executor task ${taskId} failed:`, error);
-      });
-
-      return { success: true };
-    } catch (error: any) {
-      return { success: false, error: error.message || 'Executor failed' };
-    }
-  }
-
-  /**
-   * 执行媒体生成任务（内部方法）
-   * 使用统一的媒体执行器
-   */
-  private async executeMediaTask(
-    clientId: string,
-    taskId: string,
-    type: 'image' | 'video' | 'ai_analyze',
-    params: Record<string, unknown>
-  ): Promise<void> {
-    const { executeMediaTask: executeMedia } = await import('./media-executor');
-
-    // 绑定任务到客户端
-    this.taskChannels.set(taskId, this.channels.get(clientId)!);
-
-    try {
-      const config = await this.getToolConfig(taskId);
-
-      // 更新任务状态为 processing
-      await this.updateTaskStatus(taskId, TaskStatus.PROCESSING);
-
-      // 使用统一执行器执行任务
-      const result = await executeMedia(type, params, config);
-
-      if (result.success) {
-        await this.completeTask(taskId, result.data);
-      } else {
-        await this.failTask(taskId, result.error || `${type} task failed`);
-      }
-    } catch (error: any) {
-      await this.failTask(taskId, error.message || `${type} task error`);
-    } finally {
-      // 清理任务通道映射
-      this.taskChannels.delete(taskId);
-    }
-  }
-
-  /**
-   * 获取工具执行配置
-   */
-  private async getToolConfig(taskId: string): Promise<{
-    geminiConfig: GeminiConfig;
-    videoConfig: VideoAPIConfig;
-    onProgress: (progress: number, phase?: string) => void;
-    onRemoteId?: (remoteId: string) => void;
-    signal?: AbortSignal;
-  }> {
-    const geminiConfig = await taskQueueStorage.getConfig<GeminiConfig>('gemini');
-    const videoConfig = await taskQueueStorage.getConfig<VideoAPIConfig>('video');
-
-    if (!geminiConfig || !videoConfig) {
-      throw new Error('Missing API configuration');
-    }
-
-    return {
-      geminiConfig,
-      videoConfig,
-      onProgress: (progress: number, phase?: string) => {
-        this.updateTaskProgress(taskId, progress, phase);
-      },
-      onRemoteId: (remoteId: string) => {
-        this.updateTaskRemoteId(taskId, remoteId);
-      },
-    };
-  }
-
-  /**
-   * 更新任务状态
-   */
-  private async updateTaskStatus(taskId: string, status: TaskStatus): Promise<void> {
-    const task = await taskQueueStorage.getTask(taskId);
-    if (task) {
-      task.status = status;
-      task.updatedAt = Date.now();
-      if (status === TaskStatus.PROCESSING && !task.startedAt) {
-        task.startedAt = Date.now();
-      }
-      await taskQueueStorage.saveTask(task);
-      this.sendTaskStatus(taskId, status);
-    }
-  }
-
-  /**
-   * 更新任务进度
-   */
-  private updateTaskProgress(taskId: string, progress: number, phase?: string): void {
-    // 异步更新，不阻塞
-    taskQueueStorage.getTask(taskId).then((task) => {
-      if (task) {
-        task.progress = progress;
-        task.updatedAt = Date.now();
-        if (phase) {
-          task.executionPhase = phase as TaskExecutionPhase;
-        }
-        taskQueueStorage.saveTask(task);
-        this.sendTaskProgress(taskId, progress);
-      }
-    });
-  }
-
-  /**
-   * 更新任务远程 ID
-   */
-  private updateTaskRemoteId(taskId: string, remoteId: string): void {
-    taskQueueStorage.getTask(taskId).then((task) => {
-      if (task) {
-        task.remoteId = remoteId;
-        task.updatedAt = Date.now();
-        taskQueueStorage.saveTask(task);
-      }
-    });
-  }
-
-  /**
-   * 完成任务
-   */
-  private async completeTask(taskId: string, result: unknown): Promise<void> {
-    const task = await taskQueueStorage.getTask(taskId);
-    if (task) {
-      task.status = TaskStatus.COMPLETED;
-      task.result = result as any;
-      task.completedAt = Date.now();
-      task.updatedAt = Date.now();
-      task.progress = 100;
-      await taskQueueStorage.saveTask(task);
-      this.sendTaskCompleted(taskId, task.result, task.remoteId);
-    }
-  }
-
-  /**
-   * 任务失败
-   */
-  private async failTask(taskId: string, errorMessage: string): Promise<void> {
-    const task = await taskQueueStorage.getTask(taskId);
-    if (task) {
-      task.status = TaskStatus.FAILED;
-      task.error = { code: 'EXECUTOR_ERROR', message: errorMessage };
-      task.updatedAt = Date.now();
-      await taskQueueStorage.saveTask(task);
-      this.sendTaskFailed(taskId, task.error);
-    }
-  }
-
-  // ============================================================================
   // 事件推送方法（SW 主动推送给客户端）
   // ============================================================================
 
@@ -1972,9 +1841,8 @@ export class SWChannelManager {
    * 使用 workflowChannels 映射实现点对点通讯
    */
   private sendToWorkflowClient(workflowId: string, event: string, data: Record<string, unknown>): void {
-    // 使用通用方法，工作流事件在未找到映射时广播给所有客户端
-    // 这确保即使客户端重连后映射丢失，消息仍能送达
-    this.sendToMappedClient(this.workflowChannels, workflowId, event, data, true);
+    // 使用通用方法，工作流事件在未找到映射时不广播（静默忽略）
+    this.sendToMappedClient(this.workflowChannels, workflowId, event, data, false);
   }
 
   /**
@@ -2066,10 +1934,12 @@ export class SWChannelManager {
     }
     
     if (!clientChannel) {
+      console.log(`[SWChannelManager] sendToolRequest: No client channel found for workflow ${workflowId}`);
       return null;
     }
     
     try {
+      console.log(`[SWChannelManager] sendToolRequest: Sending ${toolName} to client ${clientChannel.clientId.substring(0, 8)}...`);
       
       // 使用 withTimeout 工具控制超时
       const response = await withTimeout(
@@ -2085,6 +1955,7 @@ export class SWChannelManager {
       );
       
       if (!response || typeof response !== 'object') {
+        console.log(`[SWChannelManager] sendToolRequest: No response received for ${toolName}`, { response });
         return null;
       }
       
@@ -2239,7 +2110,12 @@ export class SWChannelManager {
     this.broadcastToAll(SW_EVENTS.SW_UPDATED, { version });
   }
 
-  // Note: sendSWRequestConfig 已移除 - 配置现在同步到 IndexedDB，SW 直接读取
+  /**
+   * 发送请求配置事件
+   */
+  sendSWRequestConfig(reason: string): void {
+    this.broadcastToAll(SW_EVENTS.SW_REQUEST_CONFIG, { reason });
+  }
 
   // ============================================================================
   // MCP 事件发送方法

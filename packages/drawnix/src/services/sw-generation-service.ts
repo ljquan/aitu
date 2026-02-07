@@ -15,8 +15,7 @@ import type {
   TaskError,
   GenerationParams,
   SWTask,
-} from './sw-channel/types/';
-import { taskStorageReader } from './task-storage-reader';
+} from './sw-channel/types';
 
 // ============================================================================
 // 类型定义
@@ -208,19 +207,24 @@ class SWGenerationService {
   }
 
   /**
-   * 获取所有任务（直接从 IndexedDB 读取）
+   * 获取所有任务（分页获取，避免 postMessage 大小限制）
    */
   async getAllTasks(): Promise<SWTask[]> {
-    try {
-      if (await taskStorageReader.isAvailable()) {
-        const tasks = await taskStorageReader.getAllTasks();
-        return tasks as unknown as SWTask[];
-      }
-    } catch (error) {
-      console.warn('[SWGenerationService] Failed to read from IndexedDB:', error);
+    const allTasks: SWTask[] = [];
+    const pageSize = 50;
+    let offset = 0;
+    let hasMore = true;
+    
+    while (hasMore) {
+      const result = await swChannelClient.listTasksPaginated({ offset, limit: pageSize });
+      if (!result.success) break;
+      
+      allTasks.push(...(result.tasks || []));
+      hasMore = result.hasMore;
+      offset += pageSize;
     }
     
-    return [];
+    return allTasks;
   }
 
   // ============================================================================

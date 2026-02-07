@@ -109,7 +109,7 @@ sw.addEventListener('message', (event: ExtendableMessageEvent) => {
 
 ### 启用调试模式
 
-1. 打开 `http://localhost:7200/sw-debug.html`
+1. 打开 `http://localhost:4200/sw-debug.html`
 2. 点击 "启用调试" 按钮
 3. 切换到 "PostMessage 日志" 标签
 4. 查看所有主线程与 Service Worker 之间的消息通信

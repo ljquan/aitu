@@ -101,8 +101,6 @@ function toWorkflowMessageData(
     prompt: metadata.prompt || retryContext?.aiContext?.finalPrompt || '',
     aiAnalysis: workflow.aiAnalysis,
     count: metadata.count,
-    createdAt: workflow.createdAt,
-    status: workflow.status,
     steps: workflow.steps.map(step => ({
       id: step.id,
       description: step.description,
@@ -932,17 +930,12 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
     try {
       // 检查 API key，如果没有配置则弹窗获取
       const globalSettings = geminiSettings.get();
-      console.log('[AIInputBar][handleGenerate] API Key 检查:', { hasApiKey: !!globalSettings?.apiKey });
       if (!globalSettings.apiKey) {
-        console.log('[AIInputBar][handleGenerate] 弹窗获取 API Key...');
         const newApiKey = await promptForApiKey();
-        console.log('[AIInputBar][handleGenerate] API Key 输入完成:', { hasNewKey: !!newApiKey });
         if (!newApiKey) {
           setIsSubmitting(false);
           return;
         }
-        const settingsAfter = geminiSettings.get();
-        console.log('[AIInputBar][handleGenerate] API Key 输入后设置状态:', { hasApiKey: !!settingsAfter?.apiKey });
       }
 
       // 构建选中元素的分类信息（使用合并后的 allContent）
@@ -986,7 +979,6 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
       const workflow = convertToWorkflow(parsedParams, referenceImages);
 
       // 在画布上创建 WorkZone 显示工作流进度
-      console.log('[AIInputBar][handleGenerate] 即将创建 WorkZone, workflow.steps:', workflow.steps.length);
       const board = SelectionWatcherBoardRef.current;
       if (board) {
         // WorkZone 固定尺寸
@@ -1066,7 +1058,6 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
         });
 
         currentWorkZoneIdRef.current = workzoneElement.id;
-        console.log('[AIInputBar][handleGenerate] WorkZone 已创建:', workzoneElement.id);
 
         setTimeout(() => {
           const workzoneCenterX = workzoneX + WORKZONE_WIDTH / 2;
@@ -1082,10 +1073,6 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
           id: parsedParams.modelId,
           type: parsedParams.generationType,
           isExplicit: parsedParams.isModelExplicit,
-        },
-        defaultModels: {
-          image: globalSettings.imageModelName || 'gemini-3-pro-image-preview-vip',
-          video: globalSettings.videoModelName || 'veo3.1',
         },
         params: {
           count: parsedParams.count,
@@ -1106,10 +1093,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
       currentRetryContextRef.current = retryContext;
 
       try {
-        console.log('[AIInputBar][handleGenerate] 开始提交工作流 submitWorkflowToSW...');
-        const t0 = Date.now();
         const { usedSW } = await submitWorkflowToSW(parsedParams, referenceImages, retryContext, workflow);
-        console.log('[AIInputBar][handleGenerate] submitWorkflowToSW 返回:', { usedSW, 耗时ms: Date.now() - t0 });
         if (usedSW) {
           if (prompt.trim()) {
             const hasSelection = allContent.length > 0;
@@ -1136,7 +1120,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
       }
 
       // Fallback: 主线程执行（仅当 SW 不可用时）
-      console.log('[AIInputBar] Fallback: Executing workflow in main thread:', workflow.steps.length, 'steps');
+      // console.log(`[AIInputBar] Fallback: Executing workflow in main thread: ${workflow.steps.length} steps`);
 
       const createdTaskIds: string[] = [];
 
@@ -1232,7 +1216,6 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
 
       // 执行单个步骤的函数
       const executeStep = async (step: typeof workflow.steps[0]) => {
-        console.log('[AIInputBar] Executing step:', step.mcp, 'with mode:', step.options?.mode);
         const stepStartTime = Date.now();
 
         // 更新步骤为运行中
@@ -1246,13 +1229,11 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
             ...createStepCallbacks(step, stepStartTime),
           };
 
-          console.log('[AIInputBar] Calling mcpRegistry.executeTool for:', step.mcp);
           // 通过 MCP Registry 执行工具
           const result = await mcpRegistry.executeTool(
             { name: step.mcp, arguments: step.args },
             executeOptions
           ) as MCPTaskResult;
-          console.log('[AIInputBar] Tool result:', { success: result.success, taskId: result.taskId, error: result.error });
 
           // 根据结果更新步骤状态
           const currentStepStatus = workflowControl.getWorkflow()?.steps.find(s => s.id === step.id)?.status;

@@ -32,9 +32,6 @@ export const FORM_RESET_DELAY = 100; // 100ms for smooth UX
 /**
  * IndexedDB configuration
  * Database settings for task persistence
- *
- * @deprecated 此配置已废弃，仅用于历史数据迁移。
- * 新代码请使用 storage-keys.ts 中的 SW_TASK_QUEUE 配置。
  */
 export const INDEXEDDB_CONFIG = {
   /** Database name */

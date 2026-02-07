@@ -2,7 +2,7 @@
  * Image Generation Handler for Service Worker
  *
  * Handles image generation tasks including standard images and inspiration boards.
- * 使用 media-api 共享模块减少重复代码
+ * 使用通用的媒体生成工具函数来减少重复代码
  */
 
 import type { SWTask, TaskResult, HandlerConfig, TaskHandler } from '../types';
@@ -15,13 +15,39 @@ import {
   convertAspectRatioToSize,
 } from '../utils/media-generation-utils';
 import type { LLMReferenceImage } from '../llm-api-logger';
+const ASYNC_IMAGE_MODELS = [
+  'gemini-3-pro-image-preview-async',
+  'gemini-3-pro-image-preview-2k-async',
+  'gemini-3-pro-image-preview-4k-async',
+];
 
-// 使用共享模块的工具函数（通过相对路径导入以支持 SW 独立构建）
-import {
-  isAsyncImageModel,
-  normalizeApiBase,
-  getExtensionFromUrl,
-} from '../../../../../../packages/drawnix/src/services/media-api';
+const isAsyncImageModel = (model?: string): boolean => {
+  if (!model) return false;
+  const lower = model.toLowerCase();
+  return ASYNC_IMAGE_MODELS.some((m) => lower.includes(m));
+};
+
+const getExtensionFromUrl = (url: string): string => {
+  try {
+    const clean = url.split('?')[0];
+    const last = clean.split('.').pop();
+    if (last && last.length <= 5) {
+      return last.toLowerCase();
+    }
+  } catch (e) {
+    // ignore
+  }
+  return 'jpg';
+};
+
+// 规范化 baseUrl，移除尾部 / 或 /v1，便于拼接 /v1/videos
+const normalizeApiBase = (url: string): string => {
+  let base = url.replace(/\/+$/, '');
+  if (base.endsWith('/v1')) {
+    base = base.slice(0, -3);
+  }
+  return base;
+};
 
 /**
  * Image generation handler
@@ -243,283 +269,129 @@ export class ImageHandler implements TaskHandler {
   ): Promise<TaskResult> {
     const { geminiConfig } = config;
     const { params } = task;
-    const { startLLMApiLog, completeLLMApiLog, failLLMApiLog } = await import(
-      '../llm-api-logger'
-    );
-    const { getImageInfo } = await import('../utils/media-generation-utils');
 
-    const startTime = Date.now();
-    const modelName =
-      params.model || geminiConfig.modelName || 'gemini-3-pro-image-preview-async';
+    const aspectRatio = this.getAspectRatio(
+      params.aspectRatio as string,
+      resolvedSize
+    );
+    // 异步接口使用 size 字段传递比例枚举
+    const sizeParam = aspectRatio;
+    const baseUrl = normalizeApiBase(geminiConfig.baseUrl);
 
     // 处理参考图：支持多图，按接口字段重复 append input_reference
     const refImages =
       (params.referenceImages as string[] | undefined) ||
       extractUrlsFromUploadedImages(params.uploadedImages);
     const refBlobs: Blob[] = [];
-    const referenceImageInfos: LLMReferenceImage[] = [];
-    
     if (refImages && refImages.length > 0) {
-      console.log(
-        `[ImageHandler] 处理 ${refImages.length} 张参考图片`
-      );
       for (let i = 0; i < refImages.length; i++) {
         const blob = await this.toBlob(refImages[i], signal);
         if (blob) {
           refBlobs.push(blob);
-          // 获取图片信息用于日志
-          try {
-            const info = await getImageInfo(blob, signal);
-            referenceImageInfos.push({
-              url: info.url,
-              size: info.size,
-              width: info.width,
-              height: info.height,
-            });
-          } catch (err) {
-            console.warn(`[ImageHandler] Failed to get image info for log:`, err);
-            referenceImageInfos.push({
-              url: refImages[i],
-              size: blob.size,
-              width: 0,
-              height: 0,
-            });
-          }
         }
       }
     }
 
-    // 开始记录 LLM API 日志（在获取参考图信息后）
-    const logId = startLLMApiLog({
-      endpoint: '/v1/videos (async image)',
-      model: modelName,
-      taskType: 'image',
-      prompt: params.prompt as string,
-      hasReferenceImages: refBlobs.length > 0,
-      referenceImageCount: refBlobs.length,
-      referenceImages: referenceImageInfos.length > 0 ? referenceImageInfos : undefined,
-      taskId: task.id,
+    const formData = new FormData();
+    formData.append(
+      'model',
+      params.model ||
+        geminiConfig.modelName ||
+        'gemini-3-pro-image-preview-async'
+    );
+    formData.append('prompt', params.prompt || '');
+    if (sizeParam) {
+      formData.append('size', sizeParam);
+    }
+    if (refBlobs.length > 0) {
+      refBlobs.forEach((blob, idx) => {
+        formData.append('input_reference', blob, `reference-${idx}.png`);
+      });
+    }
+
+    config.onProgress(task.id, 5, TaskExecutionPhase.SUBMITTING);
+
+    const submitResp = await fetch(`${baseUrl}/v1/videos`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${geminiConfig.apiKey}`,
+      },
+      body: formData,
+      signal,
     });
 
-    console.log(
-      `[ImageHandler] 🚀 开始异步图片生成: model=${modelName}, taskId=${task.id}`
-    );
-
-    try {
-      const aspectRatio = this.getAspectRatio(
-        params.aspectRatio as string,
-        resolvedSize
+    if (!submitResp.ok) {
+      const text = await submitResp.text();
+      throw new Error(
+        `Async image submit failed: ${submitResp.status} - ${text}`
       );
-      // 异步接口使用 size 字段传递比例枚举
-      const sizeParam = aspectRatio;
-      const baseUrl = normalizeApiBase(geminiConfig.baseUrl);
+    }
 
-      console.log(
-        `[ImageHandler] 配置: baseUrl=${baseUrl}, aspectRatio=${sizeParam}`
-      );
+    const submitData = await submitResp.json();
 
-      const formData = new FormData();
-      formData.append('model', modelName);
-      formData.append('prompt', params.prompt || '');
-      if (sizeParam) {
-        formData.append('size', sizeParam);
-      }
-      if (refBlobs.length > 0) {
-        refBlobs.forEach((blob, idx) => {
-          formData.append('input_reference', blob, `reference-${idx}.png`);
-        });
-      }
+    if (submitData.status === 'failed') {
+      const msg =
+        typeof submitData.error === 'string'
+          ? submitData.error
+          : submitData.error?.message || '图片生成失败';
+      throw new Error(msg);
+    }
 
-      config.onProgress(task.id, 5, TaskExecutionPhase.SUBMITTING);
+    const taskRemoteId = submitData.id;
 
-      console.log(
-        `[ImageHandler] 📤 提交异步图片任务到: ${baseUrl}/v1/videos`
-      );
+    // 轮询
+    const interval = 5000;
+    const maxAttempts = 1080; // ~90min
+    let attempts = 0;
+    let progress = submitData.progress ?? 0;
 
-      const submitResp = await fetch(`${baseUrl}/v1/videos`, {
-        method: 'POST',
+    config.onProgress(task.id, progress, TaskExecutionPhase.POLLING);
+
+    while (attempts < maxAttempts) {
+      await this.sleep(interval, signal);
+      attempts += 1;
+
+      const queryResp = await fetch(`${baseUrl}/v1/videos/${taskRemoteId}`, {
+        method: 'GET',
         headers: {
           Authorization: `Bearer ${geminiConfig.apiKey}`,
         },
-        body: formData,
         signal,
       });
 
-      console.log(
-        `[ImageHandler] 📥 提交响应状态: ${submitResp.status}`
-      );
-
-      if (!submitResp.ok) {
-        const text = await submitResp.text();
-        const duration = Date.now() - startTime;
-        failLLMApiLog(logId, {
-          httpStatus: submitResp.status,
-          duration,
-          errorMessage: text.substring(0, 500),
-        });
+      if (!queryResp.ok) {
+        const text = await queryResp.text();
         throw new Error(
-          `Async image submit failed: ${submitResp.status} - ${text}`
+          `Async image query failed: ${queryResp.status} - ${text}`
         );
       }
 
-      const submitData = await submitResp.json();
-      console.log(
-        `[ImageHandler] 📋 提交结果: id=${submitData.id}, status=${submitData.status}, progress=${submitData.progress}`
-      );
-
-      if (submitData.status === 'failed') {
-        const msg =
-          typeof submitData.error === 'string'
-            ? submitData.error
-            : submitData.error?.message || '图片生成失败';
-        const duration = Date.now() - startTime;
-        failLLMApiLog(logId, {
-          httpStatus: submitResp.status,
-          duration,
-          errorMessage: msg,
-        });
-        throw new Error(msg);
-      }
-
-      const taskRemoteId = submitData.id;
-      if (!taskRemoteId) {
-        const duration = Date.now() - startTime;
-        failLLMApiLog(logId, {
-          httpStatus: submitResp.status,
-          duration,
-          errorMessage: 'No task ID returned from API',
-        });
-        throw new Error('No task ID returned from API');
-      }
-
-      // 轮询
-      const interval = 5000;
-      const maxAttempts = 1080; // ~90min
-      let attempts = 0;
-      let progress = submitData.progress ?? 0;
-
+      const statusData = await queryResp.json();
+      progress = statusData.progress ?? progress;
       config.onProgress(task.id, progress, TaskExecutionPhase.POLLING);
 
-      console.log(
-        `[ImageHandler] 🔄 开始轮询: remoteId=${taskRemoteId}`
-      );
-
-      while (attempts < maxAttempts) {
-        await this.sleep(interval, signal);
-        attempts += 1;
-
-        const queryResp = await fetch(`${baseUrl}/v1/videos/${taskRemoteId}`, {
-          method: 'GET',
-          headers: {
-            Authorization: `Bearer ${geminiConfig.apiKey}`,
-          },
-          signal,
-        });
-
-        if (!queryResp.ok) {
-          const text = await queryResp.text();
-          console.warn(
-            `[ImageHandler] ⚠️ 轮询失败: attempt=${attempts}, status=${queryResp.status}`
-          );
-          const duration = Date.now() - startTime;
-          failLLMApiLog(logId, {
-            httpStatus: queryResp.status,
-            duration,
-            errorMessage: text.substring(0, 500),
-            remoteId: taskRemoteId,
-          });
-          throw new Error(
-            `Async image query failed: ${queryResp.status} - ${text}`
-          );
+      if (statusData.status === 'completed') {
+        const url = statusData.video_url || statusData.url;
+        if (!url) {
+          throw new Error('API 未返回有效的图片 URL');
         }
-
-        const statusData = await queryResp.json();
-        progress = statusData.progress ?? progress;
-        config.onProgress(task.id, progress, TaskExecutionPhase.POLLING);
-
-        // 每 10 次轮询打印一次日志，避免刷屏
-        if (attempts % 10 === 1) {
-          console.log(
-            `[ImageHandler] 🔄 轮询中: attempt=${attempts}, status=${statusData.status}, progress=${progress}`
-          );
-        }
-
-        if (statusData.status === 'completed') {
-          const url = statusData.video_url || statusData.url;
-          if (!url) {
-            const duration = Date.now() - startTime;
-            failLLMApiLog(logId, {
-              httpStatus: 200,
-              duration,
-              errorMessage: 'API 未返回有效的图片 URL',
-              remoteId: taskRemoteId,
-            });
-            throw new Error('API 未返回有效的图片 URL');
-          }
-
-          const duration = Date.now() - startTime;
-          console.log(
-            `[ImageHandler] ✅ 异步图片生成完成: url=${url.substring(0, 80)}..., duration=${duration}ms`
-          );
-
-          completeLLMApiLog(logId, {
-            httpStatus: 200,
-            duration,
-            resultType: 'image',
-            resultCount: 1,
-            resultUrl: url,
-            remoteId: taskRemoteId,
-          });
-
-          return {
-            url,
-            format: getExtensionFromUrl(url),
-            size: 0,
-          };
-        }
-
-        if (statusData.status === 'failed') {
-          const msg =
-            typeof statusData.error === 'string'
-              ? statusData.error
-              : statusData.error?.message || '图片生成失败';
-          const duration = Date.now() - startTime;
-          console.error(
-            `[ImageHandler] ❌ 异步图片生成失败: ${msg}`
-          );
-          failLLMApiLog(logId, {
-            httpStatus: 200,
-            duration,
-            errorMessage: msg,
-            remoteId: taskRemoteId,
-          });
-          throw new Error(msg);
-        }
+        return {
+          url,
+          format: getExtensionFromUrl(url),
+          size: 0,
+        };
       }
 
-      const duration = Date.now() - startTime;
-      failLLMApiLog(logId, {
-        duration,
-        errorMessage: '图片生成超时',
-        remoteId: taskRemoteId,
-      });
-      throw new Error('图片生成超时');
-    } catch (error: unknown) {
-      // 确保错误情况下也记录日志
-      if (error instanceof Error && !error.message.includes('LLM API Log')) {
-        const duration = Date.now() - startTime;
-        // 尝试记录失败（如果还没有记录过）
-        try {
-          failLLMApiLog(logId, {
-            duration,
-            errorMessage: error.message,
-          });
-        } catch {
-          // 忽略重复记录错误
-        }
+      if (statusData.status === 'failed') {
+        const msg =
+          typeof statusData.error === 'string'
+            ? statusData.error
+            : statusData.error?.message || '图片生成失败';
+        throw new Error(msg);
       }
-      throw error;
     }
+
+    throw new Error('图片生成超时');
   }
 
   private getAspectRatio(

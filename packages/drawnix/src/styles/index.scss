@@ -175,7 +175,7 @@
         gap: 0;
         width: fit-content;
         max-width: 80px;
-        overflow: visible; // 允许 Badge 角标溢出显示，滚动由 __scrollable 处理
+        overflow: hidden;
         border-radius: $border-radius-lg; // 更加圆润
         box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08); // 更加柔和的阴影
         background: rgba(var(--island-bg-color-rgb, 255, 255, 255), 0.95); // 稍微透明感
@@ -234,7 +234,6 @@
                 justify-content: center;
                 align-items: center;
                 background: inherit;
-                overflow: visible; // 允许 Badge 角标溢出显示
             }
 
             // 固定在顶部的section (菜单)
@@ -242,9 +241,6 @@
                 flex-shrink: 0;
                 padding: 12px 8px;
                 border-bottom: 1px solid var(--color-border-light, rgba(0, 0, 0, 0.05));
-                display: flex;
-                flex-direction: column;
-                align-items: center;
                 background: inherit;
             }
         }
@@ -406,9 +402,9 @@
                 display: flex;
                 align-items: center;
                 justify-content: center;
-                width: 30px; // 固定宽度，与下方工具按钮一致
+                width: 100%; // 填满容器宽度，与收起状态一致
                 height: 32px; // 与收起状态一致
-                margin: 4px auto 0; // 水平居中
+                margin: 4px 4px 0; // 与收起状态位置一致
                 background: transparent;
                 border: none;
                 border-radius: 8px;
@@ -439,9 +435,6 @@
         bottom: auto;
         transform: none;
         width: 100%; // 填充容器宽度
-        display: flex;
-        flex-direction: column;
-        align-items: center; // 让所有直接子元素（包括 GitHub 按钮）居中
 
         // 调整 Island 容器
         .island {

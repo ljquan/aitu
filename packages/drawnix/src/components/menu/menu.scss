@@ -48,7 +48,6 @@
       margin-top: 4px;
       cursor: pointer;
       border-radius: var(--border-radius-md);
-      outline: none;
 
       @media screen and (min-width: 1921px) {
         height: 2.25rem;
@@ -83,10 +82,6 @@
       &:hover {
         background-color: var(--color-surface-primary-container);
         text-decoration: none;
-      }
-
-      &:focus-visible {
-        background-color: var(--color-surface-primary-container);
       }
 
       &:active {

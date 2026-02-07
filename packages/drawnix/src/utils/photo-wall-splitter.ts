@@ -27,7 +27,7 @@ import {
   isBackgroundPixel,
   isWhiteBorderPixel,
   removeWhiteBorder,
-} from '@aitu/utils';
+} from './image-border-utils';
 import { mergeSplitLines } from './image-split-core';
 
 /** 检测时的最大尺寸，超过此尺寸会降采样（降低此值可提升性能） */

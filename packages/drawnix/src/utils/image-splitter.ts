@@ -7,7 +7,7 @@
 import { PlaitBoard, Point, getRectangleByElements, PlaitElement } from '@plait/core';
 import { trackMemory } from './common';
 import { DrawTransforms } from '@plait/draw';
-import { loadImage, trimBorders } from '@aitu/utils';
+import { loadImage, trimBorders } from './image-border-utils';
 import { scrollToPointIfNeeded } from './selection-utils';
 import {
   type SplitImageElement,

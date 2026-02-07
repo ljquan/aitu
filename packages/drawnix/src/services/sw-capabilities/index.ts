@@ -10,5 +10,5 @@
  * - Results are sent back to SW
  */
 
-export { SWCapabilitiesHandler, swCapabilitiesHandler, getCapabilitiesBoard } from './handler';
+export { SWCapabilitiesHandler, swCapabilitiesHandler } from './handler';
 export type { DelegatedOperation, CapabilityResult } from './types';

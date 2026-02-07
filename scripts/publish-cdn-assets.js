@@ -207,6 +207,7 @@ https://cdn.jsdelivr.net/npm/${CONFIG.packageName}@${version}/assets/index-xxx.c
 
 - \`*.html\` - HTML 文件（安全考虑）
 - \`*.map\` - Source maps
+- \`init.json\` - 初始化配置
 
 ## 许可证
 
@@ -273,6 +274,7 @@ async function main() {
   log('\n📋 排除的文件类型:', 'cyan');
   log('  - *.html (HTML 文件)');
   log('  - *.map (Source maps)');
+  log('  - init.json (初始化配置)');
   
   // 步骤 4: 发布
   logStep('4/4', '发布到 npm');

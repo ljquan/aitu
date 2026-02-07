@@ -66,13 +66,6 @@
         "command": "eslint .",
         "cwd": "apps/web"
       }
-    },
-    "typecheck": {
-      "executor": "nx:run-commands",
-      "options": {
-        "command": "tsc --noEmit",
-        "cwd": "apps/web"
-      }
     }
   }
 }

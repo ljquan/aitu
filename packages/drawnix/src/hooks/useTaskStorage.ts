@@ -15,7 +15,6 @@ import {
   legacyTaskQueueService,
 } from '../services/task-queue';
 import { storageService } from '../services/storage-service';
-import { taskStorageReader } from '../services/task-storage-reader';
 import { UPDATE_INTERVALS } from '../constants/TASK_CONSTANTS';
 import { migrateLegacyHistory } from '../utils/history-migration';
 import {
@@ -90,7 +89,7 @@ export function useTaskStorage(): void {
         await migrateLegacyHistory();
 
         // In SW mode, tasks are managed by Service Worker's IndexedDB
-        // Initialize SW service
+        // Initialize SW service and sync tasks from SW
         if (usingSW) {
           // Import and initialize SW task queue service
           const { swTaskQueueService } = await import(
@@ -113,13 +112,14 @@ export function useTaskStorage(): void {
             }
           }
 
-          // 任务数据直接从 IndexedDB 读取，不需要 syncTasksFromSW
+          // Sync tasks from SW to local state
+          await swTaskQueueService.syncTasksFromSW();
+
           return;
         }
 
-        // Legacy mode: Load tasks from sw-task-queue database (same as SW mode)
-        // This ensures consistency - both modes read from the same IndexedDB
-        const storedTasks = await taskStorageReader.getAllTasks();
+        // Legacy mode: Load tasks from storage (including migrated history)
+        const storedTasks = await storageService.loadTasks();
         // console.log(`[useTaskStorage] Loaded ${storedTasks.length} tasks from IndexedDB`);
 
         if (storedTasks.length > 0 && subscriptionActive) {

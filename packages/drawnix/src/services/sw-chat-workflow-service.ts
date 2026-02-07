@@ -124,24 +124,20 @@ export async function sendChatWorkflow(
       startTime,
     });
 
-    // Ensure SW client is initialized (with timeout protection)
-    // 配置已由 SettingsManager 同步到 IndexedDB，SW 直接读取
+    // Ensure SW client is initialized
     if (!swChannelClient.isInitialized()) {
-      const SW_INIT_TIMEOUT = 10000; // 10 seconds
-      try {
-        await settingsManager.waitForInitialization();
-        const initSuccess = await Promise.race([
-          swChannelClient.initialize(),
-          new Promise<boolean>((resolve) => setTimeout(() => resolve(false), SW_INIT_TIMEOUT)),
-        ]);
-        if (!initSuccess) {
-          throw new Error('Service Worker initialization timeout');
-        }
-        // 配置从 IndexedDB 读取，无需传递
-        await swChannelClient.init({});
-      } catch (initError) {
-        throw new Error(`Chat workflow requires Service Worker: ${initError instanceof Error ? initError.message : 'Initialization failed'}`);
-      }
+      await settingsManager.waitForInitialization();
+      await swChannelClient.initialize();
+      await swChannelClient.init({
+        geminiConfig: {
+          apiKey: settings.apiKey,
+          baseUrl: settings.baseUrl,
+          modelName: settings.chatModel,
+        },
+        videoConfig: {
+          baseUrl: 'https://api.tu-zi.com',
+        },
+      });
     }
 
     // Convert attachments to base64

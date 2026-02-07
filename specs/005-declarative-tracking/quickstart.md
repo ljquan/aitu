@@ -309,7 +309,7 @@ test('should track button click', async ({ page }) => {
   });
 
   // 访问页面
-  await page.goto('http://localhost:7200');
+  await page.goto('http://localhost:4200');
 
   // 点击埋点按钮
   await page.click('[track="button_click_save"]');
@@ -321,7 +321,7 @@ test('should track button click', async ({ page }) => {
   expect(requests.length).toBeGreaterThan(0);
   expect(requests[0].name).toBe('button_click_save');
   expect(requests[0].data.version).toBeDefined();
-  expect(requests[0].data.url).toContain('localhost:7200');
+  expect(requests[0].data.url).toContain('localhost:4200');
 });
 ```
 

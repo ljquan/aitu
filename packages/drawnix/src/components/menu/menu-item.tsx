@@ -63,9 +63,6 @@ const MenuItem = ({
             onClick={handleClick}
             onMouseEnter={handleMouseEnter}
             onMouseLeave={handleMouseLeave}
-            role="menuitem"
-            aria-haspopup="true"
-            aria-expanded={isOpen}
           >
             {menuItemContent}
           </button>
@@ -84,7 +81,6 @@ const MenuItem = ({
       type="button"
       className={getMenuItemClassName(className, selected)}
       title={rest.title ?? rest['aria-label']}
-      role="menuitem"
     >
       {menuItemContent}
     </button>

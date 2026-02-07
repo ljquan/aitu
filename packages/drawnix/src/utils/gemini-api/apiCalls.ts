@@ -7,9 +7,48 @@
 import { GeminiConfig, GeminiMessage, GeminiResponse, VideoGenerationOptions } from './types';
 import { DEFAULT_CONFIG, VIDEO_DEFAULT_CONFIG } from './config';
 import { analytics } from '../posthog-analytics';
+import { shouldUseSWTaskQueue } from '../../services/task-queue';
 import { swChannelClient } from '../../services/sw-channel';
+import { geminiSettings, settingsManager } from '../settings-manager';
 import type { ChatStartParams, ChatMessage as SWChatMessage } from '../../services/sw-channel';
 import { isAuthError, dispatchApiAuthError } from '../api-auth-error-event';
+
+/**
+ * 确保 SW 客户端已初始化
+ */
+async function ensureSWInitialized(): Promise<boolean> {
+  if (!shouldUseSWTaskQueue()) {
+    return false;
+  }
+  
+  if (swChannelClient.isInitialized()) {
+    return true;
+  }
+  
+  const settings = geminiSettings.get();
+  if (!settings.apiKey || !settings.baseUrl) {
+    return false;
+  }
+  
+  try {
+    await settingsManager.waitForInitialization();
+    await swChannelClient.initialize();
+    const result = await swChannelClient.init({
+      geminiConfig: {
+        apiKey: settings.apiKey,
+        baseUrl: settings.baseUrl,
+        modelName: settings.chatModel,
+      },
+      videoConfig: {
+        baseUrl: settings.baseUrl,
+      },
+    });
+    return result.success;
+  } catch (error) {
+    console.error('[ApiCalls] SW client initialization failed:', error);
+    return false;
+  }
+}
 
 /**
  * 将 GeminiMessage 转换为 SW ChatMessage 格式
@@ -155,10 +194,6 @@ export async function callApiRaw(
 /**
  * 流式API调用函数
  * 优先使用 Service Worker 发送请求，降级时使用直接 fetch
- *
- * 重要：不再调用 initializeChannel()（其内部 doInitialize 会重试 3×10s = 30s+），
- * 改为只检查 isInitialized() + ping 快速验证 channel 可用性。
- * 当 SW 不可用时立即 fallback 到 direct fetch，避免长时间阻塞。
  */
 export async function callApiStreamRaw(
   config: GeminiConfig,
@@ -166,22 +201,15 @@ export async function callApiStreamRaw(
   onChunk?: (content: string) => void,
   signal?: AbortSignal
 ): Promise<GeminiResponse> {
-  // 快速检查：只用已初始化好的 SW channel，不触发重新初始化
-  if (swChannelClient.isInitialized()) {
-    // 验证 channel 真正可用（ping 超时说明 channel 已断，避免 startChat 卡住）
-    const pingOk = await Promise.race([
-      swChannelClient.ping(),
-      new Promise<boolean>((r) => setTimeout(() => r(false), 800)),
-    ]);
-    if (pingOk) {
-      console.log('[callApiStreamRaw] 使用 SW 模式');
-      return callApiStreamViaSW(config, messages, onChunk, signal);
-    }
-    console.log('[callApiStreamRaw] SW channel 已初始化但 ping 失败，降级到 direct fetch');
-  } else {
-    console.log('[callApiStreamRaw] SW channel 未初始化，使用 direct fetch');
+  // 尝试使用 SW 模式
+  const useSW = await ensureSWInitialized();
+  
+  if (useSW) {
+    // console.log('[ApiCalls] Using SW mode for streaming API call');
+    return callApiStreamViaSW(config, messages, onChunk, signal);
   }
-
+  
+  // console.log('[ApiCalls] Using direct fetch for streaming API call');
   return callApiStreamDirect(config, messages, onChunk, signal);
 }
 
@@ -315,13 +343,6 @@ async function callApiStreamDirect(
   const startTime = Date.now();
   const model = config.modelName || 'gemini-3-pro-image-preview-vip';
   const endpoint = '/chat/completions';
-
-  console.log('[callApiStreamDirect] 发起 direct fetch 请求:', {
-    model,
-    baseUrl: config.baseUrl,
-    hasApiKey: !!config.apiKey,
-    messageCount: messages.length,
-  });
 
   // Track API call start
   analytics.trackAPICallStart({

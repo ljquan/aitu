@@ -9,7 +9,6 @@ import {
   DebugLogIcon,
   BookOpenIcon,
   CloudIcon,
-  CleanBrokenLinksIcon,
 } from '../../icons';
 import { useBoard, useListRender } from '@plait-board/react-board';
 import {
@@ -19,18 +18,14 @@ import {
   PlaitTheme,
   ThemeColorMode,
   Viewport,
-  Transforms,
 } from '@plait/core';
-import { PlaitDrawElement } from '@plait/draw';
-import { isVideoElement } from '../../../plugins/with-video';
-import { MessagePlugin } from 'tdesign-react';
 import { loadFromJSON, saveAsJSON } from '../../../data/json';
 import MenuItem from '../../menu/menu-item';
 import { saveAsImage } from '../../../utils/image';
 import { useDrawnix } from '../../../hooks/use-drawnix';
 import { useI18n } from '../../../i18n';
 import Menu from '../../menu/menu';
-import { useContext, useState, useCallback } from 'react';
+import { useContext } from 'react';
 import { MenuContentPropsContext } from '../../menu/common';
 import { EVENT } from '../../../constants';
 
@@ -301,137 +296,3 @@ export const VersionInfo = () => {
   );
 };
 VersionInfo.displayName = 'VersionInfo';
-
-/**
- * 检查 URL 是否有效
- * 对于虚拟路径和外部 URL 进行不同的检查策略
- */
-async function checkUrlValidity(url: string): Promise<boolean> {
-  if (!url || typeof url !== 'string') {
-    return false;
-  }
-
-  // blob URL 直接视为有效（临时 URL）
-  if (url.startsWith('blob:')) {
-    return true;
-  }
-
-  // data URL 直接视为有效
-  if (url.startsWith('data:')) {
-    return true;
-  }
-
-  try {
-    // 对于虚拟路径和外部 URL，尝试 HEAD 请求检查
-    const response = await fetch(url, {
-      method: 'HEAD',
-      mode: 'cors',
-      cache: 'no-cache',
-    });
-    return response.ok;
-  } catch {
-    // HEAD 请求失败，尝试 GET 请求
-    try {
-      const response = await fetch(url, {
-        method: 'GET',
-        mode: 'no-cors', // 使用 no-cors 模式尝试获取
-        cache: 'no-cache',
-      });
-      // no-cors 模式下，opaque response 类型表示请求成功但无法读取内容
-      // 这种情况我们认为是有效的
-      return response.type === 'opaque' || response.ok;
-    } catch {
-      return false;
-    }
-  }
-}
-
-/**
- * 清除失效链接菜单项
- */
-export const CleanInvalidLinks = () => {
-  const board = useBoard();
-  const { t } = useI18n();
-  const [isScanning, setIsScanning] = useState(false);
-
-  const handleCleanInvalidLinks = useCallback(async () => {
-    if (isScanning) return;
-
-    setIsScanning(true);
-    const loadingInstance = MessagePlugin.loading(t('menu.cleanInvalidLinks.scanning'), 0);
-
-    try {
-      // 收集所有媒体元素
-      const mediaElements: { element: PlaitElement; index: number; url: string }[] = [];
-
-      for (let i = 0; i < board.children.length; i++) {
-        const element = board.children[i];
-        const url = (element as any).url;
-
-        if (!url || typeof url !== 'string') continue;
-
-        // 检查是否为图片或视频元素
-        const isImage = PlaitDrawElement.isDrawElement(element) && PlaitDrawElement.isImage(element);
-        const isVideo = isVideoElement(element);
-
-        if (isImage || isVideo) {
-          mediaElements.push({ element, index: i, url });
-        }
-      }
-
-      // 检查每个媒体元素的 URL 有效性
-      const invalidElements: { element: PlaitElement; index: number }[] = [];
-
-      await Promise.all(
-        mediaElements.map(async ({ element, index, url }) => {
-          const isValid = await checkUrlValidity(url);
-          if (!isValid) {
-            invalidElements.push({ element, index });
-          }
-        })
-      );
-
-      // 关闭 loading 提示
-      loadingInstance.then((instance) => instance?.close?.());
-
-      if (invalidElements.length === 0) {
-        MessagePlugin.success(t('menu.cleanInvalidLinks.noInvalid'));
-        setIsScanning(false);
-        return;
-      }
-
-      // 从后往前删除，避免索引偏移问题
-      invalidElements.sort((a, b) => b.index - a.index);
-
-      for (const { index } of invalidElements) {
-        Transforms.removeNode(board, [index]);
-      }
-
-      const successMessage = t('menu.cleanInvalidLinks.success').replace(
-        '{count}',
-        String(invalidElements.length)
-      );
-      MessagePlugin.success(successMessage);
-    } catch (error) {
-      // 关闭 loading 提示
-      loadingInstance.then((instance) => instance?.close?.());
-      MessagePlugin.error(t('menu.cleanInvalidLinks.error'));
-      console.error('[CleanInvalidLinks] Error:', error);
-    } finally {
-      setIsScanning(false);
-    }
-  }, [board, t, isScanning]);
-
-  return (
-    <MenuItem
-      icon={<CleanBrokenLinksIcon />}
-      data-track="toolbar_click_menu_clean_invalid_links"
-      onSelect={handleCleanInvalidLinks}
-      aria-label={t('menu.cleanInvalidLinks')}
-      disabled={isScanning}
-    >
-      {t('menu.cleanInvalidLinks')}
-    </MenuItem>
-  );
-};
-CleanInvalidLinks.displayName = 'CleanInvalidLinks';

@@ -30,7 +30,7 @@ npm install
 ### 2. 验证开发服务器
 
 ```bash
-npm start  # 启动开发服务器在 localhost:7200
+npm start  # 启动开发服务器在 localhost:4200
 ```
 
 ### 3. 运行测试

@@ -24,7 +24,6 @@ import type { ChatDrawerProps, ChatDrawerRef, ChatSession, WorkflowMessageData, 
 import { MessageRole, MessageStatus } from '../../types/chat.types';
 import type { Message } from '@llamaindex/chat-ui';
 import { useTextSelection } from '../../hooks/useTextSelection';
-import { useMultiWorkflowStatusSync } from '../../hooks/useWorkflowStatusSync';
 import { analytics } from '../../utils/posthog-analytics';
 
 const ChatMessagesArea = React.lazy(() => import('./ChatMessagesArea'));
@@ -457,40 +456,12 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
                 break;
               }
 
-              case 'steps_added': {
-                // AI 分析返回了后续步骤，添加到工作流中
-                const stepsAddedEvent = workflowEvent as {
-                  type: string;
-                  workflowId: string;
-                  steps?: Array<{
-                    id: string;
-                    mcp: string;
-                    args: Record<string, unknown>;
-                    description: string;
-                    status: string;
-                  }>;
-                };
-                const newSteps = (stepsAddedEvent.steps || []).map(step => ({
-                  id: step.id,
-                  mcp: step.mcp,
-                  args: step.args,
-                  description: step.description,
-                  status: step.status as 'pending' | 'running' | 'completed' | 'failed' | 'skipped',
-                }));
-                updatedWorkflow = {
-                  ...workflow,
-                  steps: [...workflow.steps, ...newSteps],
-                };
-                break;
-              }
-
               case 'completed':
               case 'failed': {
                 // Workflow completed or failed - update all pending/running steps
                 const finalStatus = workflowEvent.type === 'completed' ? 'completed' : 'failed';
                 updatedWorkflow = {
                   ...workflow,
-                  status: finalStatus,
                   steps: workflow.steps.map((step) => {
                     if (step.status === 'running' || step.status === 'pending') {
                       // For steps with taskId, don't force status change
@@ -532,61 +503,6 @@ export const ChatDrawer = forwardRef<ChatDrawerRef, ChatDrawerProps>(
         subscription?.unsubscribe();
       };
     }, []);
-
-    // 轮询 IndexedDB 同步工作流状态
-    // 这是一个备用机制，确保即使 SW 事件丢失，UI 也能更新
-    // 获取正在运行的工作流 ID 列表
-    const runningWorkflowIds = useMemo(() => {
-      return Array.from(workflowMessages.entries())
-        .filter(([, wf]) => 
-          wf.status === 'running' || wf.status === 'pending' ||
-          wf.steps.some(s => s.status === 'running' || s.status === 'pending')
-        )
-        .map(([, wf]) => wf.id);
-    }, [workflowMessages]);
-
-    // 创建 workflowId -> msgId 的映射
-    const workflowIdToMsgId = useMemo(() => {
-      const map = new Map<string, string>();
-      for (const [msgId, wf] of workflowMessages.entries()) {
-        map.set(wf.id, msgId);
-      }
-      return map;
-    }, [workflowMessages]);
-
-    // 使用公共的工作流状态同步 hook
-    useMultiWorkflowStatusSync(runningWorkflowIds, useCallback((change) => {
-      const msgId = workflowIdToMsgId.get(change.workflowId);
-      if (!msgId) return;
-
-      setWorkflowMessages((prev) => {
-        const localWf = prev.get(msgId);
-        if (!localWf) return prev;
-
-        const newMap = new Map(prev);
-        const updatedWorkflow: WorkflowMessageData = {
-          ...localWf,
-          status: change.currentStatus as typeof localWf.status,
-          steps: change.steps.map(s => ({
-            id: s.id,
-            mcp: s.mcp,
-            args: s.args,
-            description: s.description,
-            status: s.status as 'pending' | 'running' | 'completed' | 'failed' | 'skipped',
-            result: s.result,
-            error: s.error,
-            duration: s.duration,
-            options: s.options,
-          })),
-        };
-        newMap.set(msgId, updatedWorkflow);
-        
-        // 持久化到本地存储
-        chatStorageService.updateMessage(msgId, { workflow: updatedWorkflow });
-        
-        return newMap;
-      });
-    }, [workflowIdToMsgId]));
 
     // Handle click outside to close session list
     useEffect(() => {
