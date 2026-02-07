@@ -1,19 +1,14 @@
 /**
  * 主线程 IndexedDB 配置写入器
  * 
- * 将配置同步到 IndexedDB，供 Service Worker 直接读取。
- * 使用与 SW 相同的数据库和存储结构，确保两边可以共享数据。
- * 
- * 设计说明：
- * - 主线程负责写入配置（用户修改设置时）
- * - SW 负责读取配置（执行任务时）
- * - 两边共享同一个 IndexedDB 数据库
+ * 将配置写入 aitu-app 数据库（主线程专用）。
+ * SW 不再直接读取主线程 IDB，配置通过 Fetch Relay 传递。
  */
 
 import type { GeminiConfig } from './gemini-api/types';
 
 /**
- * VideoAPIConfig 类型定义（与 SW 保持一致）
+ * VideoAPIConfig 类型定义
  */
 export interface VideoAPIConfig {
   apiKey: string;
@@ -21,91 +16,21 @@ export interface VideoAPIConfig {
   model?: string;
 }
 
-// 与 SW storage.ts 保持一致的常量
-const DB_NAME = 'sw-task-queue';
-const CONFIG_STORE = 'config';
-const MIN_DB_VERSION = 3;
+import { getAppDB, APP_DB_STORES } from '../services/app-database';
 
-/**
- * 检测当前数据库版本
- */
-function detectDatabaseVersion(): Promise<number> {
-  return new Promise((resolve) => {
-    const request = indexedDB.open(DB_NAME);
-    
-    request.onsuccess = () => {
-      const db = request.result;
-      const version = db.version;
-      db.close();
-      resolve(Math.max(version, MIN_DB_VERSION));
-    };
-    
-    request.onerror = () => {
-      resolve(MIN_DB_VERSION);
-    };
-  });
-}
-
-/**
- * 打开 IndexedDB 连接
- */
-async function openDB(): Promise<IDBDatabase> {
-  const targetVersion = await detectDatabaseVersion();
-  
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, targetVersion);
-
-    request.onerror = () => {
-      console.error('[ConfigWriter] Failed to open DB:', request.error);
-      reject(request.error);
-    };
-
-    request.onsuccess = () => {
-      const db = request.result;
-      
-      // 检查 config store 是否存在
-      if (!db.objectStoreNames.contains(CONFIG_STORE)) {
-        console.warn('[ConfigWriter] Config store not found, SW may need to initialize first');
-        db.close();
-        reject(new Error('Config store not found'));
-        return;
-      }
-      
-      resolve(db);
-    };
-
-    request.onupgradeneeded = (event) => {
-      const db = (event.target as IDBOpenDBRequest).result;
-      // 如果 config store 不存在，创建它
-      if (!db.objectStoreNames.contains(CONFIG_STORE)) {
-        db.createObjectStore(CONFIG_STORE, { keyPath: 'key' });
-      }
-    };
-  });
-}
+const CONFIG_STORE = APP_DB_STORES.CONFIG;
 
 /**
  * 配置 IndexedDB 写入器
  */
 class ConfigIndexedDBWriter {
-  private dbPromise: Promise<IDBDatabase> | null = null;
   private writeQueue: Promise<void> = Promise.resolve();
 
   /**
    * 获取数据库连接
    */
   private async getDB(): Promise<IDBDatabase> {
-    if (!this.dbPromise) {
-      this.dbPromise = openDB();
-    }
-    return this.dbPromise;
-  }
-
-  /**
-   * 重置数据库连接（用于错误恢复）
-   */
-  private resetDB(): void {
-    this.dbPromise = null;
+    return getAppDB();
   }
 
   /**
@@ -134,7 +59,6 @@ class ConfigIndexedDBWriter {
       });
     } catch (error) {
       console.error('[ConfigWriter] Failed to save config:', error);
-      this.resetDB();
       throw error;
     }
   }
@@ -196,7 +120,6 @@ class ConfigIndexedDBWriter {
         });
       } catch (error) {
         console.error('[ConfigWriter] Failed to save configs:', error);
-        this.resetDB();
         throw error;
       }
     }).catch((error) => {

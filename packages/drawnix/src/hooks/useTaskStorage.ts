@@ -11,7 +11,6 @@
 import { useEffect } from 'react';
 import {
   taskQueueService,
-  shouldUseSWTaskQueue,
   legacyTaskQueueService,
 } from '../services/task-queue';
 import { storageService } from '../services/storage-service';
@@ -62,7 +61,6 @@ function waitForIdle(timeout = 100): Promise<void> {
 export function useTaskStorage(): void {
   useEffect(() => {
     let subscriptionActive = true;
-    const usingSW = shouldUseSWTaskQueue();
 
     // Initialize storage and load tasks (deferred to browser idle time)
     const initializeStorage = async () => {
@@ -89,36 +87,7 @@ export function useTaskStorage(): void {
         // Migrate legacy history data from localStorage to task queue
         await migrateLegacyHistory();
 
-        // In SW mode, tasks are managed by Service Worker's IndexedDB
-        // Initialize SW service
-        if (usingSW) {
-          // Import and initialize SW task queue service
-          const { swTaskQueueService } = await import(
-            '../services/sw-task-queue-service'
-          );
-          await swTaskQueueService.initialize();
-
-          // Wait for browser idle
-          await waitForIdle(50);
-
-          // Migrate legacy tasks from old storage to SW (one-time migration)
-          const legacyTasks = await storageService.loadTasks();
-          if (legacyTasks.length > 0) {
-            // Restore legacy tasks to SW service (which will sync to SW)
-            await swTaskQueueService.restoreTasks(legacyTasks);
-
-            // Clear legacy storage after successful migration
-            for (const task of legacyTasks) {
-              await storageService.deleteTask(task.id);
-            }
-          }
-
-          // 任务数据直接从 IndexedDB 读取，不需要 syncTasksFromSW
-          return;
-        }
-
-        // Legacy mode: Load tasks from sw-task-queue database (same as SW mode)
-        // This ensures consistency - both modes read from the same IndexedDB
+        // Load tasks from IndexedDB
         const storedTasks = await taskStorageReader.getAllTasks();
         // console.log(`[useTaskStorage] Loaded ${storedTasks.length} tasks from IndexedDB`);
 

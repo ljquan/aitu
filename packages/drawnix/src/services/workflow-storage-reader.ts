@@ -14,9 +14,11 @@ import type {
 } from './sw-channel/types/workflow';
 import { BaseStorageReader } from './base-storage-reader';
 
-// 与 SW 端 storage.ts 保持一致的数据库配置
-const DB_NAME = 'sw-task-queue';
-const WORKFLOWS_STORE = 'workflows';
+import { APP_DB_NAME, APP_DB_STORES } from './app-database';
+
+// 使用主线程专用数据库
+const DB_NAME = APP_DB_NAME;
+const WORKFLOWS_STORE = APP_DB_STORES.WORKFLOWS;
 
 // SW 端的 Workflow 结构
 interface SWWorkflow {

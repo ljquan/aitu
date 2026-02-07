@@ -8,70 +8,16 @@
 import { ServiceWorkerChannel, ReturnCode } from 'postmessage-duplex';
 import type {
   SWMethods,
-  SWEvents,
-  SWTask,
-  TaskCreateParams,
-  TaskCreateResult,
-  TaskOperationParams,
   TaskOperationResult,
-  InitParams,
-  InitResult,
-  ChatStartParams,
-  ChatStopParams,
-  TaskStatusEvent,
-  TaskCompletedEvent,
-  TaskFailedEvent,
-  TaskCreatedEvent,
-  ChatChunkEvent,
-  ChatDoneEvent,
-  ChatErrorEvent,
-  // Workflow types
-  WorkflowDefinition,
-  WorkflowSubmitParams,
-  WorkflowSubmitResult,
-  WorkflowStatusResponse,
-  WorkflowAllResponse,
-  CanvasOperationResponse,
-  MainThreadToolResponse,
-  WorkflowStatusEvent,
-  WorkflowStepStatusEvent,
-  WorkflowCompletedEvent,
-  WorkflowFailedEvent,
-  WorkflowStepsAddedEvent,
-  CanvasOperationRequestEvent,
-  MainThreadToolRequestEvent,
-  WorkflowRecoveredEvent,
   DebugStatusResult,
-  TaskConfig,
 } from './types';
 import { callWithDefault, callOperation } from './rpc-helpers';
-import { geminiSettings, settingsManager } from '../../utils/settings-manager';
-// Import from isolated module to avoid circular dependencies
-// IMPORTANT: sw-detection.ts does NOT import task queue services
-import { shouldUseSWTaskQueue } from '../task-queue/sw-detection';
 
 // ============================================================================
 // 事件处理器类型
 // ============================================================================
 
 export interface SWChannelEventHandlers {
-  onTaskCreated?: (event: TaskCreatedEvent) => void;
-  onTaskStatus?: (event: TaskStatusEvent) => void;
-  onTaskCompleted?: (event: TaskCompletedEvent) => void;
-  onTaskFailed?: (event: TaskFailedEvent) => void;
-  onTaskCancelled?: (taskId: string) => void;
-  onTaskDeleted?: (taskId: string) => void;
-  onChatChunk?: (event: ChatChunkEvent) => void;
-  onChatDone?: (event: ChatDoneEvent) => void;
-  onChatError?: (event: ChatErrorEvent) => void;
-  // Workflow events
-  onWorkflowStatus?: (event: WorkflowStatusEvent) => void;
-  onWorkflowStepStatus?: (event: WorkflowStepStatusEvent) => void;
-  onWorkflowCompleted?: (event: WorkflowCompletedEvent) => void;
-  onWorkflowFailed?: (event: WorkflowFailedEvent) => void;
-  onWorkflowStepsAdded?: (event: WorkflowStepsAddedEvent) => void;
-  onToolRequest?: (event: MainThreadToolRequestEvent) => void;
-  onWorkflowRecovered?: (event: WorkflowRecoveredEvent) => void;
   // Cache events
   onCacheImageCached?: (event: import('./types').CacheImageCachedEvent) => void;
   onCacheDeleted?: (event: import('./types').CacheDeletedEvent) => void;
@@ -80,10 +26,6 @@ export interface SWChannelEventHandlers {
   onSWNewVersionReady?: (event: import('./types').SWNewVersionReadyEvent) => void;
   onSWActivated?: (event: import('./types').SWActivatedEvent) => void;
   onSWUpdated?: (event: import('./types').SWUpdatedEvent) => void;
-  /** @deprecated 配置现在同步到 IndexedDB，SW 直接读取，不再需要请求主线程 */
-  onSWRequestConfig?: (event: import('./types').SWRequestConfigEvent) => void;
-  // MCP events
-  onMCPToolResult?: (event: import('./types').MCPToolResultEvent) => void;
 }
 
 // ============================================================================
@@ -216,12 +158,21 @@ export class SWChannelClient {
   }
 
   /**
+   * 获取底层 channel 引用
+   * 同一页面只能有一个 ServiceWorkerChannel，否则 SW 的 enableGlobalRouting
+   * 按 clientId 路由会导致消息冲突。
+   */
+  getChannel(): ServiceWorkerChannel<SWMethods> | null {
+    return this.isInitialized() ? this.channel : null;
+  }
+
+  /**
    * 仅初始化 SW 通道，不同步配置
-   * 配置随每个任务传递，不需要预先同步
    */
   async initializeChannel(): Promise<boolean> {
     // URL 参数检查（?sw=0 禁用 SW）
-    if (!shouldUseSWTaskQueue()) {
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('sw') === '0') {
       return false;
     }
 
@@ -321,312 +272,6 @@ export class SWChannelClient {
       console.warn(`[SWChannelClient] ${method} failed:`, error);
       return { success: false, error: errMsg };
     }
-  }
-
-  // ============================================================================
-  // 初始化相关 RPC
-  // ============================================================================
-
-  /**
-   * 初始化 SW 任务队列
-   * SW 端会立即返回，IndexedDB 操作在后台进行
-   * 如果超时，使用短重试机制
-   */
-  async init(params: InitParams): Promise<InitResult> {
-    this.ensureInitialized();
-    
-    const maxRetries = 2;
-    const timeout = 10000; // 10 秒超时，因为 SW 现在立即返回
-    
-    for (let attempt = 0; attempt <= maxRetries; attempt++) {
-      try {
-        const response = await Promise.race([
-          this.channel!.call('init', params),
-          new Promise<never>((_, reject) => 
-            setTimeout(() => reject(new Error('init timeout')), timeout)
-          )
-        ]);
-        
-        if (response.ret === ReturnCode.Success) {
-          return response.data || { success: true };
-        }
-        
-        console.error(`[SWChannelClient] init attempt ${attempt + 1} failed:`, response.msg);
-        
-      } catch (error) {
-        console.error(`[SWChannelClient] init attempt ${attempt + 1} error:`, error);
-      }
-      
-      // 短暂等待后重试
-      if (attempt < maxRetries) {
-        await new Promise(r => setTimeout(r, 1000));
-      }
-    }
-    
-    console.error('[SWChannelClient] init failed after retries');
-    return { success: false, error: 'Init failed after retries' };
-  }
-
-  // ============================================================================
-  // 任务操作 RPC
-  // ============================================================================
-
-  /** RPC 超时配置 */
-  private static readonly RPC_TIMEOUTS = {
-    createTask: 15000,     // 15s - 任务创建
-    submitWorkflow: 15000, // 15s - 工作流提交
-    retryTask: 10000,      // 10s - 重试任务
-    cancelTask: 10000,     // 10s - 取消任务
-    getTask: 5000,         // 5s  - 获取任务状态
-  };
-
-  /**
-   * 创建任务（原子性操作）
-   * SW 会检查重复，返回创建结果
-   */
-  async createTask(params: TaskCreateParams): Promise<TaskCreateResult> {
-    this.ensureInitialized();
-    
-    try {
-      const callPromise = this.channel!.call('task:create', params);
-      const response = await this.withTimeout(
-        callPromise,
-        SWChannelClient.RPC_TIMEOUTS.createTask,
-        'Create task timeout'
-      );
-      
-      if (response.ret !== ReturnCode.Success) {
-        return { 
-          success: false, 
-          reason: response.msg || 'Create task failed',
-        };
-      }
-      
-      return response.data || { success: false, reason: 'No response data' };
-    } catch (error) {
-      const errMsg = error instanceof Error ? error.message : 'Create task failed';
-      console.error('[SWChannelClient] task:create error:', error);
-      return { success: false, reason: errMsg };
-    }
-  }
-
-  /**
-   * 取消任务
-   */
-  cancelTask(taskId: string): Promise<TaskOperationResult> {
-    return this.callOperationRPC('task:cancel', { taskId }, 'Cancel task failed');
-  }
-
-  /**
-   * 重试任务
-   */
-  retryTask(taskId: string): Promise<TaskOperationResult> {
-    return this.callOperationRPC(
-      'task:retry',
-      { taskId },
-      'Retry task failed',
-      SWChannelClient.RPC_TIMEOUTS.retryTask
-    );
-  }
-
-  /**
-   * 删除任务
-   */
-  deleteTask(taskId: string): Promise<TaskOperationResult> {
-    return this.callOperationRPC('task:delete', { taskId }, 'Delete task failed');
-  }
-
-  /**
-   * 标记任务已插入画布
-   */
-  markTaskInserted(taskId: string): Promise<TaskOperationResult> {
-    return this.callOperationRPC('task:markInserted', { taskId }, 'Mark inserted failed');
-  }
-
-  // ============================================================================
-  // 任务查询 RPC
-  // ============================================================================
-
-  /**
-   * 获取单个任务
-   */
-  async getTask(taskId: string): Promise<SWTask | null> {
-    this.ensureInitialized();
-    const response = await this.channel!.call('task:get', { taskId });
-
-    if (response.ret !== ReturnCode.Success) {
-      return null;
-    }
-    
-    return response.data?.task || null;
-  }
-
-  // Note: listTasksPaginated 已移除
-  // 主线程现在直接从 IndexedDB 读取任务数据，避免 postMessage 的 1MB 大小限制问题
-
-  // ============================================================================
-  // Chat RPC
-  // ============================================================================
-
-  /**
-   * 开始 Chat 流
-   */
-  startChat(params: ChatStartParams): Promise<TaskOperationResult> {
-    return this.callOperationRPC('chat:start', params, 'Start chat failed');
-  }
-
-  /**
-   * 停止 Chat 流
-   */
-  stopChat(chatId: string): Promise<TaskOperationResult> {
-    return this.callOperationRPC('chat:stop', { chatId }, 'Stop chat failed');
-  }
-
-  /**
-   * 获取缓存的 Chat 结果
-   */
-  getCachedChat(chatId: string): Promise<{ found: boolean; fullContent?: string }> {
-    return this.callRPC('chat:getCached', { chatId }, { found: false });
-  }
-
-  // ============================================================================
-  // Workflow RPC
-  // ============================================================================
-
-  /**
-   * 提交工作流
-   */
-  async submitWorkflow(workflow: WorkflowDefinition, config: TaskConfig): Promise<WorkflowSubmitResult> {
-    this.ensureInitialized();
-    
-    try {
-      const callPromise = this.channel!.call('workflow:submit', { workflow, config });
-      const response = await this.withTimeout(
-        callPromise,
-        SWChannelClient.RPC_TIMEOUTS.submitWorkflow,
-        'Submit workflow timeout'
-      );
-      
-      if (response.ret !== ReturnCode.Success) {
-        return { 
-          success: false, 
-          error: response.msg || 'Submit workflow failed',
-        };
-      }
-      
-      return response.data || { success: false, error: 'No response data' };
-    } catch (error) {
-      const errMsg = error instanceof Error ? error.message : 'Submit workflow failed';
-      console.error('[SWChannelClient] workflow:submit error:', error);
-      return { success: false, error: errMsg };
-    }
-  }
-
-  /**
-   * 取消工作流
-   */
-  cancelWorkflow(workflowId: string): Promise<TaskOperationResult> {
-    return this.callOperationRPC('workflow:cancel', { workflowId }, 'Cancel workflow failed');
-  }
-
-  /**
-   * 获取工作流状态
-   */
-  getWorkflowStatus(workflowId: string): Promise<WorkflowStatusResponse> {
-    return this.callRPC('workflow:getStatus', { workflowId }, { success: false, error: 'Get workflow status failed' });
-  }
-
-  /**
-   * 获取所有工作流
-   */
-  getAllWorkflows(): Promise<WorkflowAllResponse> {
-    return this.callRPC('workflow:getAll', undefined, { success: true, workflows: [] });
-  }
-
-  /**
-   * 声明接管工作流
-   * 用于页面刷新后，WorkZone 重新建立与工作流的连接
-   * 
-   * @param workflowId 工作流 ID
-   * @returns 工作流状态和是否有待处理的工具请求
-   */
-  async claimWorkflow(workflowId: string): Promise<{
-    success: boolean;
-    workflow?: WorkflowDefinition;
-    hasPendingToolRequest?: boolean;
-    error?: string;
-  }> {
-    const result = await this.callRPC('workflow:claim', { workflowId }, { success: false, error: 'Claim failed' });
-    return result;
-  }
-
-  /**
-   * 注册 Canvas 操作处理器
-   * SW 发起 publish('canvas:execute', { operation, params }) 请求，主线程处理并返回结果
-   * 
-   * @param handler 处理函数，接收 operation 和 params，返回 { success, error? }
-   */
-  registerCanvasOperationHandler(
-    handler: (operation: string, params: Record<string, unknown>) => Promise<{ success: boolean; error?: string }>
-  ): void {
-    this.ensureInitialized();
-    
-    this.channel!.subscribe('canvas:execute', async (request) => {
-      const data = request.data as { operation?: string; params?: Record<string, unknown> };
-      if (!data?.operation) {
-        return { ret: ReturnCode.ReceiverCallbackError, msg: 'Missing operation parameter' };
-      }
-      
-      try {
-        const result = await handler(data.operation, data.params || {});
-        return { ret: ReturnCode.Success, data: result };
-      } catch (error) {
-        console.error('[SWChannelClient] canvas:execute handler error:', error);
-        return { ret: ReturnCode.ReceiverCallbackError, msg: String(error) };
-      }
-    });
-  }
-
-  /**
-   * 注册主线程工具请求处理器
-   * SW 发起 publish('workflow:toolRequest', { ... }) 请求，主线程处理并直接返回结果
-   * 这样可以减少一次交互，不需要再通过 respondToToolRequest 发送结果
-   * 
-   * @param handler 处理函数，接收工具请求参数，返回执行结果
-   */
-  registerToolRequestHandler(
-    handler: (request: MainThreadToolRequestEvent) => Promise<{
-      success: boolean;
-      result?: unknown;
-      error?: string;
-      taskId?: string;
-      taskIds?: string[];
-      addSteps?: MainThreadToolResponse['addSteps'];
-    }>
-  ): void {
-    this.ensureInitialized();
-    
-    this.channel!.subscribe('workflow:toolRequest', async (request) => {
-      // publish 模式下，数据可能直接在 request 中，而不是 request.data 中
-      // 检查两种可能的格式
-      let data: MainThreadToolRequestEvent;
-      if (request?.data?.requestId && request?.data?.toolName) {
-        // 标准格式: { ret: 0, data: { requestId, toolName, ... } }
-        data = request.data as MainThreadToolRequestEvent;
-      } else if (request?.requestId && request?.toolName) {
-        // publish 格式: { requestId, toolName, ... } 直接在 request 中
-        data = request as unknown as MainThreadToolRequestEvent;
-      } else {
-        return { ret: ReturnCode.ReceiverCallbackError, msg: 'Missing required parameters' };
-      }
-      
-      try {
-        const result = await handler(data);
-        return { ret: ReturnCode.Success, data: result };
-      } catch (error) {
-        return { ret: ReturnCode.ReceiverCallbackError, msg: String(error) };
-      }
-    });
   }
 
   // ============================================================================
@@ -981,61 +626,6 @@ export class SWChannelClient {
   }
 
   // ============================================================================
-  // 执行器方法 (Media Executor)
-  // ============================================================================
-
-  /**
-   * 健康检查 - 用于检测 SW 是否可用
-   */
-  async ping(): Promise<boolean> {
-    if (!this.initialized || !this.channel) {
-      return false;
-    }
-    try {
-      const response = await this.channel.call('ping', undefined);
-      return response.ret === ReturnCode.Success;
-    } catch {
-      return false;
-    }
-  }
-
-  /**
-   * 调用执行器执行媒体生成任务
-   *
-   * SW 会在后台执行任务，结果直接写入 IndexedDB 的 tasks 表。
-   * 此方法立即返回，不等待任务完成。
-   *
-   * @param params 执行参数
-   * @returns 提交结果（不是执行结果）
-   */
-  async callExecutor(params: {
-    taskId: string;
-    type: 'image' | 'video' | 'ai_analyze';
-    params: Record<string, unknown>;
-  }): Promise<{ success: boolean; error?: string }> {
-    this.ensureInitialized();
-
-    try {
-      const response = await this.channel!.call('executor:execute', params);
-
-      if (response.ret !== ReturnCode.Success) {
-        return {
-          success: false,
-          error: response.msg || 'Executor call failed',
-        };
-      }
-
-      return response.data || { success: true };
-    } catch (error) {
-      console.error('[SWChannelClient] executor:execute error:', error);
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
-      };
-    }
-  }
-
-  // ============================================================================
   // 工具方法
   // ============================================================================
 
@@ -1140,59 +730,6 @@ export class SWChannelClient {
     }
 
     // ============================================================================
-    // Task 事件订阅
-    // ============================================================================
-    this.subscribeEvent<TaskCreatedEvent>('task:created', () => this.eventHandlers.onTaskCreated);
-    this.subscribeEvent<TaskStatusEvent>('task:status', () => this.eventHandlers.onTaskStatus);
-    this.subscribeEvent<TaskCompletedEvent>('task:completed', () => this.eventHandlers.onTaskCompleted);
-    this.subscribeEvent<TaskFailedEvent>('task:failed', () => this.eventHandlers.onTaskFailed);
-
-    // 任务进度事件（转换为 TaskStatusEvent 格式）
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const comm = this.channel as any;
-    comm.onBroadcast('task:progress', ({ data }: { data?: Record<string, unknown> }) => {
-      if (data) {
-        const progressData = data as { taskId: string; progress: number };
-        this.eventHandlers.onTaskStatus?.({
-          taskId: progressData.taskId,
-          status: 'processing',
-          progress: progressData.progress,
-          updatedAt: Date.now(),
-        });
-      }
-    });
-
-    // 任务取消/删除事件（需要提取 taskId）
-    comm.onBroadcast('task:cancelled', ({ data }: { data?: Record<string, unknown> }) => {
-      if (data) {
-        this.eventHandlers.onTaskCancelled?.((data as { taskId: string }).taskId);
-      }
-    });
-    comm.onBroadcast('task:deleted', ({ data }: { data?: Record<string, unknown> }) => {
-      if (data) {
-        this.eventHandlers.onTaskDeleted?.((data as { taskId: string }).taskId);
-      }
-    });
-
-    // ============================================================================
-    // Chat 事件订阅
-    // ============================================================================
-    this.subscribeEvent<ChatChunkEvent>('chat:chunk', () => this.eventHandlers.onChatChunk);
-    this.subscribeEvent<ChatDoneEvent>('chat:done', () => this.eventHandlers.onChatDone);
-    this.subscribeEvent<ChatErrorEvent>('chat:error', () => this.eventHandlers.onChatError);
-
-    // ============================================================================
-    // Workflow 事件订阅
-    // ============================================================================
-    this.subscribeEvent<WorkflowStatusEvent>('workflow:status', () => this.eventHandlers.onWorkflowStatus);
-    this.subscribeEvent<WorkflowStepStatusEvent>('workflow:stepStatus', () => this.eventHandlers.onWorkflowStepStatus);
-    this.subscribeEvent<WorkflowCompletedEvent>('workflow:completed', () => this.eventHandlers.onWorkflowCompleted);
-    this.subscribeEvent<WorkflowFailedEvent>('workflow:failed', () => this.eventHandlers.onWorkflowFailed);
-    this.subscribeEvent<WorkflowStepsAddedEvent>('workflow:stepsAdded', () => this.eventHandlers.onWorkflowStepsAdded);
-    this.subscribeEvent<MainThreadToolRequestEvent>('workflow:toolRequest', () => this.eventHandlers.onToolRequest);
-    this.subscribeEvent<WorkflowRecoveredEvent>('workflow:recovered', () => this.eventHandlers.onWorkflowRecovered);
-
-    // ============================================================================
     // Cache 事件订阅
     // ============================================================================
     this.subscribeEvent<import('./types').CacheImageCachedEvent>('cache:imageCached', () => this.eventHandlers.onCacheImageCached);
@@ -1205,13 +742,6 @@ export class SWChannelClient {
     this.subscribeEvent<import('./types').SWNewVersionReadyEvent>('sw:newVersionReady', () => this.eventHandlers.onSWNewVersionReady);
     this.subscribeEvent<import('./types').SWActivatedEvent>('sw:activated', () => this.eventHandlers.onSWActivated);
     this.subscribeEvent<import('./types').SWUpdatedEvent>('sw:updated', () => this.eventHandlers.onSWUpdated);
-
-    // Note: sw:requestConfig 已移除 - 配置现在同步到 IndexedDB，SW 直接读取
-
-    // ============================================================================
-    // MCP 事件订阅
-    // ============================================================================
-    this.subscribeEvent<import('./types').MCPToolResultEvent>('mcp:toolResult', () => this.eventHandlers.onMCPToolResult);
   }
 }
 

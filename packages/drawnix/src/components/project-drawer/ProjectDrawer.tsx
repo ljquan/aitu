@@ -48,6 +48,7 @@ import {
 } from '../../types/workspace.types';
 import { BaseDrawer } from '../side-drawer';
 import { workspaceExportService } from '../../services/workspace-export-service';
+import { safeReload } from '../../utils/active-tasks';
 import './project-drawer.scss';
 
 export interface ProjectDrawerProps {
@@ -1320,7 +1321,7 @@ export const ProjectDrawer: React.FC<ProjectDrawerProps> = ({
             `导入成功：${result.folders} 个文件夹，${result.boards} 个画板，${result.assets} 个素材`
           );
           // Reload the page to refresh workspace
-          window.location.reload();
+          safeReload();
         } else {
           if (result.errors.length > 0) {
             MessagePlugin.warning(
@@ -1329,7 +1330,7 @@ export const ProjectDrawer: React.FC<ProjectDrawerProps> = ({
             console.warn('[ProjectDrawer] Import errors:', result.errors);
           }
           // Reload anyway to show imported data
-          window.location.reload();
+          safeReload();
         }
       } catch (error: any) {
         console.error('[ProjectDrawer] Import failed:', error);

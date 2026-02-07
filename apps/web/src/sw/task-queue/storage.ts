@@ -11,10 +11,39 @@
  * - Pending Tool Requests (main thread tool delegation)
  */
 
-import type { SWTask, GeminiConfig, VideoAPIConfig } from './types';
-import type { Workflow } from './workflow-types';
-import type { ChatWorkflow } from './chat-workflow/types';
+import type { SWTask, GeminiConfig, VideoAPIConfig, ChatParams } from './types';
 import { getSafeErrorMessage } from './utils/sanitize-utils';
+
+// Import Workflow type from the main package's workflow-engine types
+import type { Workflow } from '../../../../../packages/drawnix/src/services/workflow-engine/types';
+
+/**
+ * Inline ChatWorkflow type (previously imported from deleted chat-workflow/types.ts)
+ * Kept for IndexedDB storage compatibility
+ */
+interface ChatWorkflow {
+  id: string;
+  status: string;
+  params: ChatParams;
+  content: string;
+  aiAnalysis?: string;
+  toolCalls: Array<{
+    id: string;
+    name: string;
+    arguments: Record<string, unknown>;
+    status: string;
+    result?: {
+      success: boolean;
+      data?: unknown;
+      error?: string;
+      taskId?: string;
+    };
+  }>;
+  createdAt: number;
+  updatedAt: number;
+  completedAt?: number;
+  error?: string;
+}
 
 /**
  * Task-Step mapping for unified progress sync

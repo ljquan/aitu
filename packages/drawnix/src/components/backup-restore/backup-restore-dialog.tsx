@@ -16,6 +16,7 @@ import {
   BackupWorkspaceState,
 } from '../../services/backup-restore-service';
 import { workspaceService } from '../../services/workspace-service';
+import { safeReload } from '../../utils/active-tasks';
 import './backup-restore-dialog.scss';
 
 export interface BackupRestoreDialogProps {
@@ -107,7 +108,7 @@ export const BackupRestoreDialog = ({
 
       // 如果有导入结果且导入了任务数据，刷新页面以确保任务队列生效
       if (importResult && importResult.tasks && importResult.tasks.imported > 0) {
-        window.location.reload();
+        safeReload();
         return;
       }
       

@@ -1,94 +1,62 @@
 /**
  * Executor Factory
  *
- * 执行器工厂，自动选择 SW 执行器或降级执行器。
+ * 执行器工厂，始终使用主线程执行器。
  */
 
 import type { IMediaExecutor } from './types';
-import { SWMediaExecutor, swMediaExecutor } from './sw-executor';
 import { FallbackMediaExecutor, fallbackMediaExecutor } from './fallback-executor';
 
 /**
  * 执行器工厂
  *
- * 自动检测 SW 可用性，返回合适的执行器。
- * - SW 可用：返回 SW 执行器（后台执行，页面刷新不中断）
- * - SW 不可用：返回降级执行器（主线程执行，页面刷新中断）
+ * 始终返回主线程执行器。
+ * getFallbackExecutor / getExecutor 返回相同实例，保持 API 兼容。
  */
 class ExecutorFactory {
-  private swExecutor: SWMediaExecutor = swMediaExecutor;
-  private fallbackExecutor: FallbackMediaExecutor = fallbackMediaExecutor;
-
-  // 缓存 SW 可用性检测结果
-  private swAvailable: boolean | null = null;
-  private lastCheck: number = 0;
-  private readonly checkInterval = 30000; // 30 秒缓存
+  private executor: FallbackMediaExecutor = fallbackMediaExecutor;
 
   /**
-   * 获取执行器
-   *
-   * 自动检测 SW 可用性并返回合适的执行器。
+   * 获取执行器（主线程执行器）
    */
   async getExecutor(): Promise<IMediaExecutor> {
-    const swAvailable = await this.isSWAvailable();
-    return swAvailable ? this.swExecutor : this.fallbackExecutor;
+    return this.executor;
   }
 
   /**
-   * 强制使用降级执行器
-   *
-   * 用于调试或测试降级模式。
+   * 获取降级执行器（与 getExecutor 相同，保持 API 兼容）
    */
   getFallbackExecutor(): IMediaExecutor {
-    return this.fallbackExecutor;
+    return this.executor;
   }
 
   /**
-   * 强制使用 SW 执行器
-   *
-   * 注意：如果 SW 不可用，调用会失败。
+   * SW 执行器已移除，返回主线程执行器
+   * @deprecated 使用 getExecutor() 代替
    */
   getSWExecutor(): IMediaExecutor {
-    return this.swExecutor;
+    return this.executor;
   }
 
   /**
-   * 检测 SW 是否可用
+   * SW 不再参与任务执行
    */
   async isSWAvailable(): Promise<boolean> {
-    const now = Date.now();
-
-    // 使用缓存
-    if (this.swAvailable !== null && now - this.lastCheck < this.checkInterval) {
-      return this.swAvailable;
-    }
-
-    // 重新检测
-    try {
-      this.swAvailable = await this.swExecutor.isAvailable();
-      this.lastCheck = now;
-      return this.swAvailable;
-    } catch {
-      this.swAvailable = false;
-      this.lastCheck = now;
-      return false;
-    }
+    return false;
   }
 
   /**
-   * 清除缓存，强制下次重新检测
+   * 无操作（保持 API 兼容）
    */
   clearCache(): void {
-    this.swAvailable = null;
-    this.lastCheck = 0;
+    // no-op
   }
 
   /**
-   * 获取当前执行模式
+   * 始终返回 fallback 模式
    */
   async getExecutorMode(): Promise<'sw' | 'fallback'> {
-    const swAvailable = await this.isSWAvailable();
-    return swAvailable ? 'sw' : 'fallback';
+    return 'fallback';
   }
 }
 

@@ -3,20 +3,9 @@
 
 // Import task queue module
 import {
-  initTaskQueue,
-  getTaskQueue,
-  initWorkflowHandler,
-  updateWorkflowConfig,
-  isWorkflowMessage,
-  handleWorkflowMessage,
-  handleMainThreadToolResponse,
-  resendPendingToolRequests,
   taskQueueStorage,
   initChannelManager,
   getChannelManager,
-  ensureWorkflowHandlerInitialized,
-  type WorkflowMainToSWMessage,
-  type MainThreadToolResponseMessage,
 } from './task-queue';
 import {
   setDebugFetchBroadcast,
@@ -75,13 +64,8 @@ export {
   IMAGE_CACHE_NAME,
 };
 
-// Initialize task queue (instance used by channelManager for RPC handlers)
-const taskQueue = initTaskQueue(sw);
-
 // Initialize channel manager for duplex communication (postmessage-duplex)
 const channelManager = initChannelManager(sw);
-channelManager.setTaskQueue(taskQueue);
-taskQueue.setChannelManager(channelManager);
 
 // 设置调试客户端数量变化回调
 // 当调试页面连接时自动启用调试模式，当所有调试页面关闭时自动禁用
@@ -681,7 +665,6 @@ function getDebugStatus(): {
   debugLogsCount: number;
   consoleLogsCount: number;
   debugModeEnabled: boolean;
-  workflowHandlerInitialized: boolean;
   memoryStats: {
     pendingRequestsMapSize: number;
     completedRequestsMapSize: number;
@@ -712,7 +695,6 @@ function getDebugStatus(): {
     debugLogsCount: debugLogs.length,
     consoleLogsCount: consoleLogs.length,
     debugModeEnabled,
-    workflowHandlerInitialized,
     // 运行时内存统计
     memoryStats: {
       pendingRequestsMapSize: pendingImageRequests.size,
@@ -1285,20 +1267,6 @@ sw.addEventListener('activate', (event: ExtendableEvent) => {
   );
 });
 
-// Track if workflow handler is initialized
-let workflowHandlerInitialized = false;
-
-// Store config for lazy initialization
-let storedGeminiConfig: any = null;
-let storedVideoConfig: any = null;
-
-// Pending workflow messages waiting for config
-interface PendingWorkflowMessage {
-  message: WorkflowMainToSWMessage;
-  clientId: string;
-}
-const pendingWorkflowMessages: PendingWorkflowMessage[] = [];
-
 // Helper function to broadcast PostMessage log to debug panel
 function broadcastPostMessageLog(entry: PostMessageLogEntry): void {
   if (debugModeEnabled) {
@@ -1353,68 +1321,6 @@ sw.addEventListener('message', (event: ExtendableMessageEvent) => {
         broadcastPostMessageLog(entry);
       }
     }
-  }
-
-  // Handle workflow messages
-  if (event.data && isWorkflowMessage(event.data)) {
-    const wfClientId = (event.source as Client)?.id || '';
-
-    // Lazy initialize workflow handler if not yet initialized
-    if (
-      !workflowHandlerInitialized &&
-      storedGeminiConfig &&
-      storedVideoConfig
-    ) {
-      initWorkflowHandler(sw, storedGeminiConfig, storedVideoConfig);
-      workflowHandlerInitialized = true;
-    }
-
-    // If still not initialized, try to load config from IndexedDB
-    // 主线程会自动同步配置到 IndexedDB，SW 可以直接读取
-    if (!workflowHandlerInitialized) {
-      // Use async IIFE to handle the async operation
-      (async () => {
-        try {
-          // 使用 ensureWorkflowHandlerInitialized 从 IndexedDB 加载配置
-          const initialized = await ensureWorkflowHandlerInitialized(sw);
-          
-          if (initialized) {
-            workflowHandlerInitialized = true;
-            // console.log('Service Worker: Workflow handler initialized from IndexedDB');
-
-            // Now handle the message (use wfClientId from outer scope)
-            handleWorkflowMessage(
-              event.data as WorkflowMainToSWMessage,
-              wfClientId
-            );
-          } else {
-            // 配置不存在时，将消息暂存
-            // 注意：配置应由主线程同步到 IndexedDB，不再请求主线程发送
-            console.warn('[SW] No config in IndexedDB, queueing workflow message');
-            pendingWorkflowMessages.push({
-              message: event.data as WorkflowMainToSWMessage,
-              clientId: wfClientId,
-            });
-          }
-        } catch (error) {
-          // 只记录错误类型，不记录详细信息（可能包含敏感配置）
-          console.error(
-            '[SW] Failed to load config from storage:',
-            getSafeErrorMessage(error)
-          );
-        }
-      })();
-      return;
-    }
-
-    handleWorkflowMessage(event.data as WorkflowMainToSWMessage, wfClientId);
-    return;
-  }
-
-  // Handle main thread tool response
-  if (event.data && event.data.type === 'MAIN_THREAD_TOOL_RESPONSE') {
-    handleMainThreadToolResponse(event.data as MainThreadToolResponseMessage);
-    return;
   }
 
   // Handle thumbnail generation request from main thread

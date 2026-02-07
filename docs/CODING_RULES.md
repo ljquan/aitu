@@ -2016,6 +2016,233 @@ this.fallbackEngine = new MainThreadWorkflowEngine({
 
 **原因**: 降级路径应完全在主线程执行，直接调用 API，不依赖 SW 或 IndexedDB 就绪。
 
+### 降级路径工作流工具集一致性
+
+**场景**: 工作流降级到主线程执行时，WorkflowEngine 的 `executeToolStep` 用 switch 按 `step.mcp` 分发。SW 侧（如 workflow-executor、swCapabilitiesHandler）支持的工具，主线程分支也必须能路由，否则会落入 default 抛出 `Unknown tool: xxx`。
+
+❌ **错误示例**:
+```typescript
+// 错误：SW 的 handler 支持 generate_grid_image，但 engine 的 switch 没有对应 case
+// sw-capabilities/handler.ts 有 case 'generate_grid_image'
+// workflow-engine/engine.ts 只有 generate_image、generate_video、ai_analyze、insert_*...
+// → generate_grid_image 落入 default，抛 Unknown tool: generate_grid_image
+switch (step.mcp) {
+  case 'generate_image': // ...
+  case 'generate_video': // ...
+  case 'ai_analyze': // ...
+  case 'insert_mermaid':
+  case 'canvas_insert': // ...
+  default:
+    throw new Error(`Unknown tool: ${step.mcp}`);
+}
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：与 DelegatedOperationType / swCapabilitiesHandler.execute 支持的工具集一致
+// 凡由主线程 handler 执行的工具，都走 executeMainThreadTool 分支
+case 'generate_grid_image':
+case 'generate_inspiration_board':
+case 'split_image':
+case 'generate_long_video':
+case 'insert_mermaid':
+case 'insert_mindmap':
+case 'insert_svg':
+case 'canvas_insert':
+case 'insert_to_canvas': {
+  if (!this.options.executeMainThreadTool) {
+    throw new Error(`No main thread tool executor configured for: ${step.mcp}`);
+  }
+  const toolResult = await this.options.executeMainThreadTool(step.mcp, step.args);
+  // ...
+}
+```
+
+**原因**: 降级路径功能一致性要求主线程与 SW 支持相同工具集。新增 DelegatedOperation 类型或在 handler 增加 case 时，需同步在 WorkflowEngine.executeToolStep 中增加对应 case 并路由到 executeMainThreadTool。
+
+**相关文件**:
+- `packages/drawnix/src/services/sw-capabilities/types.ts` - DelegatedOperationType
+- `packages/drawnix/src/services/sw-capabilities/handler.ts` - execute switch
+- `packages/drawnix/src/services/workflow-engine/engine.ts` - executeToolStep switch
+
+### 同页面禁止创建多个 ServiceWorkerChannel
+
+**场景**: 主线程需要与 SW 通信的多个模块（如 `swChannelClient`、`FetchRelayClient`）各自调用 `ServiceWorkerChannel.createFromPage()`。
+
+**问题**: SW 端 `enableGlobalRouting` 按 `event.source.id`（SW client ID）路由消息。同一页面的所有 `createFromPage()` 共享同一个 `clientId`。SW 端 `ensureChannel(clientId)` 只为第一个连接创建 channel 和 subscribeMap，后续连接复用同一个 server-side channel。这导致 RPC 响应可能路由到错误的 client-side channel，`channel.call()` 永远不 resolve。
+
+❌ **错误示例**:
+```typescript
+// FetchRelayClient 创建独立 channel — 与 swChannelClient 冲突！
+class FetchRelayClient {
+  private channel: ServiceWorkerChannel | null = null;
+
+  async doInitialize(): Promise<boolean> {
+    // 创建第二个 channel，但 SW 只有一个 server-side channel
+    this.channel = await ServiceWorkerChannel.createFromPage({ timeout: 120000 });
+    return true;
+  }
+
+  async fetch(url: string, init: RequestInit): Promise<Response> {
+    // channel.call() 永远不 resolve — 响应去了 swChannelClient 的 channel
+    const response = await this.channel!.call('fetchRelay:start', { url, ...init });
+    // ...
+  }
+}
+```
+
+✅ **正确示例**:
+```typescript
+// FetchRelayClient 复用 swChannelClient 的 channel
+class FetchRelayClient {
+  private swChannelClientRef: { getChannel: () => ServiceWorkerChannel | null } | null = null;
+
+  private getChannel(): ServiceWorkerChannel | null {
+    return this.swChannelClientRef?.getChannel() ?? null;
+  }
+
+  async initialize(): Promise<boolean> {
+    const { swChannelClient } = await import('../sw-channel');
+    this.swChannelClientRef = swChannelClient;
+    if (!swChannelClient.isInitialized()) {
+      await swChannelClient.initializeChannel();
+    }
+    return !!swChannelClient.getChannel();
+  }
+
+  async fetch(url: string, init: RequestInit): Promise<Response> {
+    const channel = this.getChannel();
+    if (!channel) return this.directFetch(url, init); // 降级
+    const response = await channel.call('fetchRelay:start', { url, ...init });
+    // ...
+  }
+}
+```
+
+**原因**: `enableGlobalRouting` 按 `clientId` 路由。同一浏览器 tab 的所有 `createFromPage()` 共享同一个 clientId（来自 `event.source.id`）。SW 端只为每个 clientId 维护一个 server-side channel 和一套 subscribeMap。第二个 `createFromPage()` 的握手消息被已有 channel 处理，导致路由混乱。
+
+**相关文件**：
+- `packages/drawnix/src/services/sw-channel/client.ts` - swChannelClient（唯一的 createFromPage 调用点）
+- `packages/drawnix/src/services/fetch-relay/client.ts` - FetchRelayClient（复用 swChannelClient.getChannel()）
+- `apps/web/src/sw/task-queue/channel-manager.ts` - enableGlobalRouting + ensureChannel
+
+### Fetch Relay 初始化超时保护
+
+**场景**: `fetchRelayClient.initialize()` 在热路径中被调用（如 `FallbackMediaExecutor.generateImage()`、`swTaskQueueService.doInitialize()`）。内部 `ServiceWorkerChannel.createFromPage()` 默认超时 120 秒，如果 SW 存在但响应慢（如正在 activate），整个热路径会被阻塞 2 分钟。
+
+❌ **错误示例**:
+```typescript
+// 错误：await 可能阻塞 120 秒
+await fetchRelayClient.initialize();
+
+const relayResponse = await fetchRelayClient.fetch(url, { ... });
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：3 秒超时保护，超时后 isInitialized() 返回 false，
+// fetchRelayClient.fetch() 内部自动降级到 directFetch
+const relayReady = await Promise.race([
+  fetchRelayClient.initialize(),
+  new Promise<boolean>((r) => setTimeout(() => r(false), 3000)),
+]);
+console.debug('[XXX] Fetch Relay ready:', relayReady);
+
+// fetch() 内部会检查 isInitialized()，不可用时自动降级
+const relayResponse = await fetchRelayClient.fetch(url, { ... });
+```
+
+**原因**: `fetchRelayClient.initialize()` 创建的 `ServiceWorkerChannel` 需要与 SW 完成握手。SW 在 activating、更新或忙碌时可能延迟响应。在图片生成、任务初始化等热路径中，2 分钟阻塞会导致用户感知请求未发出。
+
+**补充**：同理，`recoverFetchRelayResults()` 在 `doInitialize()` 中也需加超时，否则会阻塞任务恢复流程（`handleInterruptedTasks` 和 `startPolling` 无法执行）。
+
+**相关文件**：
+- `packages/drawnix/src/services/fetch-relay/client.ts` - FetchRelayClient
+- `packages/drawnix/src/services/media-executor/fallback-executor.ts` - generateImage
+- `packages/drawnix/src/services/sw-task-queue-service.ts` - doInitialize / recoverFetchRelayResults
+
+### 模块迁移时接口定义必须逐字段对比
+
+**场景**: 将模块从 SW 迁移到主线程（或反向迁移）时，在新模块中重新定义了 `interface`，但遗漏了某些字段。
+
+❌ **错误示例**:
+```typescript
+// SW 版本的 llm-api-logger.ts 有完整定义
+interface LLMApiLog {
+  id: string;
+  // ... 基础字段 ...
+  hasReferenceImages?: boolean;
+  referenceImageCount?: number;
+  referenceImages?: LLMReferenceImage[];  // ← SW 版本有这个字段
+}
+
+// 主线程版本迁移时遗漏了 referenceImages
+interface LLMApiLog {
+  id: string;
+  // ... 基础字段 ...
+  hasReferenceImages?: boolean;
+  referenceImageCount?: number;
+  // ❌ referenceImages 字段丢失！类型定义缺失导致调用方无法传入数据
+}
+```
+
+✅ **正确示例**:
+```typescript
+// 主线程版本必须与 SW 版本逐字段对比
+interface LLMApiLog {
+  id: string;
+  // ... 基础字段 ...
+  hasReferenceImages?: boolean;
+  referenceImageCount?: number;
+  referenceImages?: LLMReferenceImage[];  // ✅ 保留所有字段
+}
+```
+
+**原因**: 模块迁移时，不仅调用方传参需要完整，**类型定义本身**也必须包含所有字段。如果 `interface` 缺少字段，即使调用方想传数据也无法传入（TypeScript 严格对象字面量检查会报错）。迁移后应逐字段对比新旧 `interface`，确保功能完整性。本次案例中，主线程 `LLMApiLog` 遗漏 `referenceImages` 导致 debug 面板参考图始终显示"加载中..."。
+
+**相关文件**：
+- `packages/drawnix/src/services/media-executor/llm-api-logger.ts` - 主线程版本
+- `apps/web/src/sw/task-queue/llm-api-logger.ts` - SW 版本
+
+### 中断任务延迟判定
+
+**场景**: 页面刷新后，`handleInterruptedTasks()` 处理仍处于 `processing` 状态的任务。如果图片生成通过 Fetch Relay 代理，SW 可能仍在执行 fetch（尚未完成），此时 `recoverFetchRelayResults()` 找不到结果。
+
+❌ **错误示例**:
+```typescript
+// 错误：立即标记失败，但 SW 可能几秒后就完成了
+private async handleInterruptedTasks(): Promise<void> {
+  for (const task of processingTasks) {
+    if (!task.remoteId) {
+      await taskStorageWriter.failTask(task.id, { code: 'INTERRUPTED', message: '...' });
+    }
+  }
+}
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：延迟 15 秒后再次尝试 Fetch Relay 恢复，仍无法恢复才标记失败
+private async handleInterruptedTasks(): Promise<void> {
+  for (const task of processingTasks) {
+    if (!task.remoteId) {
+      this.delayedInterruptCheck(task); // 15 秒后再检查
+    }
+  }
+}
+
+private delayedInterruptCheck(task: Task): void {
+  setTimeout(async () => {
+    const current = this.tasks.get(task.id);
+    if (!current || current.status !== TaskStatus.PROCESSING) return;
+    await this.recoverFetchRelayResults(); // 再试一次
+    // 仍然 processing → 标记失败
+  }, 15000);
+}
+```
+
+**原因**: Fetch Relay 的 SW 端是异步执行的，图片生成 API 通常需要 5-30 秒。如果立即标记失败，SW 完成的结果会被丢弃，用户看到失败但实际上请求成功了。
+
 ### IndexedDB 主线程读取前检查 store 是否存在
 
 **场景**: 主线程 StorageReader（如 WorkflowStorageReader）从 IndexedDB 读取数据时

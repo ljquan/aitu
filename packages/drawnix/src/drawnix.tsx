@@ -89,6 +89,7 @@ import { withGradientFill } from './plugins/with-gradient-fill';
 import { API_AUTH_ERROR_EVENT, ApiAuthErrorDetail } from './utils/api-auth-error-event';
 import { MessagePlugin } from 'tdesign-react';
 import { calculateEditedImagePoints } from './utils/image';
+import { safeReload } from './utils/active-tasks';
 
 const TTDDialog = lazy(() => import('./components/ttd-dialog/ttd-dialog').then(module => ({ default: module.TTDDialog })));
 const SettingsDialog = lazy(() => import('./components/settings-dialog/settings-dialog').then(module => ({ default: module.SettingsDialog })));
@@ -291,123 +292,37 @@ export const Drawnix: React.FC<DrawnixProps> = ({
   }, []);
 
   // Handle interrupted WorkZone elements after page refresh
-  // Query task status from Service Worker and restore workflow state
+  // Query task status from main-thread task queue and restore workflow state
   useEffect(() => {
     if (board && value && value.length > 0) {
       const restoreWorkZones = async () => {
         const { WorkZoneTransforms } = await import('./plugins/with-workzone');
         const { TaskStatus } = await import('./types/task.types');
 
-        // Initialize SW service (fire-and-forget, 不阻塞应用启动)
-        // SW 可用性由服务内部管理，即使 SW 不可用也能正常工作
-        const { swTaskQueueService } = await import('./services/sw-task-queue-service');
-        
-        // 使用 Promise.race 设置超时，避免 SW 初始化阻塞应用启动
-        const SW_INIT_TIMEOUT = 5000; // 5秒超时
-        let swInitialized = false;
-        try {
-          swInitialized = await Promise.race([
-            swTaskQueueService.initialize(),
-            new Promise<boolean>((resolve) => setTimeout(() => resolve(false), SW_INIT_TIMEOUT))
-          ]);
-        } catch {
-          // SW 初始化失败，继续使用降级模式
-          console.warn('[Drawnix] SW initialization failed, using fallback mode');
-        }
+        // 数据迁移：从旧 sw-task-queue 数据库迁移到 aitu-app（一次性，fire-and-forget）
+        import('./services/app-database').then(({ migrateFromLegacyDB }) => {
+          migrateFromLegacyDB().catch(() => {});
+        });
 
-        // Query all chat workflows from SW (only if SW is initialized)
-        // Now returns ALL workflows including completed ones for proper state sync
-        type StepStatus = 'pending' | 'running' | 'completed' | 'failed' | 'skipped';
-        type WorkflowStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
-        let activeChatWorkflows: { id: string; status: string }[] = [];
-        let activeWorkflows: Array<{
-          id: string;
-          status: WorkflowStatus;
-          steps: Array<{ id: string; mcp: string; args: Record<string, unknown>; description: string; status: StepStatus; result?: unknown; error?: string; duration?: number }>;
-          error?: string;
-        }> = [];
-        
-        if (swInitialized) {
-          const { chatWorkflowClient } = await import('./services/sw-channel/chat-workflow-client');
-          activeChatWorkflows = await chatWorkflowClient.getAllActiveWorkflows();
-          
-          // Also query regular workflows
-          const { workflowSubmissionService } = await import('./services/workflow-submission-service');
-          activeWorkflows = await workflowSubmissionService.queryAllWorkflows();
-        } else {
-          // SW 不可用时，从 IndexedDB 直接同步任务状态
-          await swTaskQueueService.syncFromIndexedDB();
-        }
-        
-        const activeWorkflowIds = new Set(activeWorkflows.map(w => w.id));
-        
-        // console.log('[Drawnix] Active chat workflows:', activeChatWorkflows.length, 'regular workflows:', activeWorkflows.length);
-
-        // Now import taskQueueService after sync is complete
         const { taskQueueService } = await import('./services/task-queue');
 
         const workzones = WorkZoneTransforms.getAllWorkZones(board);
 
         for (const workzone of workzones) {
-          const swWorkflow = activeWorkflows.find(w => w.id === workzone.workflow.id);
-          
+          const currentWorkflow = { ...workzone.workflow, steps: [...workzone.workflow.steps] };
+
           // 检查工作流是否已完成，如果是则自动删除 WorkZone
-          // 注意：需要确保没有 pending/running 步骤（AI 分析可能会添加后续步骤）
-          const workflowStatus = swWorkflow?.status || workzone.workflow.status;
-          const stepsToCheck = swWorkflow?.steps || workzone.workflow.steps;
-          const hasPendingOrRunningSteps = stepsToCheck.some(
-            step => step.status === 'running' || step.status === 'pending' || step.status === 'pending_main_thread'
+          const hasPendingOrRunningSteps = currentWorkflow.steps.some(
+            step => step.status === 'running' || step.status === 'pending'
           );
           
-          if (workflowStatus === 'completed' && !hasPendingOrRunningSteps) {
+          if (currentWorkflow.status === 'completed' && !hasPendingOrRunningSteps) {
             WorkZoneTransforms.removeWorkZone(board, workzone.id);
             continue;
           }
-          
-          const hasRunningSteps = workzone.workflow.steps.some(
-            step => step.status === 'running' || step.status === 'pending'
-          );
 
-          // If we found the workflow in SW, sync the steps list first (for dynamic steps and status)
-          // Create a mutable copy of workflow for local use
-          let currentWorkflow = { ...workzone.workflow, steps: [...workzone.workflow.steps] };
-          
-          if (swWorkflow) {
-            const needsSync = swWorkflow.steps.length !== currentWorkflow.steps.length || 
-                             swWorkflow.status !== currentWorkflow.status;
-            
-            if (needsSync) {
-              // console.log(`[Drawnix] Syncing workflow for WorkZone ${workzone.id}, SW status: ${swWorkflow.status}, steps: ${swWorkflow.steps.length}`);
-              WorkZoneTransforms.updateWorkflow(board, workzone.id, {
-                steps: swWorkflow.steps,
-                status: swWorkflow.status,
-                error: swWorkflow.error,
-              });
-              // Update local reference for the mapping logic below
-              currentWorkflow = { ...currentWorkflow, steps: swWorkflow.steps, status: swWorkflow.status };
-            }
-          }
-
-          if (!hasRunningSteps && !swWorkflow) continue;
-
-          // Check if this workzone's workflow exists in SW (including completed ones)
-          // For chat workflows, also get the full workflow object to check actual status
-          const chatWorkflow = activeChatWorkflows.find(w => w.id === currentWorkflow.id);
-          const isChatWorkflowExists = !!chatWorkflow;
-          const isRegularWorkflowExists = activeWorkflowIds.has(currentWorkflow.id);
-          const isWorkflowExists = isChatWorkflowExists || isRegularWorkflowExists;
-          
-          // Check if workflow is still running (not completed/failed)
-          const isChatWorkflowRunning = chatWorkflow && 
-            chatWorkflow.status !== 'completed' && 
-            chatWorkflow.status !== 'failed' && 
-            chatWorkflow.status !== 'cancelled';
-          const isWorkflowRunning = isChatWorkflowRunning || (swWorkflow && 
-            swWorkflow.status !== 'completed' && 
-            swWorkflow.status !== 'failed' && 
-            swWorkflow.status !== 'cancelled');
-
-          // console.log('[Drawnix] Found interrupted WorkZone:', workzone.id, 'chatExists:', isChatWorkflowExists, 'regularExists:', isRegularWorkflowExists, 'running:', isWorkflowRunning);
+          const hasRunningSteps = hasPendingOrRunningSteps;
+          if (!hasRunningSteps) continue;
 
           // Update steps based on task queue status
           const updatedSteps = currentWorkflow.steps.map(step => {
@@ -418,28 +333,14 @@ export const Drawnix: React.FC<DrawnixProps> = ({
             // Get taskId from step result
             const taskId = (step.result as { taskId?: string })?.taskId;
             if (!taskId) {
-              // No taskId means it's an AI analyze step or similar
-              // For ai_analyze (text model), always keep current status
-              // SW will send workflow:status or workflow:stepStatus events to update actual state
-              // This prevents incorrectly marking as failed when SW query times out but workflow is still running
-              if (step.mcp === 'ai_analyze') {
-                // Keep current status - SW event subscription will update if needed
-                // If SW workflow failed, we'll receive workflow:failed event
-                // If SW workflow completed, we'll receive workflow:completed event
-                return step;
-              }
-              // For media generation steps (generate_image, generate_video, etc.),
-              // they may be pending and need to be resumed via fallback engine
+              // For media generation steps, keep status for fallback engine to resume
               const mediaGenerationSteps = ['generate_image', 'generate_video', 'generate_grid_image', 'generate_inspiration_board'];
-              if (mediaGenerationSteps.includes(step.mcp)) {
-                // Keep status for fallback engine to resume
-                // The WorkZoneContent claim logic will trigger fallback resume
+              if (step.mcp === 'ai_analyze' || mediaGenerationSteps.includes(step.mcp)) {
                 return step;
               }
               
               // For other steps without taskId (like insert_mindmap, insert_mermaid),
               // they are synchronous and should have completed before refresh
-              // If they're still running, mark as failed (pending is ok, will be skipped)
               if (step.status === 'running') {
                 return {
                   ...step,
@@ -453,7 +354,6 @@ export const Drawnix: React.FC<DrawnixProps> = ({
             // Query task status from task queue
             const task = taskQueueService.getTask(taskId);
             if (!task) {
-              // Task not found in queue, mark as failed
               return {
                 ...step,
                 status: 'failed' as const,
@@ -482,7 +382,6 @@ export const Drawnix: React.FC<DrawnixProps> = ({
                 };
               case TaskStatus.PENDING:
               case TaskStatus.PROCESSING:
-                // Task is still running, keep as running
                 return step;
               default:
                 return step;
@@ -498,7 +397,6 @@ export const Drawnix: React.FC<DrawnixProps> = ({
             WorkZoneTransforms.updateWorkflow(board, workzone.id, {
               steps: updatedSteps,
             });
-            // console.log('[Drawnix] Restored WorkZone state:', workzone.id);
           }
         }
       };
@@ -511,9 +409,8 @@ export const Drawnix: React.FC<DrawnixProps> = ({
             restoreWorkZones().catch(error => {
               console.error('[Drawnix] Failed to restore WorkZones:', error);
             });
-          }, { timeout: 2000 }); // 最多延迟 2 秒
+          }, { timeout: 2000 });
         } else {
-          // Safari 不支持 requestIdleCallback，使用 setTimeout 兜底
           setTimeout(() => {
             restoreWorkZones().catch(error => {
               console.error('[Drawnix] Failed to restore WorkZones:', error);
@@ -715,7 +612,7 @@ export const Drawnix: React.FC<DrawnixProps> = ({
       
       // 延迟刷新页面，让用户看到切换效果
       setTimeout(() => {
-        window.location.reload();
+        safeReload();
       }, 500);
     }
   }, [handleBeforeSwitch, createBoard, switchBoard]);

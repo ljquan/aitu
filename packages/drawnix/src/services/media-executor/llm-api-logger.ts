@@ -14,6 +14,17 @@ const STORE_NAME = 'logs';
 const MAX_DB_LOGS = 1000;
 
 /**
+ * 参考图信息
+ */
+export interface LLMReferenceImage {
+  url: string;
+  size: number;
+  width: number;
+  height: number;
+  name?: string;
+}
+
+/**
  * LLM API 日志条目
  */
 export interface LLMApiLog {
@@ -26,6 +37,7 @@ export interface LLMApiLog {
   requestBody?: string;
   hasReferenceImages?: boolean;
   referenceImageCount?: number;
+  referenceImages?: LLMReferenceImage[];
   status: 'pending' | 'success' | 'error';
   httpStatus?: number;
   duration?: number;
@@ -138,6 +150,7 @@ export function startLLMApiLog(params: {
   requestBody?: string;
   hasReferenceImages?: boolean;
   referenceImageCount?: number;
+  referenceImages?: LLMReferenceImage[];
   taskId?: string;
   workflowId?: string;
 }): string {
@@ -153,6 +166,7 @@ export function startLLMApiLog(params: {
     requestBody: params.requestBody ? sanitizeRequestBody(params.requestBody) : undefined,
     hasReferenceImages: params.hasReferenceImages,
     referenceImageCount: params.referenceImageCount,
+    referenceImages: params.referenceImages,
     status: 'pending',
     taskId: params.taskId,
     workflowId: params.workflowId,

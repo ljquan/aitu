@@ -1,6 +1,6 @@
 {
   "version": "0.5.83",
-  "buildTime": "2026-02-07T03:12:02.648Z",
+  "buildTime": "2026-02-07T12:30:38.081Z",
   "gitCommit": "unknown",
   "changelog": [
     "enhance logging and error handling in AI analysis and agent execution"

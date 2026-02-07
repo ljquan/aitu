@@ -4,7 +4,7 @@
  * 主线程工作流引擎，负责：
  * - 管理工作流状态
  * - 按顺序/依赖执行步骤
- * - 使用执行器工厂执行媒体生成任务
+ * - 调用 media-generation 服务执行媒体生成任务
  * - 轮询等待任务完成
  */
 
@@ -15,10 +15,11 @@ import type {
   WorkflowEvent,
   WorkflowEngineOptions,
 } from './types';
-import { executorFactory, waitForTaskCompletion, taskStorageWriter } from '../media-executor';
+import { executorFactory, taskStorageWriter } from '../media-executor';
 import type { AIAnalyzeParams } from '../media-executor/types';
 import { workflowStorageWriter } from './workflow-storage-writer';
 import { findExecutableSteps, getFirstError } from './workflow-factory';
+import { generateImage, generateVideo, TaskStatus } from '../media-generation';
 
 /**
  * 主线程工作流引擎
@@ -53,17 +54,25 @@ export class WorkflowEngine {
    * 提交工作流
    */
   async submitWorkflow(workflow: Workflow): Promise<void> {
+    console.log('[WorkflowEngine] submitWorkflow 入口, id:', workflow.id, 'steps:', workflow.steps.length);
+
     // 保存到内存
     this.workflows.set(workflow.id, workflow);
 
-    // 保存到 IndexedDB
-    await workflowStorageWriter.saveWorkflow(workflow);
+    // 保存到 IndexedDB（降级模式下可能失败，不阻塞执行）
+    try {
+      await workflowStorageWriter.saveWorkflow(workflow);
+      console.log('[WorkflowEngine] submitWorkflow: IDB 保存完成');
+    } catch (e) {
+      console.warn('[WorkflowEngine] submitWorkflow: IDB 保存失败，继续执行:', e);
+    }
 
     // 创建取消控制器
     const abortController = new AbortController();
     this.abortControllers.set(workflow.id, abortController);
 
     // 异步执行工作流
+    console.log('[WorkflowEngine] submitWorkflow: 开始异步执行工作流');
     this.executeWorkflow(workflow.id).catch((error) => {
       console.error(`[WorkflowEngine] Workflow ${workflow.id} execution error:`, error);
     });
@@ -147,8 +156,12 @@ export class WorkflowEngine {
    * 执行工作流
    */
   private async executeWorkflow(workflowId: string): Promise<void> {
+    console.log('[WorkflowEngine] executeWorkflow 开始, id:', workflowId);
     const workflow = this.workflows.get(workflowId);
-    if (!workflow) return;
+    if (!workflow) {
+      console.warn('[WorkflowEngine] executeWorkflow: 工作流不存在:', workflowId);
+      return;
+    }
 
     const abortController = this.abortControllers.get(workflowId);
 
@@ -156,8 +169,13 @@ export class WorkflowEngine {
       // 更新状态为 running
       workflow.status = 'running';
       workflow.updatedAt = Date.now();
-      await workflowStorageWriter.saveWorkflow(workflow);
+      try {
+        await workflowStorageWriter.saveWorkflow(workflow);
+      } catch (e) {
+        console.warn('[WorkflowEngine] executeWorkflow: IDB 保存失败，继续:', e);
+      }
 
+      console.log('[WorkflowEngine] executeWorkflow: 状态已更新为 running');
       this.emitEvent({
         type: 'status',
         workflowId,
@@ -207,7 +225,7 @@ export class WorkflowEngine {
       this.emitEvent({
         type: 'failed',
         workflowId,
-        error: workflow.error,
+        error: workflow.error || 'Workflow execution failed',
       });
     } finally {
       // 清理
@@ -250,6 +268,7 @@ export class WorkflowEngine {
     step: WorkflowStep,
     signal?: AbortSignal
   ): Promise<void> {
+    console.log('[WorkflowEngine] executeStep 开始:', step.mcp, 'stepId:', step.id);
     const startTime = Date.now();
 
     // 更新步骤状态为 running
@@ -313,71 +332,51 @@ export class WorkflowEngine {
     step: WorkflowStep,
     signal?: AbortSignal
   ): Promise<void> {
-    const executor = this.options.forceFallbackExecutor
-      ? executorFactory.getFallbackExecutor()
-      : await executorFactory.getExecutor();
-    const taskId = step.id; // 使用步骤 ID 作为任务 ID
+    console.log('[WorkflowEngine] executeToolStep:', step.mcp, 'stepId:', step.id, 'forceFallback:', this.options.forceFallbackExecutor);
 
     // 根据工具类型执行
     switch (step.mcp) {
       case 'generate_image': {
-        // 创建任务记录
-        await taskStorageWriter.createTask(taskId, 'image', {
-          prompt: step.args.prompt as string,
-          ...step.args,
-        });
+        // 使用独立的图片生成服务
+        const result = await generateImage(
+          step.args.prompt as string,
+          {
+            model: step.args.model as string | undefined,
+            size: step.args.size as string | undefined,
+            referenceImages: step.args.referenceImages as string[] | undefined,
+            count: step.args.count as number | undefined,
+            forceMainThread: this.options.forceFallbackExecutor,
+            signal,
+          }
+        );
 
-        // 执行图片生成
-        await executor.generateImage({
-          taskId,
-          prompt: step.args.prompt as string,
-          model: step.args.model as string | undefined,
-          size: step.args.size as string | undefined,
-          referenceImages: step.args.referenceImages as string[] | undefined,
-          count: step.args.count as number | undefined,
-        }, { signal });
-
-        // 等待任务完成
-        const result = await waitForTaskCompletion(taskId, {
-          timeout: this.options.stepTimeout,
-          signal,
-        });
-
-        if (!result.success) {
-          throw new Error(result.error || 'Image generation failed');
+        if (result.task.status === TaskStatus.FAILED) {
+          throw new Error(result.task.error?.message || 'Image generation failed');
         }
 
-        step.result = result.task?.result;
+        step.result = result.task.result;
         break;
       }
 
       case 'generate_video': {
-        // 创建任务记录
-        await taskStorageWriter.createTask(taskId, 'video', {
-          prompt: step.args.prompt as string,
-          ...step.args,
-        });
+        // 使用独立的视频生成服务
+        const result = await generateVideo(
+          step.args.prompt as string,
+          {
+            model: step.args.model as string | undefined,
+            duration: step.args.duration as string | number | undefined,
+            size: step.args.size as string | undefined,
+            referenceImages: step.args.referenceImages as string[] | undefined,
+            forceMainThread: this.options.forceFallbackExecutor,
+            signal,
+          }
+        );
 
-        // 执行视频生成
-        await executor.generateVideo({
-          taskId,
-          prompt: step.args.prompt as string,
-          model: step.args.model as string | undefined,
-          duration: step.args.duration as string | undefined,
-          size: step.args.size as string | undefined,
-        }, { signal });
-
-        // 等待任务完成
-        const result = await waitForTaskCompletion(taskId, {
-          timeout: this.options.stepTimeout,
-          signal,
-        });
-
-        if (!result.success) {
-          throw new Error(result.error || 'Video generation failed');
+        if (result.task.status === TaskStatus.FAILED) {
+          throw new Error(result.task.error?.message || 'Video generation failed');
         }
 
-        step.result = result.task?.result;
+        step.result = result.task.result;
         break;
       }
 
@@ -388,6 +387,7 @@ export class WorkflowEngine {
 
         // 强制使用降级执行器，确保结果立即返回
         const fallbackExecutor = executorFactory.getFallbackExecutor();
+        const taskId = step.id;
         const analyzeResult = await fallbackExecutor.aiAnalyze({
           taskId,
           // 支持 messages 或 prompt
@@ -423,7 +423,11 @@ export class WorkflowEngine {
         break;
       }
 
-      // 主线程工具（需要访问 Board/Canvas）
+      // 主线程工具（需要访问 Board/Canvas 或由 swCapabilitiesHandler 统一处理，与 SW 工具集一致）
+      case 'generate_grid_image':
+      case 'generate_inspiration_board':
+      case 'split_image':
+      case 'generate_long_video':
       case 'insert_mermaid':
       case 'insert_mindmap':
       case 'insert_svg':

@@ -665,13 +665,12 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
   // 保存 board 引用供后处理完成后使用
   const SelectionWatcherBoardRef = useRef<any>(null);
 
-  // 使用 SW 工作流提交 Hook
+  // 使用工作流提交 Hook
   const {
     submitWorkflow: submitWorkflowToSW,
   } = useWorkflowSubmission({
     boardRef: SelectionWatcherBoardRef,
     workZoneIdRef: currentWorkZoneIdRef,
-    useSWExecution: true, // 启用 SW 执行
   });
 
   const inputRef = useRef<HTMLTextAreaElement>(null);

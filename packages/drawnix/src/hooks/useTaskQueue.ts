@@ -6,7 +6,7 @@
  */
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { taskQueueService, swTaskQueueService, shouldUseSWTaskQueue } from '../services/task-queue';
+import { taskQueueService } from '../services/task-queue';
 import { taskStorageReader } from '../services/task-storage-reader';
 import { Task, TaskStatus, TaskType, GenerationParams } from '../types/task.types';
 
@@ -94,14 +94,9 @@ export function useTaskQueue(): UseTaskQueueReturn {
   const maxRetries = 3;
   const retryDelay = 500;
 
-  // 更新分页状态
+  // 分页状态（不再使用 SW 分页，数据直接从 IndexedDB 加载）
   const updatePaginationState = useCallback(() => {
-    if (shouldUseSWTaskQueue()) {
-      const state = swTaskQueueService.getPaginationState();
-      setHasMore(state.hasMore);
-      setTotalCount(state.total);
-      setLoadedCount(state.loadedCount);
-    }
+    // No-op: all data loaded from IndexedDB directly
   }, []);
 
   // Subscribe to task updates
@@ -192,32 +187,10 @@ export function useTaskQueue(): UseTaskQueueReturn {
     };
   }, [updatePaginationState, retryCount]);
 
-  // 加载更多任务
+  // 加载更多任务（不再需要 SW 分页，直接返回）
   const loadMore = useCallback(async () => {
-    if (!shouldUseSWTaskQueue() || !hasMore || isLoadingMore || loadMoreLock.current) {
-      return;
-    }
-
-    loadMoreLock.current = true;
-    setIsLoadingMore(true);
-
-    try {
-      const stillHasMore = await swTaskQueueService.loadMoreTasks();
-      // 从 swTaskQueueService 获取任务并更新本地 taskQueueService
-      const swTasks = swTaskQueueService.getAllTasks();
-      if (swTasks.length > 0) {
-        taskQueueService.restoreTasks(swTasks);
-      }
-      setTasks(taskQueueService.getAllTasks());
-      setHasMore(stillHasMore);
-      updatePaginationState();
-    } catch {
-      // 静默忽略错误
-    } finally {
-      setIsLoadingMore(false);
-      loadMoreLock.current = false;
-    }
-  }, [hasMore, isLoadingMore, updatePaginationState]);
+    // All tasks loaded from IndexedDB on mount, no pagination needed
+  }, []);
 
   // 注意：任务状态更新主要依赖 SW 的广播事件
   // visibility 监听器会在页面变为可见时同步第一页

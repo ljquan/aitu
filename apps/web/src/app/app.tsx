@@ -8,6 +8,7 @@ import {
   BoardChangeData,
   TreeNode,
   crashRecoveryService,
+  safeReload,
   useDocumentTitle,
 } from '@drawnix/drawnix';
 import { PlaitBoard, PlaitElement, PlaitTheme, Viewport } from '@plait/core';
@@ -372,7 +373,7 @@ export function App() {
     appInitialized = false;
     // 使用 setTimeout 确保状态更新后再触发 useEffect
     setTimeout(() => {
-      window.location.reload();
+      safeReload();
     }, 100);
   }, []);
 
