@@ -22,6 +22,7 @@ import { tokenService, syncPasswordService } from '../../services/github-sync';
 import { TokenGuide } from './TokenGuide';
 import { RecycleBin } from './RecycleBin';
 import { LockOnIcon, LockOffIcon } from 'tdesign-icons-react';
+import { safeReload } from '../../utils/active-tasks';
 import './sync-settings.scss';
 
 /** Props */
@@ -304,7 +305,7 @@ export function SyncSettings({ visible, onClose }: SyncSettingsProps) {
         // 刷新页面以加载新数据
         setTimeout(() => {
           console.log('[SyncSettings] Refreshing page...');
-          window.location.reload();
+          safeReload();
         }, 1000);
       } else if (result.needsPassword) {
         // 需要输入密码
@@ -665,7 +666,7 @@ export function SyncSettings({ visible, onClose }: SyncSettingsProps) {
                 isConnected={isConnected} 
                 onRefresh={() => {
                   // 恢复画板后刷新页面
-                  window.location.reload();
+                  safeReload();
                 }}
               />
 

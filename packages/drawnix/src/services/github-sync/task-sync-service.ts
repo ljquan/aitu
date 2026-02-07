@@ -4,7 +4,8 @@
  */
 
 import { Task, TaskStatus, TaskType } from '../../types/task.types';
-import { swTaskQueueService } from '../sw-task-queue-service';
+import { taskStorageReader } from '../task-storage-reader';
+import { taskQueueService } from '../task-queue';
 import { gitHubApiService } from './github-api-service';
 import { cryptoService } from './crypto-service';
 import { logDebug, logInfo, logWarning } from './sync-log-service';
@@ -311,7 +312,7 @@ class TaskSyncService {
    * 收集本地已完成的任务
    */
   async collectLocalTasks(): Promise<Task[]> {
-    const allTasks = await swTaskQueueService.getAllTasksFromSW();
+    const allTasks = await taskStorageReader.getAllTasks();
     return allTasks.filter(
       task => task.status === TaskStatus.COMPLETED &&
         (task.type === TaskType.IMAGE || task.type === TaskType.VIDEO)
@@ -471,7 +472,7 @@ class TaskSyncService {
       if (page) {
         // 恢复下载的任务到本地
         const tasksToRestore = page.tasks.map(compact => this.compactToTask(compact));
-        await swTaskQueueService.restoreTasks(tasksToRestore);
+        await taskQueueService.restoreTasks(tasksToRestore);
         downloaded += page.tasks.length;
       }
       // 每处理 2 个分页让出主线程

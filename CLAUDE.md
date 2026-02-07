@@ -174,7 +174,7 @@ Service Worker (后台执行)
 8. **Cache.put() 会消费 Response body**：需要缓存到多个 key 时，为每个 key 创建独立的 Response 对象，不要复用后 clone
 9. **fetchOptions 优先级**：优先尝试 `cors` 模式（可缓存），最后才尝试 `no-cors` 模式（无法缓存）
 10. **postmessage-duplex 1.1.0 通信模式**：RPC 用 `call()` 方法（需响应），单向广播用 `broadcast()` + `onBroadcast()`（fire-and-forget）；SW 用 `enableGlobalRouting` 自动管理 channel
-11. **postmessage-duplex 客户端初始化**：`createFromPage()` 设置 `autoReconnect: true` 处理 SW 更新；禁用日志需 `log: {...}` 配合 `as any`（类型定义不含 log）
+11. **postmessage-duplex 单页面单 channel**：同一页面只允许一个 `createFromPage()`（`swChannelClient`），其他模块（如 `FetchRelayClient`）必须复用 `swChannelClient.getChannel()`；多个 channel 会导致 SW `enableGlobalRouting` 按 `clientId` 路由冲突，RPC 响应丢失
 12. **postmessage-duplex 消息大小限制**：单次 RPC 响应不超过 1MB，大数据查询需后端分页+精简数据（去掉 requestBody/responseBody 等大字段）
 13. **主线程直接读取 IndexedDB**：只读数据直接用 `taskStorageReader.getAllTasks()` 读取，避免 postMessage 限制；写操作通过 SW 或 `taskStorageWriter` 保持一致性
 14. **任务数据持久化**：主线程直接通过 `taskStorageWriter` 写入 IndexedDB，无需通过 RPC 通知 SW（断舍离：避免重复写入）
@@ -185,13 +185,15 @@ Service Worker (后台执行)
 19. **同步数据双向合并**：下载远程数据时必须与本地合并（基于 ID 去重，`updatedAt` 判断版本），合并后自动上传确保双向同步
 20. **同步数据格式一致性**：`tasks.json` 结构是 `{ completedTasks: Task[] }` 不是数组，画板文件是 `board_{id}.json` 不是 `.drawnix`
 21. **RPC 超时与重连**：关键 RPC 调用（如工作流提交）需设置合理超时（15-30秒），超时时主动重新初始化 SW 连接并重试
-22. **降级路径功能一致性**：降级到主线程直接调用 API 时，必须保持与 SW 模式相同的功能行为（如 LLM API 日志记录），否则调试工具会漏掉这些调用
+22. **降级路径功能一致性**：降级到主线程直接调用 API 时，必须保持与 SW 模式相同的功能行为（如 LLM API 日志记录）；工作流工具集也需一致，WorkflowEngine.executeToolStep 中 SW 支持的工具在主线程分支也需有对应 case 路由到 executeMainThreadTool，否则会报 Unknown tool
 23. **SW 初始化统一入口**：使用 `swChannelClient.ensureReady()` 作为统一入口，避免在各处重复初始化逻辑；任务队列用 `swTaskQueueService.initialize()`
 24. **配置同步到 IndexedDB**：SW 无法访问 localStorage，`SettingsManager` 自动将配置同步到 IndexedDB（同一数据库 `sw-task-queue`），SW 直接从 IndexedDB 读取，避免依赖 postMessage
 25. **远程同步任务不恢复执行**：通过 `syncedFromRemote` 标记区分本地和远程任务，SW 的 `shouldResumeTask()` 跳过远程任务，避免多设备重复调用大模型接口
 26. **任务参考图传递**：创建图片/视频任务时 `createTask` 的 params 须包含 `referenceImages`（与 `uploadedImages` 一并）；执行时 `executor.generateImage/generateVideo` 须传入 `referenceImages`（或 video 的 `inputReference`），否则 sw=0 降级请求不会带参考图
 27. **SW 可用性检测统一**：决定是否走 SW 时需用 `swChannelClient.isInitialized()` + `ping`，不能仅检查 `navigator.serviceWorker.controller`，否则 channel 未就绪会提交超时
 28. **降级路径强制主线程执行器**：workflow 提交超时后降级时，MainThreadWorkflowEngine 须传 `forceFallbackExecutor: true`，否则 `executorFactory.getExecutor()` 可能仍返回 SW 执行器导致二次超时
+29. **Fetch Relay 初始化超时保护**：`fetchRelayClient.initialize()` 在热路径（如 `generateImage`、`doInitialize`）中必须用 `Promise.race` 加 3s 超时，超时后降级到 `directFetch`
+30. **模块迁移接口完整性**：将模块从 SW 迁移到主线程（或反向）时，新模块的 `interface` 定义必须与原模块逐字段对比，确保无遗漏；不仅调用时传参要完整，**类型定义本身**也要包含所有字段（如 `referenceImages`），否则即使调用方想传数据也无法传入
 
 ### React 规则
 

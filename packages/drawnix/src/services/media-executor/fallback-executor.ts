@@ -2,8 +2,7 @@
  * Media Executor (Main Thread)
  *
  * 主线程媒体执行器，直接调用 API 并将结果写入 IndexedDB。
- * 这是主执行器（不再是降级备选），所有任务在主线程执行。
- * API 请求通过 Fetch Relay 代理，页面关闭后 SW 继续执行。
+ * 所有 LLM API 请求在主线程直接发起（不经过 Service Worker）。
  */
 
 import type {
@@ -23,12 +22,12 @@ import {
   completeLLMApiLog,
   failLLMApiLog,
   updateLLMApiLogMetadata,
+  LLMReferenceImage,
 } from './llm-api-logger';
 import { parseToolCalls, extractTextContent, compressImageBlob } from '@aitu/utils';
 import { isAuthError, dispatchApiAuthError } from '../../utils/api-auth-error-event';
 import { unifiedCacheService } from '../unified-cache-service';
 import { getDataURL } from '../../data/blob';
-
 /** 参考图转 base64 时最大体积（1MB），避免请求体过大 */
 const MAX_REFERENCE_IMAGE_BYTES = 1 * 1024 * 1024;
 import { submitVideoGeneration } from '../media-api';
@@ -86,10 +85,10 @@ async function ensureBase64ForAI(
 }
 
 /**
- * 主线程降级执行器
+ * 主线程媒体执行器
  *
- * 当 SW 不可用时，在主线程直接执行媒体生成任务。
- * 缺点：页面刷新会中断任务执行。
+ * 在主线程直接执行媒体生成任务，所有 API 请求使用原生 fetch。
+ * 页面刷新会中断任务执行，通过 beforeunload 提示用户保护。
  */
 export class FallbackMediaExecutor implements IMediaExecutor {
   readonly name = 'FallbackMediaExecutor';
@@ -146,19 +145,22 @@ export class FallbackMediaExecutor implements IMediaExecutor {
       prompt,
       hasReferenceImages: !!referenceImages && referenceImages.length > 0,
       referenceImageCount: referenceImages?.length,
+      referenceImages: referenceImages?.map(url => ({ url, size: 0, width: 0, height: 0 } as LLMReferenceImage)),
       taskId,
     });
 
     try {
-      // 处理参考图片：统一转为 base64（API 要求；远程 URL 在未缓存时 getImageForAI 返回 URL，需再转 base64）
+      // 处理参考图片：统一转为 base64（API 要求），并行处理提升性能
       let processedImages: string[] | undefined;
       if (referenceImages && referenceImages.length > 0) {
-        processedImages = [];
-        for (const imgUrl of referenceImages) {
-          const imageData = await unifiedCacheService.getImageForAI(imgUrl);
-          const base64 = await ensureBase64ForAI(imageData, options?.signal);
-          processedImages.push(base64);
-        }
+        const t0 = performance.now();
+        processedImages = await Promise.all(
+          referenceImages.map(async (imgUrl) => {
+            const imageData = await unifiedCacheService.getImageForAI(imgUrl);
+            return ensureBase64ForAI(imageData, options?.signal);
+          })
+        );
+        console.debug('[FallbackMediaExecutor] generateImage: base64 conversion took', Math.round(performance.now() - t0), 'ms for', referenceImages.length, 'images, taskId:', taskId);
       }
 
       // 构建请求体
@@ -173,8 +175,9 @@ export class FallbackMediaExecutor implements IMediaExecutor {
 
       options?.onProgress?.({ progress: 10, phase: 'submitting' });
 
-      // 调用 API（不添加自定义 header，避免 CORS 预检被服务端拒绝）
+      // 直接调用 API
       const url = `${config.geminiConfig.baseUrl}/images/generations`;
+
       const response = await fetch(url, {
         method: 'POST',
         headers: {
@@ -186,14 +189,14 @@ export class FallbackMediaExecutor implements IMediaExecutor {
       });
 
       if (!response.ok) {
-        const errorText = await response.text();
         const duration = Date.now() - startTime;
+        const errorBody = await response.text().catch(() => `HTTP ${response.status} ${response.statusText || 'Error'}`);
         failLLMApiLog(logId, {
           httpStatus: response.status,
           duration,
-          errorMessage: errorText.substring(0, 500),
+          errorMessage: errorBody.substring(0, 500),
         });
-        throw new Error(`Image generation failed: ${response.status} - ${errorText.substring(0, 200)}`);
+        throw new Error(`Image generation failed: ${response.status} - ${errorBody.substring(0, 200)}`);
       }
 
       options?.onProgress?.({ progress: 80, phase: 'downloading' });
@@ -201,6 +204,8 @@ export class FallbackMediaExecutor implements IMediaExecutor {
       const data = await response.json();
       const result = parseImageResponse(data);
       const duration = Date.now() - startTime;
+
+      console.debug('[FallbackMediaExecutor] generateImage: success, duration:', duration, 'ms, taskId:', taskId);
 
       // 记录成功
       completeLLMApiLog(logId, {
@@ -222,7 +227,8 @@ export class FallbackMediaExecutor implements IMediaExecutor {
     } catch (error: any) {
       const duration = Date.now() - startTime;
       const errorMessage = error.message || 'Image generation failed';
-      
+      console.error('[FallbackMediaExecutor] generateImage failed:', errorMessage, 'taskId:', taskId, 'duration:', duration, 'ms');
+
       // 检测认证错误，触发设置弹窗
       if (isAuthError(errorMessage)) {
         dispatchApiAuthError({ message: errorMessage, source: 'image' });
@@ -267,19 +273,22 @@ export class FallbackMediaExecutor implements IMediaExecutor {
       prompt: params.prompt,
       hasReferenceImages: params.referenceImages && params.referenceImages.length > 0,
       referenceImageCount: params.referenceImages?.length,
+      referenceImages: params.referenceImages?.map(url => ({ url, size: 0, width: 0, height: 0 } as LLMReferenceImage)),
       taskId,
     });
 
     try {
-      // 处理参考图片：统一转为 base64（与同步路径一致）
+      // 处理参考图片：统一转为 base64（与同步路径一致），并行处理
       let processedImages: string[] | undefined;
       if (params.referenceImages && params.referenceImages.length > 0) {
-        processedImages = [];
-        for (const imgUrl of params.referenceImages) {
-          const imageData = await unifiedCacheService.getImageForAI(imgUrl);
-          const base64 = await ensureBase64ForAI(imageData, options?.signal);
-          processedImages.push(base64);
-        }
+        const t0 = performance.now();
+        processedImages = await Promise.all(
+          params.referenceImages.map(async (imgUrl) => {
+            const imageData = await unifiedCacheService.getImageForAI(imgUrl);
+            return ensureBase64ForAI(imageData, options?.signal);
+          })
+        );
+        console.debug('[FallbackMediaExecutor] generateAsyncImage: base64 conversion took', Math.round(performance.now() - t0), 'ms for', params.referenceImages.length, 'images, taskId:', taskId);
       }
 
       // 调用异步图片生成
@@ -378,18 +387,19 @@ export class FallbackMediaExecutor implements IMediaExecutor {
         (params.inputReference ? [params.inputReference] : undefined);
       let referenceImages: string[] | undefined;
       if (refUrls && refUrls.length > 0) {
-        referenceImages = [];
+        const t0 = performance.now();
         const isVirtual = (u: string) =>
           u.startsWith('/__aitu_cache__/') || u.startsWith('/asset-library/');
-        for (const url of refUrls) {
-          if (isVirtual(url)) {
-            const imageData = await unifiedCacheService.getImageForAI(url);
-            const dataUrl = await ensureBase64ForAI(imageData, options?.signal);
-            referenceImages.push(dataUrl);
-          } else {
-            referenceImages.push(url);
-          }
-        }
+        referenceImages = await Promise.all(
+          refUrls.map(async (url) => {
+            if (isVirtual(url)) {
+              const imageData = await unifiedCacheService.getImageForAI(url);
+              return ensureBase64ForAI(imageData, options?.signal);
+            }
+            return url;
+          })
+        );
+        console.debug('[FallbackMediaExecutor] generateVideo: ref image processing took', Math.round(performance.now() - t0), 'ms for', refUrls.length, 'images, taskId:', taskId);
       }
 
       const videoApiConfig = {
@@ -454,7 +464,7 @@ export class FallbackMediaExecutor implements IMediaExecutor {
         url: result.url,
         format: 'mp4',
         size: 0,
-        duration: parseInt(duration),
+        duration: duration ? parseInt(duration, 10) : undefined,
       });
     } catch (error: any) {
       const elapsedTime = Date.now() - startTime;

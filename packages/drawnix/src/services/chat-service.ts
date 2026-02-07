@@ -3,7 +3,6 @@
  *
  * Handles AI chat API communication with streaming support using the unified Gemini API client.
  * Supports generic OpenAI-compatible APIs via the client configuration.
- * When Service Worker is available, delegates requests to SW for background processing.
  */
 
 import { defaultGeminiClient } from '../utils/gemini-api';
@@ -11,14 +10,9 @@ import type { GeminiMessage } from '../utils/gemini-api/types';
 import type { ChatMessage, StreamEvent } from '../types/chat.types';
 import { MessageRole } from '../types/chat.types';
 import { analytics } from '../utils/posthog-analytics';
-import { swChannelClient } from './sw-channel';
-import type { ChatStartParams, ChatMessage as SWChatMessage, ChatAttachment } from './sw-channel';
 
 // Current abort controller for cancellation
 let currentAbortController: AbortController | null = null;
-
-// Current chat ID for SW mode cancellation
-let currentChatId: string | null = null;
 
 // 媒体 URL 映射，用于在响应中替换回原始 URL
 interface MediaUrlMap {
@@ -126,86 +120,8 @@ function convertToGeminiMessages(messages: ChatMessage[]): { geminiMessages: Gem
   return { geminiMessages: geminiMessages as GeminiMessage[], urlMap: combinedUrlMap };
 }
 
-/** Convert ChatMessage to SW ChatMessage format */
-function convertToSWMessages(messages: ChatMessage[]): { swMessages: SWChatMessage[]; urlMap: MediaUrlMap } {
-  const combinedUrlMap: MediaUrlMap = {};
-  
-  const swMessages: SWChatMessage[] = messages
-    .filter((m) => m.status === 'success' || m.status === 'streaming')
-    .map((m) => {
-      const { sanitized, urlMap } = extractAndReplaceMediaUrls(m.content);
-      Object.assign(combinedUrlMap, urlMap);
-      return {
-        role: m.role === MessageRole.USER ? 'user' : 'assistant',
-        content: sanitized,
-      } as SWChatMessage;
-    });
-  
-  return { swMessages, urlMap: combinedUrlMap };
-}
-
-/** Convert File attachments to SW ChatAttachment format */
-async function convertAttachmentsToSW(files: File[]): Promise<ChatAttachment[]> {
-  // 过滤出图片文件
-  const imageFiles = files.filter(file => file.type.startsWith('image/'));
-  
-  if (imageFiles.length === 0) {
-    return [];
-  }
-  
-  // 并行转换所有文件
-  const attachments = await Promise.all(
-    imageFiles.map(async (file) => {
-      const base64 = await fileToBase64(file);
-      return {
-        type: 'image' as const,
-        name: file.name,
-        mimeType: file.type,
-        data: base64,
-      };
-    })
-  );
-  
-  return attachments;
-}
-
-/** Convert File to base64 string */
-function fileToBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = reader.result as string;
-      // Remove data URL prefix (e.g., "data:image/png;base64,")
-      const base64 = result.split(',')[1] || result;
-      resolve(base64);
-    };
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-}
-
 /** Send message and get streaming response */
 export async function sendChatMessage(
-  messages: ChatMessage[],
-  newContent: string,
-  attachments: File[] = [],
-  onStream: (event: StreamEvent) => void,
-  temporaryModel?: string, // 临时模型（仅在当前会话中使用，不影响全局设置）
-  systemPrompt?: string // 系统提示词（包含 MCP 工具定义等）
-): Promise<string> {
-  // 尝试使用 SW 模式
-  const useSW = await swChannelClient.initializeChannel();
-  
-  if (useSW) {
-    return sendChatMessageViaSW(messages, newContent, attachments, onStream, temporaryModel, systemPrompt);
-  }
-  
-  // Fallback to direct mode
-  return sendChatMessageDirect(messages, newContent, attachments, onStream, temporaryModel, systemPrompt);
-}
-
-/** Send chat message via Service Worker */
-async function sendChatMessageViaSW(
   messages: ChatMessage[],
   newContent: string,
   attachments: File[] = [],
@@ -213,109 +129,7 @@ async function sendChatMessageViaSW(
   temporaryModel?: string,
   systemPrompt?: string
 ): Promise<string> {
-  // Cancel any existing SW chat request
-  if (currentChatId) {
-    swChannelClient.stopChat(currentChatId);
-  }
-  
-  const chatId = `chat_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
-  currentChatId = chatId;
-  
-  const taskId = Date.now().toString();
-  const startTime = Date.now();
-  const modelName = temporaryModel || defaultGeminiClient.getConfig().modelName || 'unknown';
-  
-  // Track chat start
-  analytics.trackModelCall({
-    taskId,
-    taskType: 'chat',
-    model: modelName,
-    promptLength: newContent.length,
-    hasUploadedImage: attachments.length > 0,
-    startTime,
-  });
-  
-  // Convert messages to SW format
-  const { swMessages, urlMap: historyUrlMap } = convertToSWMessages(messages);
-  const { sanitized: sanitizedContent, urlMap: currentUrlMap } = extractAndReplaceMediaUrls(newContent);
-  const allUrlMap: MediaUrlMap = { ...historyUrlMap, ...currentUrlMap };
-  
-  // Convert attachments
-  const swAttachments = await convertAttachmentsToSW(attachments);
-  
-  // Build chat params
-  const chatParams: ChatStartParams = {
-    chatId,
-    messages: swMessages,
-    newContent: sanitizedContent,
-    attachments: swAttachments,
-    temporaryModel,
-    systemPrompt,
-  };
-  
-  return new Promise((resolve, reject) => {
-    let fullContent = '';
-    let isCompleted = false;
-
-    const cleanup = () => {
-      if (currentChatId === chatId) {
-        currentChatId = null;
-      }
-    };
-
-    // Set up event handlers
-    swChannelClient.setEventHandlers({
-      onChatChunk: (event) => {
-        if (event.chatId !== chatId || isCompleted) return;
-        const restoredChunk = restoreMediaUrls(event.content, allUrlMap);
-        fullContent = restoredChunk;
-        onStream({ type: 'content', content: restoredChunk });
-      },
-      onChatDone: (event) => {
-        if (event.chatId !== chatId || isCompleted) return;
-        isCompleted = true;
-        cleanup();
-        
-        const duration = Date.now() - startTime;
-        analytics.trackModelSuccess({
-          taskId,
-          taskType: 'chat',
-          model: modelName,
-          duration,
-          resultSize: fullContent.length,
-        });
-        
-        onStream({ type: 'done' });
-        resolve(fullContent);
-      },
-      onChatError: (event) => {
-        if (event.chatId !== chatId || isCompleted) return;
-        isCompleted = true;
-        cleanup();
-        
-        const duration = Date.now() - startTime;
-        analytics.trackModelFailure({
-          taskId,
-          taskType: 'chat',
-          model: modelName,
-          duration,
-          error: event.error,
-        });
-        
-        onStream({ type: 'error', error: event.error });
-        reject(new Error(event.error));
-      },
-    });
-
-    // Start the chat
-    swChannelClient.startChat(chatParams).catch((err) => {
-      if (!isCompleted) {
-        isCompleted = true;
-        cleanup();
-        reject(err);
-      }
-    });
-  });
+  return sendChatMessageDirect(messages, newContent, attachments, onStream, temporaryModel, systemPrompt);
 }
 
 /** Send chat message directly (legacy mode) */
@@ -453,13 +267,6 @@ async function sendChatMessageDirect(
 
 /** Stop current generation */
 export function stopGeneration(): void {
-  // Stop SW chat if active
-  if (currentChatId) {
-    swChannelClient.stopChat(currentChatId);
-    currentChatId = null;
-  }
-  
-  // Stop direct request if active
   if (currentAbortController) {
     currentAbortController.abort();
     currentAbortController = null;
@@ -468,7 +275,7 @@ export function stopGeneration(): void {
 
 /** Check if generation is in progress */
 export function isGenerating(): boolean {
-  return currentAbortController !== null || currentChatId !== null;
+  return currentAbortController !== null;
 }
 
 // Export as service object

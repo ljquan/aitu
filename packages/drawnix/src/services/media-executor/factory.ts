@@ -2,7 +2,6 @@
  * Executor Factory
  *
  * 执行器工厂，始终使用主线程执行器。
- * SW 不再参与任务执行，仅通过 Fetch Relay 保护 API 请求不被页面关闭中断。
  */
 
 import type { IMediaExecutor } from './types';

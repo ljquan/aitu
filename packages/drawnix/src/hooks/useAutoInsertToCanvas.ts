@@ -454,12 +454,14 @@ export function useAutoInsertToCanvas(config: Partial<AutoInsertConfig> = {}): v
 
       // console.log(`[AutoInsert] Received event: ${event.type}, task: ${event.task.id}, status: ${event.task.status}`);
 
-      if (event.type === 'taskUpdated') {
+      if (event.type === 'taskUpdated' || event.type === 'taskCompleted') {
         if (event.task.status === TaskStatus.COMPLETED) {
           handleTaskCompleted(event.task);
         } else if (event.task.status === TaskStatus.FAILED) {
           handleTaskFailed(event.task);
         }
+      } else if (event.type === 'taskFailed') {
+        handleTaskFailed(event.task);
       } else if (event.type === 'taskSynced') {
         if (event.task.status === TaskStatus.COMPLETED) {
           handleTaskCompleted(event.task);

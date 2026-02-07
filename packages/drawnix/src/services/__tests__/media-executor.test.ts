@@ -71,42 +71,8 @@ describe('Media Executor Module', () => {
     });
   });
 
-  describe('SWMediaExecutor', () => {
-    it('should have correct executor name', async () => {
-      // 动态导入以避免 mock 问题
-      vi.doMock('../sw-channel/client', () => ({
-        swChannelClient: {
-          isInitialized: () => false,
-          ping: async () => false,
-          callExecutor: async () => ({ success: false }),
-        },
-      }));
-
-      const { SWMediaExecutor } = await import('../media-executor/sw-executor');
-      const executor = new SWMediaExecutor();
-
-      expect(executor.name).toBe('SWMediaExecutor');
-    });
-
-    it('should implement IMediaExecutor interface', async () => {
-      vi.doMock('../sw-channel/client', () => ({
-        swChannelClient: {
-          isInitialized: () => false,
-          ping: async () => false,
-          callExecutor: async () => ({ success: false }),
-        },
-      }));
-
-      const { SWMediaExecutor } = await import('../media-executor/sw-executor');
-      const executor: IMediaExecutor = new SWMediaExecutor();
-
-      expect(typeof executor.name).toBe('string');
-      expect(typeof executor.isAvailable).toBe('function');
-      expect(typeof executor.generateImage).toBe('function');
-      expect(typeof executor.generateVideo).toBe('function');
-      expect(typeof executor.aiAnalyze).toBe('function');
-    });
-  });
+  // SWMediaExecutor tests removed - sw-executor.ts has been deleted
+  // All task execution now happens on the main thread via FallbackMediaExecutor
 
   describe('FallbackMediaExecutor', () => {
     beforeEach(() => {

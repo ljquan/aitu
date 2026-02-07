@@ -14,7 +14,6 @@
 import { Subject, Observable, Subscription } from 'rxjs';
 import { filter } from 'rxjs/operators';
 import type { ParsedGenerationParams } from '../utils/ai-input-parser';
-import { isAuthError, dispatchApiAuthError } from '../utils/api-auth-error-event';
 import { swCapabilitiesHandler } from './sw-capabilities';
 import type { DelegatedOperation } from './sw-capabilities';
 import { workflowStorageReader } from './workflow-storage-reader';
@@ -161,13 +160,9 @@ export type WorkflowEvent =
 // Workflow Submission Service
 // ============================================================================
 
-// Cleanup delay: 5 minutes after workflow completes/fails
-const WORKFLOW_CLEANUP_DELAY = 5 * 60 * 1000;
-
 class WorkflowSubmissionService {
   private events$ = new Subject<WorkflowEvent>();
   private workflows: Map<string, WorkflowDefinition> = new Map();
-  private cleanupTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
   private initialized = false;
 
   /**
@@ -467,14 +462,6 @@ class WorkflowSubmissionService {
   }
 
   /**
-   * SW 可用性检测（已废弃，保持 API 兼容）
-   * @deprecated SW 不再参与工作流执行
-   */
-  private async checkSWAvailability(_timeout: number): Promise<boolean> {
-    return false;
-  }
-
-  /**
    * 主线程工作流引擎实例（降级模式）
    */
   private fallbackEngine: MainThreadWorkflowEngine | null = null;
@@ -745,51 +732,7 @@ class WorkflowSubmissionService {
     return this.events$.subscribe(callback);
   }
 
-  // ============================================================================
-  // Private Methods
-  // ============================================================================
-
-  /**
-   * Clone a workflow to ensure mutability
-   */
-  private cloneWorkflow(workflow: WorkflowDefinition): WorkflowDefinition {
-    return JSON.parse(JSON.stringify(workflow));
-  }
-
-  /**
-   * Get or create a mutable workflow from cache
-   */
-  private getMutableWorkflow(workflowId: string): WorkflowDefinition | undefined {
-    const workflow = this.workflows.get(workflowId);
-    if (!workflow) return undefined;
-    
-    // Clone to ensure mutability
-    const mutableWorkflow = this.cloneWorkflow(workflow);
-    this.workflows.set(workflowId, mutableWorkflow);
-    return mutableWorkflow;
-  }
-
   // SW 事件处理器已移除 - 工作流事件现在通过 handleFallbackEngineEvent 处理
-
-  /**
-   * Schedule cleanup of a completed/failed workflow to prevent memory leak.
-   * Workflows are kept for a short period to allow UI to query them.
-   */
-  private scheduleWorkflowCleanup(workflowId: string): void {
-    // Clear any existing timer for this workflow
-    const existingTimer = this.cleanupTimers.get(workflowId);
-    if (existingTimer) {
-      clearTimeout(existingTimer);
-    }
-
-    // Schedule new cleanup
-    const timer = setTimeout(() => {
-      this.workflows.delete(workflowId);
-      this.cleanupTimers.delete(workflowId);
-    }, WORKFLOW_CLEANUP_DELAY);
-
-    this.cleanupTimers.set(workflowId, timer);
-  }
 }
 
 // Export singleton instance

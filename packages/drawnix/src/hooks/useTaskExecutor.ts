@@ -3,13 +3,11 @@
  *
  * Automatically monitors and executes pending tasks in the background.
  * Handles task lifecycle: execution, timeout detection, retry logic.
- *
- * In SW mode: Tasks are executed by Service Worker handlers.
- * In legacy mode: Tasks are executed directly in main thread.
+ * All tasks are executed directly in the main thread.
  */
 
 import { useEffect, useRef } from 'react';
-import { taskQueueService, legacyTaskQueueService, shouldUseSWTaskQueue } from '../services/task-queue';
+import { taskQueueService, legacyTaskQueueService } from '../services/task-queue';
 import { generationAPIService } from '../services/generation-api-service';
 import { characterAPIService } from '../services/character-api-service';
 import { characterStorageService } from '../services/character-storage-service';
@@ -163,10 +161,7 @@ function getFriendlyErrorMessage(error: any): string {
  * - Implement retry logic with exponential backoff
  * - Update task status based on results
  *
- * In SW mode:
- * - Tasks are executed by Service Worker handlers
- * - This hook only handles post-completion tasks (metadata registration)
- * - Timeout detection is handled by SW
+ * All tasks are executed in the main thread.
  *
  * @example
  * function App() {
@@ -177,84 +172,11 @@ function getFriendlyErrorMessage(error: any): string {
 export function useTaskExecutor(): void {
   const executingTasksRef = useRef<Set<string>>(new Set());
   const timeoutCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const usingSW = shouldUseSWTaskQueue();
 
   useEffect(() => {
     let isActive = true;
 
-    // In SW mode, we only need to handle post-completion tasks
-    if (usingSW) {
-      // console.log('[TaskExecutor] Running in SW mode - tasks executed by Service Worker');
-
-      // Subscribe to task updates for post-completion handling
-      const subscription = taskQueueService
-        .observeTaskUpdates()
-        .subscribe(async (event) => {
-          if (!isActive) return;
-
-          // Handle completed tasks - register metadata
-          if (
-            event.type === 'taskUpdated' &&
-            event.task.status === TaskStatus.COMPLETED
-          ) {
-            const task = event.task;
-            if (task.result?.url) {
-              try {
-                await unifiedCacheService.registerImageMetadata(
-                  task.result.url,
-                  {
-                    taskId: task.id,
-                    model: task.params.model,
-                    prompt: task.params.prompt,
-                    params: task.params,
-                  }
-                );
-                // console.log(`[TaskExecutor] Registered metadata for task ${task.id}`);
-              } catch (error) {
-                console.error(
-                  `[TaskExecutor] Failed to register metadata for task ${task.id}:`,
-                  error
-                );
-              }
-            }
-
-            // Handle character task completion - save to storage
-            if (task.type === TaskType.CHARACTER && task.result) {
-              try {
-                await characterStorageService.saveCharacter({
-                  id: task.remoteId || task.id,
-                  username: task.result.characterUsername || '',
-                  profilePictureUrl:
-                    task.result.characterProfileUrl || task.result.url,
-                  permalink: task.result.characterPermalink || '',
-                  sourceTaskId: task.params.sourceLocalTaskId || '',
-                  sourceVideoId: task.params.sourceVideoTaskId || '',
-                  sourcePrompt: task.params.prompt,
-                  characterTimestamps: task.params.characterTimestamps,
-                  status: 'completed' as CharacterStatus,
-                  createdAt: task.createdAt,
-                  completedAt: Date.now(),
-                });
-                // console.log(`[TaskExecutor] Saved character for task ${task.id}`);
-              } catch (error) {
-                console.error(
-                  `[TaskExecutor] Failed to save character for task ${task.id}:`,
-                  error
-                );
-              }
-            }
-          }
-        });
-
-      return () => {
-        isActive = false;
-        subscription.unsubscribe();
-      };
-    }
-
-    // Legacy mode: Execute tasks in main thread
-    // console.log('[TaskExecutor] Running in legacy mode - tasks executed in main thread');
-    // Use legacyTaskQueueService directly to avoid union type issues with updateTaskStatus
+    // All tasks execute in main thread
 
     // Function to resume a video task that has a remoteId
     const resumeVideoTask = async (task: Task) => {

@@ -1,17 +1,12 @@
 /**
  * Gemini API 调用函数
  * 
- * 通过 Fetch Relay 代理 API 请求，页面关闭后 SW 继续执行。
- * 不再直接使用 SW 的 chat/task 机制，而是作为纯粹的 fetch 代理。
+ * 所有 API 请求在主线程直接发起。
  */
 
 import { GeminiConfig, GeminiMessage, GeminiResponse, VideoGenerationOptions } from './types';
 import { DEFAULT_CONFIG, VIDEO_DEFAULT_CONFIG } from './config';
 import { analytics } from '../posthog-analytics';
-import { fetchRelayClient } from '../../services/fetch-relay';
-import { isAuthError, dispatchApiAuthError } from '../api-auth-error-event';
-
-// convertToSWMessages 已移除 - 不再需要 SW chat 格式转换
 
 /**
  * 使用原始 fetch 调用聊天 API
@@ -118,11 +113,7 @@ export async function callApiRaw(
 /**
  * 流式 API 调用函数
  *
- * 通过 Fetch Relay 代理请求：
- * - SW 可用时：fetch 由 SW 执行，页面关闭后继续
- * - SW 不可用时：主线程直接 fetch（降级模式）
- *
- * Fetch Relay 是纯粹的 fetch 代理，不理解业务逻辑。
+ * 在主线程直接使用 fetch 发起流式请求。
  */
 export async function callApiStreamRaw(
   config: GeminiConfig,
@@ -133,11 +124,10 @@ export async function callApiStreamRaw(
   return callApiStreamDirect(config, messages, onChunk, signal);
 }
 
-// callApiStreamViaSW 已移除 - 不再需要 SW chat 机制，改用 Fetch Relay
+// callApiStreamViaSW 已移除
 
 /**
  * 使用 fetch 发送流式 API 请求
- * 通过 Fetch Relay 代理（SW 可用时由 SW 执行 fetch，页面关闭后继续）
  */
 async function callApiStreamDirect(
   config: GeminiConfig,

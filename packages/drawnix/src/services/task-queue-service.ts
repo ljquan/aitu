@@ -78,7 +78,7 @@ class TaskQueueService {
   }
 
   /**
-   * Execute task using fallback executor (for legacy/fallback mode)
+   * Execute task using executor (for legacy/fallback mode)
    * This is called automatically after task creation
    */
   private async executeTask(task: Task): Promise<void> {
@@ -157,12 +157,7 @@ class TaskQueueService {
 
         // Persist final state
         this.persistTask(localTask);
-
-        if (result.success) {
-          this.emitEvent('taskUpdated', localTask);
-        } else {
-          this.emitEvent('taskUpdated', localTask);
-        }
+        this.emitEvent('taskUpdated', localTask);
       }
     } catch (error: any) {
       console.error('[TaskQueueService] Task execution failed:', error);
@@ -178,7 +173,7 @@ class TaskQueueService {
           },
           updatedAt: now,
           completedAt: now,
-          progress: undefined, // 清除进行中进度，避免仍显示百分比
+          progress: undefined,
         };
         this.tasks.set(task.id, failedTask);
         this.persistTask(failedTask);

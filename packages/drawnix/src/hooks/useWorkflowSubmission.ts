@@ -2,15 +2,12 @@
  * useWorkflowSubmission Hook
  *
  * Encapsulates workflow submission logic for AIInputBar.
- * Supports two execution modes:
- * 1. SW Mode (direct_generation): Execute in Service Worker for background processing
- * 2. Legacy Mode (agent_flow): Execute in main thread for complex AI workflows
+ * All workflows execute in main thread.
  *
  * Handles:
  * - Workflow creation and submission
  * - Status synchronization with WorkflowContext, ChatDrawer, WorkZone
  * - Canvas operation handling
- * - Main thread tool execution (for tools that cannot run in SW)
  */
 
 import { useEffect, useCallback, useRef } from 'react';
@@ -27,7 +24,6 @@ import { useChatDrawerControl } from '../contexts/ChatDrawerContext';
 import type { WorkflowMessageData, WorkflowRetryContext, PostProcessingStatus } from '../types/chat.types';
 import type { ParsedGenerationParams } from '../utils/ai-input-parser';
 import { convertToWorkflow, type WorkflowDefinition as LegacyWorkflowDefinition } from '../components/ai-input-bar/workflow-converter';
-import { shouldUseSWTaskQueue } from '../services/task-queue';
 import { WorkZoneTransforms } from '../plugins/with-workzone';
 import { PlaitBoard } from '@plait/core';
 import { geminiSettings } from '../utils/settings-manager';
@@ -41,8 +37,6 @@ export interface UseWorkflowSubmissionOptions {
   boardRef: React.MutableRefObject<PlaitBoard | null>;
   /** Current WorkZone ID reference */
   workZoneIdRef: React.MutableRefObject<string | null>;
-  /** Whether to use SW execution (default: true for direct_generation) */
-  useSWExecution?: boolean;
 }
 
 export interface UseWorkflowSubmissionReturn {
@@ -60,8 +54,6 @@ export interface UseWorkflowSubmissionReturn {
     workflowMessageData: WorkflowMessageData,
     startStepIndex: number
   ) => Promise<void>;
-  /** Check if SW execution is available */
-  isSWAvailable: () => boolean;
   /** Get current retry context */
   getRetryContext: () => WorkflowRetryContext | null;
 }
@@ -108,38 +100,7 @@ export function toWorkflowMessageData(
 }
 
 /**
- * 同步检查：SW controller 是否存在（用于快速预检）
- */
-function checkSWControllerAvailable(): boolean {
-  const swEnabled = shouldUseSWTaskQueue();
-  if (!swEnabled) return false;
-  return !!(navigator.serviceWorker && navigator.serviceWorker.controller);
-}
-
-/**
- * 异步检查：SW duplex 通道是否真正可用（与 WorkflowSubmissionService 逻辑一致）
- * 避免 controller 存在但 channel 未就绪时，走 SW 路径后降级导致 WorkZone 卡在「待开始」
- */
-async function checkSWChannelAvailable(): Promise<boolean> {
-  const { swChannelClient } = await import('../services/sw-channel/client');
-  if (!swChannelClient.isInitialized()) {
-    console.log('[checkSWChannelAvailable] swChannelClient 未初始化');
-    return false;
-  }
-  try {
-    const ok = await Promise.race([
-      swChannelClient.ping(),
-      new Promise<boolean>((r) => setTimeout(() => r(false), 1500)),
-    ]);
-    if (!ok) console.log('[checkSWChannelAvailable] ping 超时或失败');
-    return ok;
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Handle canvas insert operation from SW
+ * Handle canvas insert operation
  */
 async function handleCanvasInsert(board: PlaitBoard, event: CanvasInsertEvent): Promise<void> {
   const { operation, params } = event;
@@ -181,7 +142,7 @@ async function handleCanvasInsert(board: PlaitBoard, event: CanvasInsertEvent): 
 export function useWorkflowSubmission(
   options: UseWorkflowSubmissionOptions
 ): UseWorkflowSubmissionReturn {
-  const { boardRef, workZoneIdRef, useSWExecution = true } = options;
+  const { boardRef, workZoneIdRef } = options;
 
   const workflowControl = useWorkflowControl();
   const chatDrawerControl = useChatDrawerControl();
@@ -213,27 +174,10 @@ export function useWorkflowSubmission(
 
   /**
    * Recover workflows on mount (after page refresh)
-   * 等待 swChannelClient 初始化完成后再恢复
    */
   const recoverWorkflowsOnMount = useCallback(async () => {
-    // Only recover once
     if (hasRecoveredRef.current) return;
     hasRecoveredRef.current = true;
-
-    // 等待 swChannelClient 初始化完成（最多等待 10 秒）
-    const { swChannelClient } = await import('../services/sw-channel/client');
-    const maxWaitTime = 10000;
-    const checkInterval = 200;
-    let waited = 0;
-    
-    while (!swChannelClient.isInitialized() && waited < maxWaitTime) {
-      await new Promise(r => setTimeout(r, checkInterval));
-      waited += checkInterval;
-    }
-    
-    if (!swChannelClient.isInitialized()) {
-      return;
-    }
     
     try {
       await workflowSubmissionService.recoverWorkflows();
@@ -242,140 +186,91 @@ export function useWorkflowSubmission(
     }
   }, []);
 
-  /**
-   * Handle a recovered workflow (from page refresh)
-   * This restores UI state without re-submitting to SW
-   * 
-   * 恢复策略：
-   * - running/pending: 完整恢复 UI 状态，继续监听进度
-   * - failed: 恢复 UI 并显示失败状态（如 ai_analyze 中断）
-   * - completed/cancelled: 不恢复（避免显示过时数据）
-   */
-  const handleRecoveredWorkflow = useCallback((event: WorkflowEvent) => {
-    if (event.type !== 'recovered' || !event.workflow) return;
-
-    const recoveredWorkflow = event.workflow as unknown as LegacyWorkflowDefinition;
-    const board = boardRef.current;
-    const workZoneId = workZoneIdRef.current;
-
-    // 只恢复活跃状态（running/pending）和最近失败的工作流
-    // completed/cancelled 不恢复，避免显示过时数据
-    const isActive = recoveredWorkflow.status === 'running' || recoveredWorkflow.status === 'pending';
-    const isRecentlyFailed = recoveredWorkflow.status === 'failed' && 
-      recoveredWorkflow.updatedAt && 
-      (Date.now() - recoveredWorkflow.updatedAt) < 5 * 60 * 1000; // 5 分钟内
-    
-    if (!isActive && !isRecentlyFailed) {
-      return;
-    }
-
-    // Restore workflow to WorkflowContext
-    workflowControl.restoreWorkflow?.(recoveredWorkflow);
-
-    // Build retry context from workflow context
-    const globalSettings = geminiSettings.get();
-    const retryContext: WorkflowRetryContext = {
-      aiContext: {
-        rawInput: recoveredWorkflow.context?.userInput || '',
-        userInstruction: recoveredWorkflow.context?.userInput || '',
-        model: {
-          id: recoveredWorkflow.context?.model || '',
-          type: recoveredWorkflow.generationType === 'video' ? 'video' : 'image',
-          isExplicit: true,
-        },
-        defaultModels: {
-          image: globalSettings.imageModelName || 'gemini-3-pro-image-preview-vip',
-          video: globalSettings.videoModelName || 'veo3.1',
-        },
-        params: {
-          count: recoveredWorkflow.metadata?.count,
-          size: recoveredWorkflow.metadata?.size,
-          duration: recoveredWorkflow.metadata?.duration,
-        },
-        selection: { texts: [], images: [], videos: [], graphics: [] },
-        finalPrompt: recoveredWorkflow.metadata?.prompt || '',
-      },
-      referenceImages: recoveredWorkflow.context?.referenceImages || [],
-      textModel: globalSettings.textModelName,
-    };
-
-    // Update ChatDrawer with recovered workflow
-    const workflowData = toWorkflowMessageData(recoveredWorkflow, retryContext);
-    updateWorkflowMessageRef.current(workflowData);
-
-    // Update WorkZone if exists
-    if (workZoneId && board) {
-      WorkZoneTransforms.updateWorkflow(board, workZoneId, workflowData);
-    }
-
-    // Subscribe to future events for this workflow using ref
-    const workflowSub = workflowSubmissionService.subscribeToWorkflow(
-      recoveredWorkflow.id,
-      async (evt: WorkflowEvent) => {
-        await handleWorkflowEventRef.current?.(evt, recoveredWorkflow, retryContext);
-      }
-    );
-    subscriptionsRef.current.push(workflowSub);
-  }, [workflowControl, boardRef, workZoneIdRef]);
-
   // Initialize service on mount
   useEffect(() => {
     workflowSubmissionService.init();
 
-    // 启动工作流轮询服务
-    // 负责执行 pending_main_thread 状态的步骤（Canvas 操作等）
-    import('../services/workflow-polling-service').then(({ workflowPollingService }) => {
-      workflowPollingService.initialize().then(() => {
-        // 设置当前画布 ID，确保只处理当前画布发起的工作流
-        const board = boardRef.current;
-        if (board && 'id' in board) {
-          workflowPollingService.setBoardId((board as unknown as { id: string }).id);
-        }
-        workflowPollingService.start();
-      });
-    });
-
-    // 注册 Canvas 操作处理器（双工通讯模式）
-    // SW 发起请求，主线程直接返回结果，无需单独响应
+    // 注册 Canvas 操作处理器
     workflowSubmissionService.registerCanvasHandler(
       async (_operation: string, _params: Record<string, unknown>) => {
-        // For now, just acknowledge - actual canvas insertion will be handled
-        // by the existing auto-insert mechanism (useAutoInsertToCanvas)
         return { success: true };
       }
     );
 
-    // Subscribe to workflow recovery events
-    const recoverySub = workflowSubmissionService.subscribeToAllEvents(
+    // Subscribe to workflow events
+    const eventSub = workflowSubmissionService.subscribeToAllEvents(
       (event: WorkflowEvent) => {
-        if (event.type === 'recovered') {
-          // Handle recovered workflow - update UI state without resubmitting
-          handleRecoveredWorkflow(event);
+        if (event.type === 'recovered' && event.workflow) {
+          const recoveredWorkflow = event.workflow as unknown as LegacyWorkflowDefinition;
+          
+          // 只恢复活跃状态和最近失败的工作流
+          const isActive = recoveredWorkflow.status === 'running' || recoveredWorkflow.status === 'pending';
+          const isRecentlyFailed = recoveredWorkflow.status === 'failed' && 
+            recoveredWorkflow.updatedAt && 
+            (Date.now() - recoveredWorkflow.updatedAt) < 5 * 60 * 1000;
+          
+          if (!isActive && !isRecentlyFailed) return;
+
+          workflowControl.restoreWorkflow?.(recoveredWorkflow);
+
+          const globalSettings = geminiSettings.get();
+          const retryContext: WorkflowRetryContext = {
+            aiContext: {
+              rawInput: recoveredWorkflow.context?.userInput || '',
+              userInstruction: recoveredWorkflow.context?.userInput || '',
+              model: {
+                id: recoveredWorkflow.context?.model || '',
+                type: recoveredWorkflow.generationType === 'video' ? 'video' : 'image',
+                isExplicit: true,
+              },
+              defaultModels: {
+                image: globalSettings.imageModelName || 'gemini-3-pro-image-preview-vip',
+                video: globalSettings.videoModelName || 'veo3.1',
+              },
+              params: {
+                count: recoveredWorkflow.metadata?.count,
+                size: recoveredWorkflow.metadata?.size,
+                duration: recoveredWorkflow.metadata?.duration,
+              },
+              selection: { texts: [], images: [], videos: [], graphics: [] },
+              finalPrompt: recoveredWorkflow.metadata?.prompt || '',
+            },
+            referenceImages: recoveredWorkflow.context?.referenceImages || [],
+            textModel: globalSettings.textModelName,
+          };
+
+          const workflowData = toWorkflowMessageData(recoveredWorkflow, retryContext);
+          updateWorkflowMessageRef.current(workflowData);
+
+          const board = boardRef.current;
+          const workZoneId = workZoneIdRef.current;
+          if (workZoneId && board) {
+            WorkZoneTransforms.updateWorkflow(board, workZoneId, workflowData);
+          }
+
+          const workflowSub = workflowSubmissionService.subscribeToWorkflow(
+            recoveredWorkflow.id,
+            async (evt: WorkflowEvent) => {
+              await handleWorkflowEventRef.current?.(evt, recoveredWorkflow, retryContext);
+            }
+          );
+          subscriptionsRef.current.push(workflowSub);
         }
       }
     );
-    subscriptionsRef.current.push(recoverySub);
+    subscriptionsRef.current.push(eventSub);
 
     // Recover workflows after page refresh
-    // This will query SW for any running workflows and restore UI state
     recoverWorkflowsOnMount();
 
-    // Note: Main thread tool requests are now handled by WorkflowPollingService
-    // which polls IndexedDB for pending_main_thread steps and executes them.
-    // This avoids real-time communication issues.
-
     return () => {
-      // 停止轮询服务
-      import('../services/workflow-polling-service').then(({ workflowPollingService }) => {
-        workflowPollingService.stop();
-      });
       subscriptionsRef.current.forEach(sub => sub.unsubscribe());
       subscriptionsRef.current = [];
     };
   }, []);
 
   /**
-   * Handle workflow events from SW
+   * Handle workflow events
    */
   const handleWorkflowEvent = useCallback(async (
     event: WorkflowEvent,
@@ -526,7 +421,7 @@ export function useWorkflowSubmission(
       }
 
       case 'canvas_insert': {
-        // Handle canvas insert operation from SW
+        // Handle canvas insert operation
         const canvasEvent = event as CanvasInsertEvent;
         // console.log('[useWorkflowSubmission] Canvas insert:', canvasEvent.operation, canvasEvent.params);
         
@@ -544,73 +439,7 @@ export function useWorkflowSubmission(
   }, [handleWorkflowEvent]);
 
   /**
-   * Submit a workflow using SW execution
-   */
-  const submitToSW = useCallback(async (
-    legacyWorkflow: LegacyWorkflowDefinition,
-    parsedInput: ParsedGenerationParams,
-    referenceImages: string[],
-    retryContext: WorkflowRetryContext
-  ): Promise<string> => {
-    // Ensure SW task queue is initialized before submitting workflow
-    // This sends TASK_QUEUE_INIT to SW which initializes the workflowHandler
-    const { swTaskQueueService } = await import('../services/sw-task-queue-service');
-    const initT0 = Date.now();
-    await swTaskQueueService.initialize();
-    console.log('[useWorkflowSubmission][submitToSW] swTaskQueueService.initialize 完成, 耗时ms:', Date.now() - initT0);
-
-    // 获取当前画布 ID，用于多画布场景下隔离工作流执行
-    const board = boardRef.current;
-    const initiatorBoardId = board && 'id' in board ? (board as unknown as { id: string }).id : undefined;
-
-    // Convert to SW workflow format
-    const swWorkflow: SWWorkflowDefinition = {
-      id: legacyWorkflow.id,
-      name: legacyWorkflow.name,
-      steps: legacyWorkflow.steps.map(step => ({
-        id: step.id,
-        mcp: step.mcp,
-        args: step.args,
-        description: step.description,
-        status: step.status as any,
-        // Include batch options for batch generation
-        options: step.options,
-      })),
-      status: 'pending',
-      createdAt: legacyWorkflow.createdAt,
-      updatedAt: Date.now(),
-      context: {
-        userInput: parsedInput.userInstruction,
-        model: parsedInput.modelId,
-        params: {
-          count: parsedInput.count,
-          size: parsedInput.size,
-          duration: parsedInput.duration,
-        },
-        referenceImages,
-      },
-      // 记录发起工作流的画布 ID，用于隔离多画布场景
-      initiatorBoardId,
-    };
-
-    // Subscribe to workflow events
-    const workflowSub = workflowSubmissionService.subscribeToWorkflow(
-      swWorkflow.id,
-      async (event: WorkflowEvent) => {
-        await handleWorkflowEvent(event, legacyWorkflow, retryContext);
-      }
-    );
-    subscriptionsRef.current.push(workflowSub);
-
-    // Submit to SW
-    await workflowSubmissionService.submit(swWorkflow);
-
-    // console.log('[WorkflowSubmit] ✓ Submitted to SW:', swWorkflow.id);
-    return swWorkflow.id;
-  }, [handleWorkflowEvent]);
-
-  /**
-   * Submit a workflow
+   * Submit a workflow (always uses main thread)
    */
   const submitWorkflow = useCallback(async (
     parsedInput: ParsedGenerationParams,
@@ -618,24 +447,8 @@ export function useWorkflowSubmission(
     retryContext?: WorkflowRetryContext,
     existingWorkflow?: LegacyWorkflowDefinition
   ): Promise<{ workflowId: string; usedSW: boolean }> => {
-    // Debug logging for workflow submission (visible when debug mode enabled)
-    // console.log('[WorkflowSubmit] ▶ submitWorkflow called', {
-    //   scenario: parsedInput.scenario,
-    //   generationType: parsedInput.generationType,
-    //   useSWExecution,
-    //   swAvailable: checkSWAvailable(),
-    //   existingWorkflowId: existingWorkflow?.id,
-    //   timestamp: new Date().toISOString(),
-    // });
-
     // Use existing workflow if provided, otherwise create a new one
     const legacyWorkflow = existingWorkflow || convertToWorkflow(parsedInput, referenceImages);
-    
-    // console.log('[WorkflowSubmit] Created/using workflow:', {
-    //   workflowId: legacyWorkflow.id,
-    //   name: legacyWorkflow.name,
-    //   stepsCount: legacyWorkflow.steps.length,
-    // });
 
     // Start workflow in WorkflowContext
     workflowControl.startWorkflow(legacyWorkflow);
@@ -679,25 +492,9 @@ export function useWorkflowSubmission(
       autoOpen: false,
     });
 
-    // Determine execution mode（与 WorkflowSubmissionService 使用相同的通道检测，避免走 SW 后又降级导致卡住）
-    const controllerOk = checkSWControllerAvailable();
-    const channelOk = controllerOk ? await checkSWChannelAvailable() : false;
-    const shouldUseSW = useSWExecution && channelOk;
-    console.log('[useWorkflowSubmission][submitWorkflow] 执行模式:', { useSWExecution, controllerOk, channelOk, shouldUseSW });
-
-    if (shouldUseSW) {
-      // Execute in Service Worker
-      console.log('[useWorkflowSubmission][submitWorkflow] 使用 SW 执行, 调用 submitToSW...');
-      const t0 = Date.now();
-      await submitToSW(legacyWorkflow, parsedInput, referenceImages, finalRetryContext);
-      console.log('[useWorkflowSubmission][submitWorkflow] submitToSW 完成, 耗时ms:', Date.now() - t0);
-      return { workflowId: legacyWorkflow.id, usedSW: true };
-    } else {
-      // Return workflow ID - caller (AIInputBar) will handle main-thread execution
-      console.log('[useWorkflowSubmission][submitWorkflow] 使用主线程执行 (SW channel 未就绪)');
-      return { workflowId: legacyWorkflow.id, usedSW: false };
-    }
-  }, [workflowControl, useSWExecution, submitToSW]);
+    // Always use main thread execution
+    return { workflowId: legacyWorkflow.id, usedSW: false };
+  }, [workflowControl]);
 
   /**
    * Cancel a workflow
@@ -744,13 +541,6 @@ export function useWorkflowSubmission(
   }, [submitWorkflow]);
 
   /**
-   * Check if SW execution is available（同步预检，仅检查 controller）
-   */
-  const isSWAvailable = useCallback((): boolean => {
-    return checkSWControllerAvailable();
-  }, []);
-
-  /**
    * Get current retry context
    */
   const getRetryContext = useCallback((): WorkflowRetryContext | null => {
@@ -761,7 +551,6 @@ export function useWorkflowSubmission(
     submitWorkflow,
     cancelWorkflow,
     retryWorkflow,
-    isSWAvailable,
     getRetryContext,
   };
 }
