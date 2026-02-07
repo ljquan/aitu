@@ -1,8 +1,8 @@
 {
-  "version": "0.5.86",
-  "buildTime": "2026-02-07T04:21:33.976Z",
+  "version": "0.5.87",
+  "buildTime": "2026-02-07T14:30:42.100Z",
   "gitCommit": "unknown",
   "changelog": [
-    "improve fallback engine handling and logging in workflow submission service"
+    "enhance logging and error handling in WorkflowEngine"
   ]
 }

@@ -1,3 +1,21 @@
+## 0.5.87 (2026-02-07)
+
+### 🚀 Features
+
+- enhance logging and error handling in WorkflowEngine ([5074339b](https://github.com/ljquan/aitu/commit/5074339b))
+
+### 🔧 Chores
+
+- bump version to 0.5.86 ([2394021b](https://github.com/ljquan/aitu/commit/2394021b))
+- bump version to 0.5.85 ([8e45567e](https://github.com/ljquan/aitu/commit/8e45567e))
+- bump version to 0.5.84 ([1aea9496](https://github.com/ljquan/aitu/commit/1aea9496))
+- docs(claude): 添加新规则 - 模块迁移接口完整性 ([afb95640](https://github.com/ljquan/aitu/commit/afb95640))
+
+### ❤️  Thank You
+
+- liquid <ljquan@qq.com>
+- liquidliang <ljquan@qq.com>
+
 ## 0.5.86 (2026-02-07)
 
 ### 🚀 Features
