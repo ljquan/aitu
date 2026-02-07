@@ -1,11 +1,11 @@
 /**
  * useTaskStorage Hook
  *
- * Manages automatic synchronization between task queue state and IndexedDB storage.
- * Handles loading tasks on mount and debounced saving on updates.
+ * Manages task queue initialization and state restoration from IndexedDB.
+ * Handles data migration from legacy databases and restores interrupted tasks.
  *
- * In SW mode: Tasks are managed by Service Worker's IndexedDB, this hook only
- * handles saving updates to local storage for backup/caching purposes.
+ * 注意：任务持久化由 taskQueueService.persistTask() 统一写入 aitu-app 数据库，
+ * 此 hook 只负责启动时的数据加载和恢复，不再额外订阅写入。
  */
 
 import { useEffect } from 'react';
@@ -13,17 +13,13 @@ import {
   taskQueueService,
   legacyTaskQueueService,
 } from '../services/task-queue';
-import { storageService } from '../services/storage-service';
 import { taskStorageReader } from '../services/task-storage-reader';
-import { UPDATE_INTERVALS } from '../constants/TASK_CONSTANTS';
-import { migrateLegacyHistory } from '../utils/history-migration';
 import {
   Task,
   TaskType,
   TaskStatus,
   TaskExecutionPhase,
 } from '../types/task.types';
-import { debounce } from '@aitu/utils';
 import { isAsyncImageModel } from '../constants/model-config';
 
 // Global flag to prevent multiple initializations (persists across HMR)
@@ -44,19 +40,12 @@ function waitForIdle(timeout = 100): Promise<void> {
 }
 
 /**
- * Hook for automatic task storage synchronization
+ * Hook for task queue initialization and restoration
  *
  * Responsibilities:
- * - Initialize storage service on mount
- * - Load tasks from storage on mount
- * - Listen to task updates and save to storage (debounced)
- * - Clean up subscriptions on unmount
- *
- * @example
- * function App() {
- *   useTaskStorage(); // Automatic sync enabled
- *   return <YourComponents />;
- * }
+ * - Migrate data from legacy databases (sw-task-queue → aitu-app)
+ * - Load tasks from IndexedDB on mount
+ * - Restore interrupted tasks
  */
 export function useTaskStorage(): void {
   useEffect(() => {
@@ -65,7 +54,6 @@ export function useTaskStorage(): void {
     // Initialize storage and load tasks (deferred to browser idle time)
     const initializeStorage = async () => {
       if (globalInitialized) {
-        // console.log('[useTaskStorage] Already initialized, skipping');
         return;
       }
 
@@ -75,19 +63,14 @@ export function useTaskStorage(): void {
       // Wait for browser idle time to avoid blocking page load
       await waitForIdle(50);
 
-      // console.log('[useTaskStorage] Starting initialization...');
-
       try {
-        // Initialize storage service
-        await storageService.initialize();
+        // 数据迁移：从旧 sw-task-queue 数据库迁移到 aitu-app（一次性）
+        // 必须在 taskStorageReader.getAllTasks() 之前完成，
+        // 否则读取 aitu-app 时数据还在 sw-task-queue 中，导致首次打开为空
+        const { migrateFromLegacyDB } = await import('../services/app-database');
+        await migrateFromLegacyDB();
 
-        // Wait for browser idle between heavy operations
-        await waitForIdle(50);
-
-        // Migrate legacy history data from localStorage to task queue
-        await migrateLegacyHistory();
-
-        // Load tasks from IndexedDB
+        // Load tasks from IndexedDB (aitu-app)
         const storedTasks = await taskStorageReader.getAllTasks();
         // console.log(`[useTaskStorage] Loaded ${storedTasks.length} tasks from IndexedDB`);
 
@@ -237,38 +220,9 @@ export function useTaskStorage(): void {
       }
     };
 
-    // Create a debounced save function
-    const debouncedSave = debounce(async (task: Task) => {
-      try {
-        await storageService.saveTask(task);
-        // console.log(`[useTaskStorage] Saved task ${task.id} to storage`);
-      } catch (error) {
-        console.error('[useTaskStorage] Failed to save task:', error);
-      }
-    }, UPDATE_INTERVALS.STORAGE_SYNC);
-
-    // Subscribe to task updates
-    const subscription = taskQueueService
-      .observeTaskUpdates()
-      .subscribe((event) => {
-        if (!subscriptionActive) {
-          return;
-        }
-
-        // Handle different event types
-        if (event.type === 'taskDeleted') {
-          // Delete from storage immediately (no debounce)
-          storageService.deleteTask(event.task.id).catch((error) => {
-            console.error(
-              '[useTaskStorage] Failed to delete task from storage:',
-              error
-            );
-          });
-        } else {
-          // Debounce save operation for created/updated tasks
-          debouncedSave(event.task);
-        }
-      });
+    // 断舍离：移除了 storageService 的订阅写入。
+    // taskQueueService.persistTask() 已统一将任务写入 aitu-app 数据库，
+    // 旧的 storageService 写入 aitu-task-queue 是冗余且写错数据库。
 
     // Initialize
     initializeStorage();
@@ -276,7 +230,6 @@ export function useTaskStorage(): void {
     // Cleanup
     return () => {
       subscriptionActive = false;
-      subscription.unsubscribe();
     };
   }, []);
 }

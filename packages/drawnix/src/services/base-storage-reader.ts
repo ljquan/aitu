@@ -96,25 +96,27 @@ export abstract class BaseStorageReader<TCache> {
 
   /**
    * 检查数据库和 store 是否存在（带缓存）
+   * 注意：仅缓存 true 结果。false 结果不缓存，允许后续重新检查
+   * （数据库 store 可能在首次检查后被其他模块创建）
    */
   async isAvailable(): Promise<boolean> {
-    // 使用缓存结果，避免重复检查
-    if (this.availabilityChecked) {
-      return this.isAvailableResult;
+    // 仅缓存 true 结果，避免永久缓存 false 导致后续读取全部失败
+    if (this.availabilityChecked && this.isAvailableResult) {
+      return true;
     }
 
     try {
       const db = await this.getDB();
       const hasStore = db.objectStoreNames.contains(this.storeName);
       
-      // 缓存结果
-      this.availabilityChecked = true;
-      this.isAvailableResult = hasStore;
+      // 缓存结果（false 不标记为已检查，允许后续重试）
+      if (hasStore) {
+        this.availabilityChecked = true;
+        this.isAvailableResult = true;
+      }
       return hasStore;
     } catch (error) {
       console.warn(`[${this.logPrefix}] isAvailable failed:`, error);
-      this.availabilityChecked = true;
-      this.isAvailableResult = false;
       return false;
     }
   }
@@ -132,6 +134,9 @@ export abstract class BaseStorageReader<TCache> {
   invalidateCache(): void {
     this.cache = null;
     this.cacheTimestamp = 0;
+    // 同时重置可用性检查，允许重新检测 store 是否存在
+    this.availabilityChecked = false;
+    this.isAvailableResult = false;
   }
 
   /**

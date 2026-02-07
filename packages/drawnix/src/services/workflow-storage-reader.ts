@@ -14,7 +14,7 @@ import type {
 } from './sw-channel/types/workflow';
 import { BaseStorageReader } from './base-storage-reader';
 
-import { APP_DB_NAME, APP_DB_STORES } from './app-database';
+import { APP_DB_NAME, APP_DB_STORES, getAppDB } from './app-database';
 
 // 使用主线程专用数据库
 const DB_NAME = APP_DB_NAME;
@@ -110,6 +110,29 @@ class WorkflowStorageReader extends BaseStorageReader<WorkflowCache> {
   protected readonly dbName = DB_NAME;
   protected readonly storeName = WORKFLOWS_STORE;
   protected readonly logPrefix = 'WorkflowStorageReader';
+
+  /**
+   * 使用 getAppDB() 获取数据库连接，确保 store 已创建。
+   */
+  protected async getDB(): Promise<IDBDatabase> {
+    if (this.db) {
+      return this.db;
+    }
+
+    if (this.dbPromise) {
+      return this.dbPromise;
+    }
+
+    this.dbPromise = getAppDB().then(db => {
+      this.db = db;
+      return db;
+    }).catch(error => {
+      this.dbPromise = null;
+      throw error;
+    });
+
+    return this.dbPromise;
+  }
 
   /**
    * 获取所有工作流（带缓存）

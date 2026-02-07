@@ -453,22 +453,45 @@ class TaskQueueService {
 
   /**
    * Restores tasks from storage
+   * 
+   * Uses merge strategy: only restores tasks that don't already exist in memory,
+   * or whose in-memory version is older than the stored version.
+   * This prevents overwriting active tasks whose status has been updated
+   * by executeTask() but not yet persisted to IndexedDB at read time.
    *
    * @param tasks - Array of tasks to restore
    */
   restoreTasks(tasks: Task[]): void {
-    this.tasks.clear();
+    let restoredCount = 0;
     tasks.forEach(task => {
+      const existing = this.tasks.get(task.id);
+
+      // Skip if in-memory task is newer or at a more advanced status
+      if (existing) {
+        // If in-memory task was updated more recently, keep it
+        if (existing.updatedAt >= task.updatedAt) {
+          return;
+        }
+      }
+
       // Ensure video tasks have progress field (for backward compatibility)
       const restoredTask: Task = task.type === TaskType.VIDEO && task.progress === undefined
         ? { ...task, progress: 0 }
         : task;
 
       this.tasks.set(restoredTask.id, restoredTask);
-      // Emit event for each restored task so subscribers can update UI
-      this.emitEvent('taskCreated', restoredTask);
+      restoredCount++;
     });
-    // console.log(`[TaskQueueService] Restored ${tasks.length} tasks`);
+
+    // Emit a single batch update event instead of per-task events
+    if (restoredCount > 0) {
+      // Use the first task to emit a generic update that triggers UI refresh
+      const allTasks = Array.from(this.tasks.values());
+      if (allTasks.length > 0) {
+        this.emitEvent('taskCreated', allTasks[0]);
+      }
+    }
+    // console.log(`[TaskQueueService] Restored ${restoredCount}/${tasks.length} tasks (merged)`);
   }
 
   /**

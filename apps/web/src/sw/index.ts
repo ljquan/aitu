@@ -2134,19 +2134,6 @@ sw.addEventListener('fetch', (event: FetchEvent) => {
   const url = new URL(event.request.url);
   const startTime = Date.now();
 
-  // 辅助函数：确定请求类型
-  function getRequestType(): string {
-    if (url.pathname.startsWith(CACHE_URL_PREFIX)) return 'cache-url';
-    if (url.pathname.startsWith(ASSET_LIBRARY_PREFIX)) return 'asset-library';
-    if (isVideoRequest(url, event.request)) return 'video';
-    if (isFontRequest(url, event.request)) return 'font';
-    if (url.origin !== location.origin && isImageRequest(url, event.request))
-      return 'image';
-    if (event.request.mode === 'navigate') return 'navigation';
-    if (event.request.destination) return event.request.destination;
-    return 'other';
-  }
-
   // 只处理 http 和 https 协议的请求，忽略 chrome-extension、data、blob 等
   if (url.protocol !== 'http:' && url.protocol !== 'https:') {
     addDebugLog({
