@@ -6,8 +6,10 @@
 @import '../../styles/z-index.scss';
 
 .prompt-list-panel {
-  width: 320px;
-  max-height: 400px;
+  width: min(320px, var(--panel-max-width, calc(100vw - 16px)));
+  max-height: var(--panel-max-height, 400px);
+  display: flex;
+  flex-direction: column;
   background: var(--td-bg-color-container, #fff);
   border-radius: 8px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
@@ -44,7 +46,8 @@
 
   // 列表
   &__list {
-    max-height: 340px;
+    flex: 1;
+    min-height: 0;
     overflow-y: auto;
     padding: 8px 0;
 
