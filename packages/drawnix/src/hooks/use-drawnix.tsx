@@ -58,6 +58,8 @@ export type DrawnixState = {
   dialogInitialData?: DialogInitialData | null;
   openCleanConfirm: boolean;
   openSettings: boolean;
+  openCommandPalette?: boolean;
+  openCanvasSearch?: boolean;
   linkState?: LinkState | null;
   lastSelectedElementIds?: string[]; // 最近选中的元素IDs,用于AI生成插入位置计算
 };

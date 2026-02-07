@@ -1,0 +1,94 @@
+@import '../../styles/z-index.scss';
+
+.canvas-search {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  z-index: $z-dialog;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: var(--island-bg-color, #fff);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(0, 0, 0, 0.06);
+  animation: canvasSearchIn 0.12s ease-out;
+  min-width: 280px;
+  max-width: 400px;
+
+  &__icon {
+    flex-shrink: 0;
+    color: var(--text-secondary-color, #999);
+    display: flex;
+    align-items: center;
+  }
+
+  &__input {
+    flex: 1;
+    border: none;
+    outline: none;
+    background: transparent;
+    font-size: 13px;
+    color: var(--text-primary-color, #333);
+    font-family: inherit;
+    min-width: 0;
+
+    &::placeholder {
+      color: var(--text-secondary-color, #aaa);
+    }
+  }
+
+  &__count {
+    flex-shrink: 0;
+    font-size: 11px;
+    color: var(--text-secondary-color, #999);
+    white-space: nowrap;
+    padding: 0 4px;
+
+    &--empty {
+      color: #e91e63;
+    }
+  }
+
+  &__actions {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    flex-shrink: 0;
+  }
+
+  &__btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border: none;
+    background: transparent;
+    border-radius: 4px;
+    color: var(--text-secondary-color, #666);
+    cursor: pointer;
+    transition: background-color 0.1s ease;
+    padding: 0;
+
+    &:hover:not(:disabled) {
+      background: var(--color-surface-high, #f0f0f0);
+    }
+
+    &:disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+    }
+  }
+}
+
+@keyframes canvasSearchIn {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

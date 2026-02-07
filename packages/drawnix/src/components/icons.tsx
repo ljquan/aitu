@@ -693,6 +693,16 @@ export const FeltTipPenIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: n
   </svg>
 );
 
+// 激光笔图标
+export const LaserPointerIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 24, ...props }) => (
+  <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round" width={size} height={size} {...props}>
+    <g transform="rotate(90 10 10)">
+      <path clipRule="evenodd" d="m9.644 13.69 7.774-7.773a2.357 2.357 0 0 0-3.334-3.334l-7.773 7.774L8 12l1.643 1.69Z" />
+      <path d="m13.25 3.417 3.333 3.333M10 10l2-2M5 15l3-3M2.156 17.894l1-1M5.453 19.029l-.144-1.407M2.377 11.887l.866 1.118M8.354 17.273l-1.194-.758M.953 14.652l1.408.13" />
+    </g>
+  </svg>
+);
+
 // 钢笔工具图标（矢量路径绘制）
 export const VectorPenIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 24, ...props }) => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" width={size} height={size} {...props}>
@@ -1266,6 +1276,23 @@ export const DebugLogIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: num
     <path d="M5 11l2 2-2 2" />
     <line x1="9" y1="15" x2="14" y2="15" />
     <line x1="9" y1="18" x2="18" y2="18" opacity="0.5" />
+  </svg>
+);
+
+export const CommandPaletteIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 24, ...props }) => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    width={size}
+    height={size}
+    {...props}
+  >
+    {/* ⌘ Command symbol */}
+    <path d="M18 3a3 3 0 0 0-3 3v12a3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3H6a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3V6a3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3h12a3 3 0 0 0 3-3 3 3 0 0 0-3-3z" />
   </svg>
 );
 

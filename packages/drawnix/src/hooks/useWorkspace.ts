@@ -305,6 +305,9 @@ export function useWorkspace(): UseWorkspaceReturn {
 
       try {
         await workspaceService.saveBoard(board.id, data);
+        // 通知其他标签页数据已更新
+        const { markTabSyncVersion } = await import('./useTabSync');
+        markTabSyncVersion();
         return true;
       } catch (err) {
         console.error('[useWorkspace] Failed to save board:', err);

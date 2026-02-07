@@ -31,6 +31,7 @@ export interface Translations {
   'toolbar.eraserShape': string;
   'toolbar.eraserShape.circle': string;
   'toolbar.eraserShape.square': string;
+  'toolbar.laserPointer': string;
   'toolbar.preciseEraser': string;
   'toolbar.preciseEraserTip': string;
   'toolbar.preciseEraser.unsupported.openPath': string;
@@ -86,6 +87,7 @@ export interface Translations {
   'menu.debugPanel': string;
   'menu.version': string;
   'menu.more': string;
+  'menu.commandPalette': string;
   'menu.userManual': string;
   'menu.cleanInvalidLinks': string;
   'menu.cleanInvalidLinks.scanning': string;
@@ -223,6 +225,7 @@ const translations: Record<Language, Translations> = {
     'toolbar.eraserShape': '橡皮擦形状',
     'toolbar.eraserShape.circle': '圆形',
     'toolbar.eraserShape.square': '方形',
+    'toolbar.laserPointer': '激光笔 — L',
     'toolbar.preciseEraser': '精确擦除',
     'toolbar.preciseEraserTip': '只擦除经过的区域，而不是整个图形',
     'toolbar.preciseEraser.unsupported.openPath': '精确擦除不支持线条，将删除整条线',
@@ -274,6 +277,7 @@ const translations: Record<Language, Translations> = {
     'menu.debugPanel': '日志 / 调试',
     'menu.version': '版本',
     'menu.more': '更多',
+    'menu.commandPalette': '快捷命令',
     'menu.userManual': '用户手册',
     'menu.cleanInvalidLinks': '清除失效媒体',
     'menu.cleanInvalidLinks.scanning': '正在扫描失效媒体...',
@@ -408,6 +412,7 @@ const translations: Record<Language, Translations> = {
     'toolbar.eraserShape': 'Eraser Shape',
     'toolbar.eraserShape.circle': 'Circle',
     'toolbar.eraserShape.square': 'Square',
+    'toolbar.laserPointer': 'Laser Pointer — L',
     'toolbar.preciseEraser': 'Precise',
     'toolbar.preciseEraserTip': 'Erase only the path area instead of the whole shape',
     'toolbar.preciseEraser.unsupported.openPath': 'Precise erase does not support lines, will delete entire line',
@@ -459,6 +464,7 @@ const translations: Record<Language, Translations> = {
     'menu.debugPanel': 'Log / Debug',
     'menu.version': 'Version',
     'menu.more': 'More',
+    'menu.commandPalette': 'Commands',
     'menu.userManual': 'User Manual',
     'menu.cleanInvalidLinks': 'Clean Invalid Media',
     'menu.cleanInvalidLinks.scanning': 'Scanning invalid media...',

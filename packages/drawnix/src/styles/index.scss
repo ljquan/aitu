@@ -15,6 +15,9 @@
 @import '../components/ai-input-bar/ai-input-bar.scss'; // AI 输入框
 @import '../components/toolbar/pencil-settings-toolbar/pencil-settings-toolbar.scss'; // 画笔设置工具栏
 @import '../components/toolbar/pen-settings-toolbar/pen-settings-toolbar.scss'; // 钢笔设置工具栏
+@import '../components/command-palette/command-palette.scss'; // 命令面板
+@import '../components/canvas-search/canvas-search.scss'; // 画布搜索
+
 
 .t-dialog__ctx.t-dialog__ctx--fixed{
     z-index: $z-dialog !important;

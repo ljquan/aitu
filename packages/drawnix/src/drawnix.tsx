@@ -34,6 +34,7 @@ import {
   DrawnixBoard,
   DrawnixContext,
   DrawnixState,
+  useDrawnix,
 } from './hooks/use-drawnix';
 import { ClosePencilToolbar } from './components/toolbar/pencil-mode-toolbar';
 import { PencilSettingsToolbar, EraserSettingsToolbar } from './components/toolbar/pencil-settings-toolbar';
@@ -90,6 +91,9 @@ import { API_AUTH_ERROR_EVENT, ApiAuthErrorDetail } from './utils/api-auth-error
 import { MessagePlugin } from 'tdesign-react';
 import { calculateEditedImagePoints } from './utils/image';
 import { safeReload } from './utils/active-tasks';
+import { CommandPalette } from './components/command-palette/command-palette';
+import { CanvasSearch } from './components/canvas-search/canvas-search';
+import { useTabSync, markTabSyncVersion } from './hooks/useTabSync';
 
 const TTDDialog = lazy(() => import('./components/ttd-dialog/ttd-dialog').then(module => ({ default: module.TTDDialog })));
 const SettingsDialog = lazy(() => import('./components/settings-dialog/settings-dialog').then(module => ({ default: module.SettingsDialog })));
@@ -775,6 +779,7 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
   onCreateProjectForMemory,
 }) => {
   const { chatDrawerRef } = useChatDrawer();
+  const { setAppState: updateState } = useDrawnix();
 
   // 画笔自定义光标
   usePencilCursor({ board, pointer: appState.pointer });
@@ -782,6 +787,15 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
   // 处理 URL 参数中的工具打开请求
   // 当访问 ?tool=xxx 时，自动以 WinBox 全屏形式打开指定工具并设为常驻
   useToolFromUrl();
+
+  // 标签页同步
+  useTabSync({
+    onSyncNeeded: useCallback(() => {
+      // 当其他标签页修改数据时，刷新页面以获取最新数据
+      safeReload();
+    }, []),
+    enabled: true,
+  });
 
   // 快捷工具栏状态
   const [quickToolbarVisible, setQuickToolbarVisible] = useState(false);
@@ -1197,6 +1211,23 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
           <ViewNavigation />
           <ToolWinBoxManager />
         </Wrapper>
+        {/* Command Palette - 命令面板 (Cmd+K) */}
+        <CommandPalette
+          open={appState.openCommandPalette || false}
+          onClose={useCallback(() => {
+            updateState((prev) => ({ ...prev, openCommandPalette: false }));
+          }, [updateState])}
+          board={board}
+          container={containerRef.current}
+        />
+        {/* Canvas Search - 画布搜索 (Cmd+F) */}
+        <CanvasSearch
+          open={appState.openCanvasSearch || false}
+          onClose={useCallback(() => {
+            updateState((prev) => ({ ...prev, openCanvasSearch: false }));
+          }, [updateState])}
+          board={board}
+        />
         <ActiveTaskWarning />
         {/* Performance Panel - 性能监控面板 */}
         <PerformancePanel 

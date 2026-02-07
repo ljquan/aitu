@@ -1271,6 +1271,51 @@ return (
 
 **原因**: 基础组件（如 `TaskItem`）已经包含了完善的响应式 Grid 布局逻辑。在子组件容器中强行覆盖布局（如从 Grid 改为 Flex）会导致维护困难、布局不一致，并破坏基础组件原有的响应式能力。应优先通过微调尺寸或传递 Props 让基础组件自我调整。
 
+#### 跨 React Root 状态共享：useSyncExternalStore
+
+**场景**: 需要从主应用向 Plait 文本组件（`react-text` 的 `Text`）传递状态时（如搜索高亮关键词）
+
+Plait 框架通过 `createRoot` 将每个文本组件渲染在独立的 React 树中（见 `react-board/src/plugins/with-react.tsx`），React Context 无法穿透这些独立 Root。
+
+❌ **错误示例**:
+```typescript
+// ❌ 错误：在主应用提供 Context，期望 Text 组件能消费
+// 主应用
+<SearchContext.Provider value={query}>
+  <Board /> {/* Board 内的文本通过 createRoot 渲染，无法访问此 Context */}
+</SearchContext.Provider>
+
+// react-text/text.tsx
+const query = useContext(SearchContext); // 永远是 undefined
+```
+
+✅ **正确示例**:
+```typescript
+// ✅ 正确：使用 useSyncExternalStore + 模块级 store 实现跨 Root 状态共享
+// search-highlight.ts
+let searchQuery = '';
+const listeners = new Set<() => void>();
+
+export function setSearchHighlightQuery(query: string) {
+  if (searchQuery === query) return;
+  searchQuery = query;
+  listeners.forEach(listener => listener());
+}
+
+export function useSearchHighlightQuery(): string {
+  return useSyncExternalStore(
+    (cb) => { listeners.add(cb); return () => listeners.delete(cb); },
+    () => searchQuery,
+    () => searchQuery,
+  );
+}
+
+// text.tsx - 在独立 React Root 中也能正确订阅
+const query = useSearchHighlightQuery(); // ✅ 正常工作
+```
+
+**原因**: `createRoot` 创建的 React 树是完全独立的，不共享父级 Context。`useSyncExternalStore` 订阅模块级全局 store，不依赖 React 树结构，因此能跨 Root 工作。此模式适用于所有需要从主应用向 Plait 文本组件传递状态的场景。
+
 ### CSS/SCSS 规范
 - 使用 BEM 命名规范
 - 优先使用设计系统 CSS 变量
@@ -2573,6 +2618,106 @@ return response.json();
 2. 失败通常是由于内容策略、配额限制或 API 问题，重试无法解决
 3. 用户可以手动重试失败的任务
 4. 重试会延长错误反馈时间，影响用户体验
+
+### 新画布功能必须作为 Plait 插件实现
+
+**场景**: 需要在画布上添加新的交互功能（如激光笔、新画笔类型、标注工具等）
+
+❌ **错误做法**：使用独立 React 组件 + SVG overlay
+
+```typescript
+// 错误：独立 React 组件，坐标系与画布不一致
+const LaserPointer: React.FC = ({ active, board }) => {
+  const svgRef = useRef<SVGSVGElement>(null);
+  // 手动监听 pointer 事件，自己计算坐标
+  const handlePointerMove = (e: React.PointerEvent) => {
+    const rect = svgRef.current!.getBoundingClientRect();
+    // 屏幕坐标，未经过画布缩放/平移变换 → 笔迹位置错误
+    trailRef.current.push({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+  };
+  return <svg className="overlay" onPointerMove={handlePointerMove}>...</svg>;
+};
+```
+
+✅ **正确做法**：实现为 `withXxx` 插件，复用框架基础设施
+
+```typescript
+// 正确：作为 Plait 插件，复用 Generator/Smoother/坐标变换
+export const withLaserPointer = (board: PlaitBoard) => {
+  const { pointerDown, pointerMove, pointerUp } = board;
+  const generator = new FreehandGenerator(board);  // 复用已有渲染器
+  const smoother = new FreehandSmoother();          // 复用已有平滑算法
+
+  board.pointerMove = (event: PointerEvent) => {
+    if (isDrawing) {
+      const smoothed = smoother.process([event.x, event.y]);
+      // 使用框架标准坐标变换，与画布缩放/平移一致
+      const point = toViewBoxPoint(board, toHostPoint(board, smoothed[0], smoothed[1]));
+      points.push(point);
+      generator.processDrawing(element, PlaitBoard.getElementTopHost(board));
+      return;
+    }
+    pointerMove(event);
+  };
+  return board;
+};
+```
+
+**原因**:
+1. 独立 SVG overlay 有自己的坐标系，不跟随画布缩放/平移，导致笔迹位置错误
+2. overlay 需要 `stopPropagation` 拦截事件，与画布交互冲突
+3. 无法复用 FreehandGenerator（SVG 渲染）、FreehandSmoother（点平滑）等已有能力
+4. 插件方式通过 `board.pointerDown/Move/Up` 链自然融入事件流
+
+### 工具互斥通过 board.pointer 管理
+
+**场景**: 添加新的工具类型（如激光笔），需要与其他工具（选择、手型、画笔）互斥
+
+❌ **错误做法**：使用独立布尔状态
+
+```typescript
+// 错误：独立状态，需要手动维护互斥
+interface DrawnixState {
+  laserPointerActive?: boolean;  // 独立状态
+}
+
+// 激活激光笔时，不会自动停用其他工具
+updateAppState({ laserPointerActive: true });
+
+// 需要额外逻辑处理互斥
+const [laserActive, setLaserActive] = useState(false);
+useEffect(() => {
+  if (appState.laserPointerActive) {
+    setLaserActive(true);
+    updateState(prev => ({ ...prev, laserPointerActive: false }));
+  }
+}, [appState.laserPointerActive]);
+```
+
+✅ **正确做法**：加入枚举，使用 `board.pointer` 系统
+
+```typescript
+// 正确：加入 FreehandShape 枚举
+export enum FreehandShape {
+  feltTipPen = 'feltTipPen',
+  eraser = 'eraser',
+  laserPointer = 'laserPointer',  // 新增
+}
+
+// 切换工具时，通过框架统一管理
+BoardTransforms.updatePointerType(board, FreehandShape.laserPointer);
+updateAppState({ pointer: FreehandShape.laserPointer });
+
+// board.pointer 是单值，自动与其他工具互斥
+// 判断激活状态
+const isActive = board.pointer === FreehandShape.laserPointer;
+```
+
+**原因**:
+1. `board.pointer` 是单值，设置新工具自动停用旧工具，无需手动管理互斥
+2. 工具栏 UI 通过 `board.pointer === xxx` 自动反映选中状态
+3. 快捷键切换（V/H/L/E 等）只需更新 pointer 一处
+4. 插件中通过 `PlaitBoard.isPointer(board, xxx)` 判断是否激活，逻辑清晰
 
 ### Plait 选中状态渲染触发
 

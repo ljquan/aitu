@@ -121,6 +121,9 @@ Service Worker (后台执行)
 
 采用 `withXxx` 组合式模式：`withTool`, `withFreehand`, `withImage`, `withVideo`, `withWorkzone` 等。
 
+- **新画布功能必须作为 Plait 插件**：涉及画布交互的功能（如激光笔、画笔变体）必须实现为 `withXxx` 插件复用 Generator/Smoother 等已有基础设施，禁止使用独立 React 组件 + SVG overlay（坐标系不一致、事件冲突）
+- **工具互斥通过 `board.pointer` 管理**：新增工具类型应加入对应枚举（如 `FreehandShape`），通过 Plait 的 `board.pointer` 单值机制自动互斥，禁止使用独立布尔状态（如 `xxxActive`）手动管理
+
 ---
 
 ## 核心编码规则
@@ -210,6 +213,7 @@ Service Worker (后台执行)
 11. **异步操作不阻塞 UI**：远程同步等耗时操作应异步执行（fire-and-forget），不阻塞弹窗关闭
 12. **关键操作直接调用**：不依赖 RxJS 事件订阅触发关键业务逻辑，订阅时序不可靠
 13. **CPU 密集型循环需 yield**：大量 JSON.stringify/加密等操作的循环，每 3-5 次迭代调用 `await yieldToMain()` 让出主线程
+14. **跨 React Root 状态共享**：Plait 文本组件通过 `createRoot` 渲染在独立 React 树中，Context 无法穿透；需用 `useSyncExternalStore` + 模块级 store 共享状态
 
 ### 缓存规则
 

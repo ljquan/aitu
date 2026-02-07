@@ -395,6 +395,7 @@ export const CreationToolbar: React.FC<ToolbarSectionProps> = ({
     return PlaitBoard.isInPointer(board, [
       FreehandShape.feltTipPen,
       FreehandShape.eraser,
+      FreehandShape.laserPointer,
       PenShape.pen,
     ]);
   };
