@@ -44,6 +44,7 @@ import {
   performHealthCheck,
 } from './cdn-fallback';
 import { getSafeErrorMessage } from './task-queue/utils/sanitize-utils';
+import { initFetchRelay } from './fetch-relay';
 
 // fix: self redeclaration error and type casting
 const sw = self as unknown as ServiceWorkerGlobalScope;
@@ -77,6 +78,9 @@ export {
 
 // Initialize task queue (instance used by channelManager for RPC handlers)
 const taskQueue = initTaskQueue(sw);
+
+// Initialize Fetch Relay (轻量级 fetch 代理，页面关闭后继续执行 API 请求)
+initFetchRelay(sw);
 
 // Initialize channel manager for duplex communication (postmessage-duplex)
 const channelManager = initChannelManager(sw);

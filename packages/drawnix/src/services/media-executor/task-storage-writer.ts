@@ -8,9 +8,11 @@
  * 此模块仅用于降级场景。
  */
 
-// 与 SW 端 storage.ts 保持一致的数据库配置
-const DB_NAME = 'sw-task-queue';
-const TASKS_STORE = 'tasks';
+import { APP_DB_NAME, APP_DB_STORES } from '../app-database';
+
+// 使用主线程专用数据库
+const DB_NAME = APP_DB_NAME;
+const TASKS_STORE = APP_DB_STORES.TASKS;
 
 // 使用与 SW 端一致的字符串字面量类型
 type SWTaskType = 'image' | 'video' | 'character' | 'inspiration_board' | 'chat';

@@ -12,9 +12,11 @@
 import { Task, TaskStatus, TaskType, GenerationParams } from '../types/task.types';
 import { BaseStorageReader } from './base-storage-reader';
 
-// 与 SW 端 storage.ts 保持一致的数据库配置
-const DB_NAME = 'sw-task-queue';
-const TASKS_STORE = 'tasks';
+import { APP_DB_NAME, APP_DB_STORES } from './app-database';
+
+// 使用主线程专用数据库
+const DB_NAME = APP_DB_NAME;
+const TASKS_STORE = APP_DB_STORES.TASKS;
 
 // SW 端的任务结构（与 SWTask 保持一致）
 interface SWTask {

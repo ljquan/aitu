@@ -298,6 +298,11 @@ export const Drawnix: React.FC<DrawnixProps> = ({
         const { WorkZoneTransforms } = await import('./plugins/with-workzone');
         const { TaskStatus } = await import('./types/task.types');
 
+        // 数据迁移：从旧 sw-task-queue 数据库迁移到 aitu-app（一次性，fire-and-forget）
+        import('./services/app-database').then(({ migrateFromLegacyDB }) => {
+          migrateFromLegacyDB().catch(() => {});
+        });
+
         // Initialize SW service (fire-and-forget, 不阻塞应用启动)
         // SW 可用性由服务内部管理，即使 SW 不可用也能正常工作
         const { swTaskQueueService } = await import('./services/sw-task-queue-service');

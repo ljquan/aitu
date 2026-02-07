@@ -99,15 +99,10 @@ class SWTaskQueueService {
           console.warn('[SWTaskQueue] Visibility sync failed:', error);
         });
         
-        // 如果有正在处理的任务且 SW 不可用，启动轮询
+        // 如果有正在处理的任务，启动轮询
         const hasProcessingTasks = this.getTasksByStatus(TaskStatus.PROCESSING).length > 0;
-        if (hasProcessingTasks && !swChannelClient.isInitialized()) {
+        if (hasProcessingTasks) {
           this.startPolling();
-        }
-        
-        // 尝试恢复 SW 连接（如果之前不可用）
-        if (!this.swAvailable) {
-          this.tryRestoreSWConnection();
         }
       } else {
         // 页面隐藏时停止轮询（节省资源）
@@ -161,32 +156,17 @@ class SWTaskQueueService {
 
   /**
    * Internal initialization logic
-   * 只初始化 SW channel，不同步配置（配置随任务传递）
+   * 不再依赖 SW channel，直接标记为已初始化（使用主线程执行器）
    */
   private async doInitialize(): Promise<boolean> {
-    try {
-      // 无论 SW 是否可用，都设置 visibility 监听器
-      // 这样即使 SW 不可用，也能通过轮询机制获取状态更新
-      this.setupVisibilityListener();
-      
-      // 只初始化 SW channel，不检查配置（配置随任务传递）
-      const success = await swChannelClient.initializeChannel();
-      
-      this.initialized = success;
-      this.swAvailable = success;
-      
-      // 成功初始化时重置失败计数
-      if (success) {
-        this.swFailureCount = 0;
-      }
-      
-      return this.initialized;
-    } catch (error) {
-      // SW 初始化失败，但 visibility 监听器已设置，可以使用轮询作为后备
-      console.warn('[SWTaskQueue] Initialization failed, using fallback mode:', error);
-      this.swAvailable = false;
-      return false;
-    }
+    // 设置 visibility 监听器，用于从 IDB 同步状态
+    this.setupVisibilityListener();
+    
+    // 始终标记为已初始化（不再依赖 SW）
+    this.initialized = true;
+    this.swAvailable = false; // SW 不再参与任务执行
+    
+    return true;
   }
 
   /**
@@ -399,28 +379,11 @@ class SWTaskQueueService {
   }
 
   async deleteTask(taskId: string): Promise<void> {
-    // 优先尝试通过 SW 删除
-    if (this.isSWAvailable()) {
-      try {
-        await swChannelClient.deleteTask(taskId);
-        this.markSWAvailable();
-      } catch (error) {
-        console.warn('[SWTaskQueue] SW delete failed, using fallback:', error);
-        this.markSWUnavailable();
-        // 降级：直接从 IndexedDB 删除
-        try {
-          await taskStorageWriter.deleteTask(taskId);
-        } catch (dbError) {
-          console.warn('[SWTaskQueue] Failed to delete from IndexedDB:', dbError);
-        }
-      }
-    } else {
-      // SW 不可用，直接从 IndexedDB 删除
-      try {
-        await taskStorageWriter.deleteTask(taskId);
-      } catch (error) {
-        console.warn('[SWTaskQueue] Failed to delete from IndexedDB:', error);
-      }
+    // 直接从 IndexedDB 删除
+    try {
+      await taskStorageWriter.deleteTask(taskId);
+    } catch (error) {
+      console.warn('[SWTaskQueue] Failed to delete from IndexedDB:', error);
     }
     
     // 更新本地状态
@@ -813,14 +776,7 @@ class SWTaskQueueService {
   // ============================================================================
 
   private setupSWClientHandlers(): void {
-    swChannelClient.setEventHandlers({
-      onTaskCreated: (event) => this.handleSWTaskCreated(event.task),
-      onTaskStatus: (event) => this.handleSWStatus(event.taskId, event.status as TaskStatus, event.progress, event.phase as TaskExecutionPhase),
-      onTaskCompleted: (event) => this.handleSWCompleted(event.taskId, event.result as TaskResult, event.remoteId),
-      onTaskFailed: (event) => this.handleSWFailed(event.taskId, event.error as TaskError),
-      onTaskCancelled: (taskId) => this.handleSWCancelled(taskId),
-      onTaskDeleted: (taskId) => this.handleSWDeleted(taskId),
-    });
+    // SW 事件处理器已移除 - 任务状态通过 IDB 轮询同步
   }
 
   private handleSWTaskCreated(swTask: SWTask): void {
@@ -856,100 +812,14 @@ class SWTaskQueueService {
     };
   }
 
+  /**
+   * 提交任务执行（始终使用主线程执行器，不再依赖 SW）
+   */
   private async submitToSW(task: Task): Promise<void> {
-    const t0 = Date.now();
-    // 获取当前配置
-    const settings = geminiSettings.get();
-    if (!settings.apiKey || !settings.baseUrl) {
-      // 没有配置，尝试降级模式（降级模式也会检查配置）
-      console.log('[SWTaskQueue] submitToSW: 无 API 配置，尝试降级');
-      const canFallback = await this.tryFallbackExecution(task);
-      if (!canFallback) {
-        this.tasks.delete(task.id);
-        this.emitEvent('taskRejected', task, 'NO_API_KEY');
-      }
-      return;
-    }
-
-    // 构建任务配置
-    const taskConfig = {
-      apiKey: settings.apiKey,
-      baseUrl: settings.baseUrl,
-      modelName: settings.imageModelName,
-      textModelName: settings.textModelName,
-    };
-
-    // 检查 SW 是否已知不可用，直接使用降级模式
-    if (!this.swAvailable && this.swFailureCount >= this.SW_FAILURE_THRESHOLD) {
-      console.log('[SWTaskQueue] SW unavailable, using fallback execution directly');
-      const canFallback = await this.tryFallbackExecution(task);
-      if (!canFallback) {
-        this.tasks.delete(task.id);
-        this.emitEvent('taskRejected', task, 'SW_UNAVAILABLE');
-      }
-      return;
-    }
-
-    // 快速检查 SW channel 是否可用，避免 initialize() 长时间阻塞（30s+）
-    if (!this.initialized) {
-      // 先检查 channel 是否已经就绪（不触发重新初始化）
-      if (swChannelClient.isInitialized()) {
-        this.initialized = true;
-        this.swAvailable = true;
-        console.log('[SWTaskQueue] submitToSW: channel 已就绪，跳过 initialize');
-      } else {
-        // channel 未就绪，直接降级，不调用 initialize() 避免 30s+ 阻塞
-        console.log('[SWTaskQueue] submitToSW: channel 未就绪，直接降级执行, 耗时:', Date.now() - t0, 'ms');
-        const canFallback = await this.tryFallbackExecution(task);
-        if (!canFallback) {
-          this.tasks.delete(task.id);
-          this.emitEvent('taskRejected', task, 'SW_NOT_READY');
-        }
-        return;
-      }
-    }
-
-    // 尝试使用 SW 执行，带上配置
-    try {
-      console.log('[SWTaskQueue] submitToSW: 调用 swChannelClient.createTask...');
-      const result = await swChannelClient.createTask({
-        taskId: task.id,
-        taskType: task.type as 'image' | 'video',
-        params: task.params,
-        config: taskConfig,
-      });
-
-      if (result.success) {
-        // SW 执行成功，标记为可用
-        console.log('[SWTaskQueue] submitToSW: SW 创建任务成功, 耗时:', Date.now() - t0, 'ms');
-        this.markSWAvailable();
-      } else {
-        if (result.reason === 'duplicate') {
-          this.tasks.delete(task.id);
-          this.emitEvent('taskRejected', task, 'DUPLICATE');
-        } else {
-          // SW 执行失败，记录失败并尝试降级模式
-          console.log('[SWTaskQueue] submitToSW: SW 创建任务失败:', result.reason, ', 尝试降级, 耗时:', Date.now() - t0, 'ms');
-          this.markSWUnavailable();
-          const canFallback = await this.tryFallbackExecution(task);
-          if (!canFallback) {
-            this.tasks.delete(task.id);
-            this.emitEvent('taskRejected', task, result.reason || 'UNKNOWN');
-          }
-        }
-      }
-    } catch (error) {
-      // SW 通信异常，标记为不可用
-      console.error('[SWTaskQueue] SW communication error, 耗时:', Date.now() - t0, 'ms, error:', error);
-      this.markSWUnavailable();
-      
-      // 尝试降级模式
-      console.log('[SWTaskQueue] submitToSW: SW 异常后尝试降级执行');
-      const canFallback = await this.tryFallbackExecution(task);
-      if (!canFallback) {
-        this.tasks.delete(task.id);
-        this.emitEvent('taskRejected', task, 'SW_ERROR');
-      }
+    const canFallback = await this.tryFallbackExecution(task);
+    if (!canFallback) {
+      this.tasks.delete(task.id);
+      this.emitEvent('taskRejected', task, 'NO_API_KEY');
     }
   }
 

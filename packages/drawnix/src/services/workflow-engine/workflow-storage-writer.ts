@@ -1,29 +1,25 @@
 /**
  * Workflow Storage Writer
  *
- * 主线程直接写入 IndexedDB 中的工作流数据。
- * 用于 SW 不可用时的降级模式。
+ * 主线程写入工作流数据到 aitu-app 数据库。
+ * 使用主线程专用数据库，不再与 SW 共享，无 IDB 并发竞争。
  */
 
 import type { Workflow } from './types';
+import { getAppDB, APP_DB_STORES } from '../app-database';
 
-// 与 SW 端 storage.ts 保持一致的数据库配置
-const DB_NAME = 'sw-task-queue';
-const WORKFLOWS_STORE = 'workflows';
+const WORKFLOWS_STORE = APP_DB_STORES.WORKFLOWS;
 
 /**
  * 工作流存储写入器
  */
 class WorkflowStorageWriter {
-  private db: IDBDatabase | null = null;
-  private dbPromise: Promise<IDBDatabase> | null = null;
-
   /**
    * 检查是否可用
    */
   async isAvailable(): Promise<boolean> {
     try {
-      const db = await this.getDB();
+      const db = await getAppDB();
       return db.objectStoreNames.contains(WORKFLOWS_STORE);
     } catch {
       return false;
@@ -34,47 +30,7 @@ class WorkflowStorageWriter {
    * 获取数据库连接
    */
   private async getDB(): Promise<IDBDatabase> {
-    if (this.db) {
-      return this.db;
-    }
-
-    if (this.dbPromise) {
-      return this.dbPromise;
-    }
-
-    this.dbPromise = new Promise((resolve, reject) => {
-      const request = indexedDB.open(DB_NAME);
-
-      request.onerror = () => {
-        this.dbPromise = null;
-        console.error('[WorkflowStorageWriter] Failed to open database:', request.error);
-        reject(new Error('Failed to open database'));
-      };
-
-      request.onsuccess = () => {
-        this.db = request.result;
-        this.dbPromise = null;
-        
-        // 检查 store 是否存在
-        if (!this.db.objectStoreNames.contains(WORKFLOWS_STORE)) {
-          console.warn('[WorkflowStorageWriter] workflows store does not exist');
-        }
-        
-        resolve(this.db);
-      };
-
-      request.onupgradeneeded = () => {
-        // 如果数据库不存在，创建必要的 object store
-        const db = request.result;
-        if (!db.objectStoreNames.contains(WORKFLOWS_STORE)) {
-          const store = db.createObjectStore(WORKFLOWS_STORE, { keyPath: 'id' });
-          store.createIndex('status', 'status', { unique: false });
-          store.createIndex('createdAt', 'createdAt', { unique: false });
-        }
-      };
-    });
-
-    return this.dbPromise;
+    return getAppDB();
   }
 
   /**
@@ -136,13 +92,10 @@ class WorkflowStorageWriter {
   }
 
   /**
-   * 关闭数据库连接
+   * 关闭数据库连接（现在由 app-database 集中管理）
    */
   close(): void {
-    if (this.db) {
-      this.db.close();
-      this.db = null;
-    }
+    // no-op: 连接由 app-database 模块管理
   }
 }
 

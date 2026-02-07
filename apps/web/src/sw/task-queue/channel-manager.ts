@@ -10,6 +10,7 @@
  */
 
 import { ServiceWorkerChannel } from 'postmessage-duplex';
+import { createFetchRelaySubscribeMap } from '../fetch-relay';
 import type { SWTaskQueue } from './queue';
 import { TaskStatus, TaskType, TaskExecutionPhase } from './types';
 import type { SWTask, GeminiConfig, VideoAPIConfig, TaskConfig } from './types';
@@ -449,69 +450,29 @@ export class SWChannelManager {
 
   private createSubscribeMap(clientId: string): Record<string, (data: any) => any> {
     return {
-      // 初始化
-      [RPC_METHODS.INIT]: this.wrapRpcHandler<{ geminiConfig: GeminiConfig; videoConfig: VideoAPIConfig }, any>(
-        RPC_METHODS.INIT, clientId, (data) => this.handleInit(data)
-      ),
+      // ============================================================================
+      // 已废弃的 RPC（返回 stub 响应，保持向后兼容）
+      // 任务/工作流/聊天逻辑已迁移到主线程
+      // ============================================================================
       
-      // 任务操作
-      [RPC_METHODS.TASK_CREATE]: this.wrapRpcHandler<TaskCreateParams, any>(
-        RPC_METHODS.TASK_CREATE, clientId, (data) => this.handleTaskCreate(clientId, data)
-      ),
-      
-      [RPC_METHODS.TASK_CANCEL]: this.wrapRpcHandler<{ taskId: string }, any>(
-        RPC_METHODS.TASK_CANCEL, clientId, (data) => this.handleTaskCancel(data.taskId)
-      ),
-      
-      [RPC_METHODS.TASK_RETRY]: this.wrapRpcHandler<{ taskId: string }, any>(
-        RPC_METHODS.TASK_RETRY, clientId, (data) => this.handleTaskRetry(data.taskId)
-      ),
-      
-      [RPC_METHODS.TASK_DELETE]: this.wrapRpcHandler<{ taskId: string }, any>(
-        RPC_METHODS.TASK_DELETE, clientId, (data) => this.handleTaskDelete(data.taskId)
-      ),
-      
-      [RPC_METHODS.TASK_MARK_INSERTED]: this.wrapRpcHandler<{ taskId: string }, any>(
-        RPC_METHODS.TASK_MARK_INSERTED, clientId, (data) => this.handleTaskMarkInserted(data.taskId)
-      ),
-      
-      // 任务查询
-      [RPC_METHODS.TASK_GET]: this.wrapRpcHandler<{ taskId: string }, any>(
-        RPC_METHODS.TASK_GET, clientId, (data) => this.handleTaskGet(data.taskId)
-      ),
-      
-      // Note: TASK_LIST_PAGINATED 已移除，主线程直接从 IndexedDB 读取任务数据
-      // 这避免了 postMessage 的 1MB 大小限制问题
-      
-      // Chat
-      [RPC_METHODS.CHAT_START]: this.wrapRpcHandler<ChatStartParams, any>(
-        RPC_METHODS.CHAT_START, clientId, (data) => this.handleChatStart(clientId, data)
-      ),
-      
-      [RPC_METHODS.CHAT_STOP]: this.wrapRpcHandler<{ chatId: string }, any>(
-        RPC_METHODS.CHAT_STOP, clientId, (data) => this.handleChatStop(data.chatId)
-      ),
-      
-      [RPC_METHODS.CHAT_GET_CACHED]: this.wrapRpcHandler<{ chatId: string }, any>(
-        RPC_METHODS.CHAT_GET_CACHED, clientId, (data) => this.handleChatGetCached(data.chatId)
-      ),
-      
-      // Workflow
-      [RPC_METHODS.WORKFLOW_SUBMIT]: this.wrapRpcHandler<{ workflow: Workflow; config?: TaskConfig }, any>(
-        RPC_METHODS.WORKFLOW_SUBMIT, clientId, (data) => this.handleWorkflowSubmit(clientId, data)
-      ),
-      
-      [RPC_METHODS.WORKFLOW_CANCEL]: this.wrapRpcHandler<{ workflowId: string }, any>(
-        RPC_METHODS.WORKFLOW_CANCEL, clientId, (data) => this.handleWorkflowCancel(data.workflowId)
-      ),
-      
-      // Note: WORKFLOW_GET_STATUS 和 WORKFLOW_GET_ALL 已移除
-      // 主线程现在直接从 IndexedDB 读取工作流数据
-      
-      // 客户端声明接管工作流（用于页面刷新后恢复）
-      [RPC_METHODS.WORKFLOW_CLAIM]: this.wrapRpcHandler<{ workflowId: string }, any>(
-        RPC_METHODS.WORKFLOW_CLAIM, clientId, (data) => this.handleWorkflowClaim(clientId, data.workflowId)
-      ),
+      [RPC_METHODS.INIT]: async () => ({ success: true }),
+      [RPC_METHODS.TASK_CREATE]: async () => ({ success: false, error: 'Deprecated: use main thread executor' }),
+      [RPC_METHODS.TASK_CANCEL]: async () => ({ success: true }),
+      [RPC_METHODS.TASK_RETRY]: async () => ({ success: false, error: 'Deprecated' }),
+      [RPC_METHODS.TASK_DELETE]: async () => ({ success: true }),
+      [RPC_METHODS.TASK_MARK_INSERTED]: async () => ({ success: true }),
+      [RPC_METHODS.TASK_GET]: async () => ({ success: false, error: 'Deprecated' }),
+      [RPC_METHODS.CHAT_START]: async () => ({ success: false, error: 'Deprecated' }),
+      [RPC_METHODS.CHAT_STOP]: async () => ({ success: true }),
+      [RPC_METHODS.CHAT_GET_CACHED]: async () => ({ success: false }),
+      [RPC_METHODS.WORKFLOW_SUBMIT]: async () => ({ success: false, error: 'Deprecated: use main thread engine' }),
+      [RPC_METHODS.WORKFLOW_CANCEL]: async () => ({ success: true }),
+      [RPC_METHODS.WORKFLOW_CLAIM]: async () => ({ success: false }),
+      [RPC_METHODS.EXECUTOR_EXECUTE]: async () => ({ success: false, error: 'Deprecated' }),
+
+      // ============================================================================
+      // 仍然活跃的 RPC
+      // ============================================================================
       
       // Thumbnail (图片缩略图，由 SW 生成)
       [RPC_METHODS.THUMBNAIL_GENERATE]: this.wrapRpcHandler<ThumbnailGenerateParams, any>(
@@ -535,43 +496,27 @@ export class SWChannelManager {
         return this.handleConsoleReport(data);
       },
       
-      // Debug (无参数的方法不需要解包)
-      [RPC_METHODS.DEBUG_GET_STATUS]: async () => {
-        return this.handleDebugGetStatus();
-      },
-      [RPC_METHODS.DEBUG_ENABLE]: async () => {
-        return this.handleDebugEnable();
-      },
-      [RPC_METHODS.DEBUG_DISABLE]: async () => {
-        return this.handleDebugDisable();
-      },
+      // Debug
+      [RPC_METHODS.DEBUG_GET_STATUS]: async () => this.handleDebugGetStatus(),
+      [RPC_METHODS.DEBUG_ENABLE]: async () => this.handleDebugEnable(),
+      [RPC_METHODS.DEBUG_DISABLE]: async () => this.handleDebugDisable(),
       [RPC_METHODS.DEBUG_GET_LOGS]: async (rawData: any) => {
         const data = this.unwrapRpcData<{ limit?: number; offset?: number; filter?: Record<string, unknown> }>(rawData);
         return this.handleDebugGetLogs(data);
       },
-      [RPC_METHODS.DEBUG_CLEAR_LOGS]: async () => {
-        return this.handleDebugClearLogs();
-      },
+      [RPC_METHODS.DEBUG_CLEAR_LOGS]: async () => this.handleDebugClearLogs(),
       [RPC_METHODS.DEBUG_GET_CONSOLE_LOGS]: async (rawData: any) => {
         const data = this.unwrapRpcData<{ limit?: number; offset?: number; filter?: Record<string, unknown> }>(rawData);
         return this.handleDebugGetConsoleLogs(data);
       },
-      [RPC_METHODS.DEBUG_CLEAR_CONSOLE_LOGS]: async () => {
-        return this.handleDebugClearConsoleLogs();
-      },
+      [RPC_METHODS.DEBUG_CLEAR_CONSOLE_LOGS]: async () => this.handleDebugClearConsoleLogs(),
       [RPC_METHODS.DEBUG_GET_POSTMESSAGE_LOGS]: async (rawData: any) => {
         const data = this.unwrapRpcData<{ limit?: number; offset?: number; filter?: Record<string, unknown> }>(rawData);
         return this.handleDebugGetPostMessageLogs(data);
       },
-      [RPC_METHODS.DEBUG_CLEAR_POSTMESSAGE_LOGS]: async () => {
-        return this.handleDebugClearPostMessageLogs();
-      },
-      [RPC_METHODS.DEBUG_GET_CRASH_SNAPSHOTS]: async () => {
-        return this.handleDebugGetCrashSnapshots();
-      },
-      [RPC_METHODS.DEBUG_CLEAR_CRASH_SNAPSHOTS]: async () => {
-        return this.handleDebugClearCrashSnapshots();
-      },
+      [RPC_METHODS.DEBUG_CLEAR_POSTMESSAGE_LOGS]: async () => this.handleDebugClearPostMessageLogs(),
+      [RPC_METHODS.DEBUG_GET_CRASH_SNAPSHOTS]: async () => this.handleDebugGetCrashSnapshots(),
+      [RPC_METHODS.DEBUG_CLEAR_CRASH_SNAPSHOTS]: async () => this.handleDebugClearCrashSnapshots(),
       [RPC_METHODS.DEBUG_GET_LLM_API_LOGS]: async (rawData: any) => {
         const data = this.unwrapRpcData<{ page?: number; pageSize?: number; taskType?: string; status?: string }>(rawData);
         return this.handleDebugGetLLMApiLogs(data);
@@ -580,9 +525,7 @@ export class SWChannelManager {
         const data = this.unwrapRpcData<{ logId: string }>(rawData);
         return this.handleDebugGetLLMApiLogById(data?.logId);
       },
-      [RPC_METHODS.DEBUG_CLEAR_LLM_API_LOGS]: async () => {
-        return this.handleDebugClearLLMApiLogs();
-      },
+      [RPC_METHODS.DEBUG_CLEAR_LLM_API_LOGS]: async () => this.handleDebugClearLLMApiLogs(),
       [RPC_METHODS.DEBUG_DELETE_LLM_API_LOGS]: async (rawData: any) => {
         const data = this.unwrapRpcData<{ logIds: string[] }>(rawData);
         return this.handleDebugDeleteLLMApiLogs(data);
@@ -591,42 +534,29 @@ export class SWChannelManager {
         const data = this.unwrapRpcData<{ cacheName?: string; limit?: number; offset?: number }>(rawData);
         return this.handleDebugGetCacheEntries(data);
       },
-      [RPC_METHODS.DEBUG_GET_CACHE_STATS]: async () => {
-        return this.handleDebugGetCacheStats();
-      },
-      [RPC_METHODS.DEBUG_EXPORT_LOGS]: async () => {
-        return this.handleDebugExportLogs();
-      },
+      [RPC_METHODS.DEBUG_GET_CACHE_STATS]: async () => this.handleDebugGetCacheStats(),
+      [RPC_METHODS.DEBUG_EXPORT_LOGS]: async () => this.handleDebugExportLogs(),
+
       // CDN
-      [RPC_METHODS.CDN_GET_STATUS]: async () => {
-        return this.handleCDNGetStatus();
-      },
-      [RPC_METHODS.CDN_RESET_STATUS]: async () => {
-        return this.handleCDNResetStatus();
-      },
-      [RPC_METHODS.CDN_HEALTH_CHECK]: async () => {
-        return this.handleCDNHealthCheck();
-      },
+      [RPC_METHODS.CDN_GET_STATUS]: async () => this.handleCDNGetStatus(),
+      [RPC_METHODS.CDN_RESET_STATUS]: async () => this.handleCDNResetStatus(),
+      [RPC_METHODS.CDN_HEALTH_CHECK]: async () => this.handleCDNHealthCheck(),
+
       // Upgrade
-      [RPC_METHODS.UPGRADE_GET_STATUS]: async () => {
-        return this.handleUpgradeGetStatus();
-      },
-      [RPC_METHODS.UPGRADE_FORCE]: async () => {
-        return this.handleUpgradeForce();
-      },
+      [RPC_METHODS.UPGRADE_GET_STATUS]: async () => this.handleUpgradeGetStatus(),
+      [RPC_METHODS.UPGRADE_FORCE]: async () => this.handleUpgradeForce(),
+
       // Cache management
       [RPC_METHODS.CACHE_DELETE]: async (rawData: any) => {
         const data = this.unwrapRpcData<{ url: string }>(rawData);
         return this.handleCacheDelete(data);
       },
 
-      // Executor (媒体执行器 - SW 可选降级方案)
-      [RPC_METHODS.PING]: async () => {
-        return this.handlePing();
-      },
-      [RPC_METHODS.EXECUTOR_EXECUTE]: this.wrapRpcHandler<ExecutorExecuteParams, any>(
-        RPC_METHODS.EXECUTOR_EXECUTE, clientId, (data) => this.handleExecutorExecute(clientId, data)
-      ),
+      // Ping
+      [RPC_METHODS.PING]: async () => this.handlePing(),
+
+      // Fetch Relay (轻量级 fetch 代理 - 核心功能)
+      ...createFetchRelaySubscribeMap(clientId, () => this.ensureChannel(clientId)),
     };
   }
 

@@ -53,17 +53,25 @@ export class WorkflowEngine {
    * 提交工作流
    */
   async submitWorkflow(workflow: Workflow): Promise<void> {
+    console.log('[WorkflowEngine] submitWorkflow 入口, id:', workflow.id, 'steps:', workflow.steps.length);
+
     // 保存到内存
     this.workflows.set(workflow.id, workflow);
 
-    // 保存到 IndexedDB
-    await workflowStorageWriter.saveWorkflow(workflow);
+    // 保存到 IndexedDB（降级模式下可能失败，不阻塞执行）
+    try {
+      await workflowStorageWriter.saveWorkflow(workflow);
+      console.log('[WorkflowEngine] submitWorkflow: IDB 保存完成');
+    } catch (e) {
+      console.warn('[WorkflowEngine] submitWorkflow: IDB 保存失败，继续执行:', e);
+    }
 
     // 创建取消控制器
     const abortController = new AbortController();
     this.abortControllers.set(workflow.id, abortController);
 
     // 异步执行工作流
+    console.log('[WorkflowEngine] submitWorkflow: 开始异步执行工作流');
     this.executeWorkflow(workflow.id).catch((error) => {
       console.error(`[WorkflowEngine] Workflow ${workflow.id} execution error:`, error);
     });
@@ -147,8 +155,12 @@ export class WorkflowEngine {
    * 执行工作流
    */
   private async executeWorkflow(workflowId: string): Promise<void> {
+    console.log('[WorkflowEngine] executeWorkflow 开始, id:', workflowId);
     const workflow = this.workflows.get(workflowId);
-    if (!workflow) return;
+    if (!workflow) {
+      console.warn('[WorkflowEngine] executeWorkflow: 工作流不存在:', workflowId);
+      return;
+    }
 
     const abortController = this.abortControllers.get(workflowId);
 
@@ -156,8 +168,13 @@ export class WorkflowEngine {
       // 更新状态为 running
       workflow.status = 'running';
       workflow.updatedAt = Date.now();
-      await workflowStorageWriter.saveWorkflow(workflow);
+      try {
+        await workflowStorageWriter.saveWorkflow(workflow);
+      } catch (e) {
+        console.warn('[WorkflowEngine] executeWorkflow: IDB 保存失败，继续:', e);
+      }
 
+      console.log('[WorkflowEngine] executeWorkflow: 状态已更新为 running');
       this.emitEvent({
         type: 'status',
         workflowId,
@@ -250,6 +267,7 @@ export class WorkflowEngine {
     step: WorkflowStep,
     signal?: AbortSignal
   ): Promise<void> {
+    console.log('[WorkflowEngine] executeStep 开始:', step.mcp, 'stepId:', step.id);
     const startTime = Date.now();
 
     // 更新步骤状态为 running
@@ -313,9 +331,11 @@ export class WorkflowEngine {
     step: WorkflowStep,
     signal?: AbortSignal
   ): Promise<void> {
+    console.log('[WorkflowEngine] executeToolStep:', step.mcp, 'stepId:', step.id, 'forceFallback:', this.options.forceFallbackExecutor);
     const executor = this.options.forceFallbackExecutor
       ? executorFactory.getFallbackExecutor()
       : await executorFactory.getExecutor();
+    console.log('[WorkflowEngine] executeToolStep: 获取到执行器');
     const taskId = step.id; // 使用步骤 ID 作为任务 ID
 
     // 根据工具类型执行

@@ -1,8 +1,9 @@
 /**
- * Fallback Media Executor
+ * Media Executor (Main Thread)
  *
- * 主线程降级执行器，当 SW 不可用时在主线程直接执行媒体生成任务。
- * 直接调用 API 并将结果写入 IndexedDB。
+ * 主线程媒体执行器，直接调用 API 并将结果写入 IndexedDB。
+ * 这是主执行器（不再是降级备选），所有任务在主线程执行。
+ * API 请求通过 Fetch Relay 代理，页面关闭后 SW 继续执行。
  */
 
 import type {
