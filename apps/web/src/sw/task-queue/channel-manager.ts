@@ -18,10 +18,10 @@ import {
   getAllLogs as getAllPostMessageLogs,
 } from './postmessage-logger';
 import { withTimeout } from './utils/timeout-utils';
+import { RPC_METHODS, SW_EVENTS } from './channel-manager/constants';
 
 // 从 channel-manager 模块导入常量
 export { RPC_METHODS, SW_EVENTS } from './channel-manager/constants';
-import { RPC_METHODS, SW_EVENTS } from './channel-manager/constants';
 
 // ============================================================================
 // 类型定义
@@ -486,7 +486,7 @@ export class SWChannelManager {
    * 请求视频缩略图生成
    * 使用 publish 直接向主线程发起请求并等待响应（双工通讯）
    */
-  async requestVideoThumbnail(url: string, timeoutMs: number = 30000): Promise<string | null> {
+  async requestVideoThumbnail(url: string, timeoutMs = 30000): Promise<string | null> {
     // 找到一个可用的 channel 来发送请求
     const clientChannel = this.channels.values().next().value as ClientChannel | undefined;
     if (!clientChannel) {

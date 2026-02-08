@@ -390,7 +390,7 @@ export const WorkZoneTransforms = {
    * WorkZone 是临时的 AI 生成面板，不应该被撤销恢复
    */
   insertWorkZone(board: PlaitBoard, options: WorkZoneCreateOptions): PlaitWorkZone {
-    const { workflow, position, size = DEFAULT_WORKZONE_SIZE, expectedInsertPosition, zoom } = options;
+    const { workflow, position, size = DEFAULT_WORKZONE_SIZE, expectedInsertPosition, targetFrameId, targetFrameDimensions, zoom } = options;
 
     const workzoneElement: PlaitWorkZone = {
       id: generateId(),
@@ -400,6 +400,8 @@ export const WorkZoneTransforms = {
       workflow,
       createdAt: Date.now(),
       expectedInsertPosition,
+      targetFrameId,
+      targetFrameDimensions,
       zoom,
     };
 

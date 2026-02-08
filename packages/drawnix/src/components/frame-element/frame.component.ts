@@ -64,10 +64,23 @@ export class FrameComponent
     value: PlaitPluginElementContext<PlaitFrame, PlaitBoard>,
     previous: PlaitPluginElementContext<PlaitFrame, PlaitBoard>
   ): void {
+    // 检查 viewport (zoom/scroll) 是否改变
+    const viewportChanged =
+      value.board.viewport.zoom !== previous.board.viewport.zoom ||
+      value.board.viewport.offsetX !== previous.board.viewport.offsetX ||
+      value.board.viewport.offsetY !== previous.board.viewport.offsetY;
+
     if (value.element !== previous.element || value.hasThemeChanged) {
       if (this.renderedG) {
         this.frameGenerator.updateDrawing(this.element, this.renderedG);
       }
+      this.activeGenerator.processDrawing(
+        this.element,
+        PlaitBoard.getActiveHost(this.board),
+        { selected: this.selected }
+      );
+    } else if (viewportChanged && value.selected) {
+      // viewport 改变且元素被选中时，更新选择框位置
       this.activeGenerator.processDrawing(
         this.element,
         PlaitBoard.getActiveHost(this.board),

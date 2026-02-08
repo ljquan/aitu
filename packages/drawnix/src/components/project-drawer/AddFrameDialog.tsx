@@ -6,6 +6,7 @@
 
 import React, { useState, useCallback, useMemo } from 'react';
 import { Dialog, Button, InputNumber } from 'tdesign-react';
+import { AddIcon } from 'tdesign-icons-react';
 import { PlaitBoard, RectangleClient, Point, addSelectedElement, clearSelectedElement, BoardTransforms } from '@plait/core';
 import { PRESET_SIZES, PresetSize } from '../../constants/frame-presets';
 import { FrameTransforms } from '../../plugins/with-frame';
@@ -89,11 +90,51 @@ export const AddFrameDialog: React.FC<AddFrameDialogProps> = ({
   const finalWidth = selectedPreset ? selectedPreset.width : customWidth;
   const finalHeight = selectedPreset ? selectedPreset.height : customHeight;
 
-  const handlePresetClick = useCallback((preset: PresetSize) => {
-    setSelectedPreset(preset);
-    setCustomWidth(preset.width);
-    setCustomHeight(preset.height);
-  }, []);
+  const addFrame = useCallback(
+    (w: number, h: number) => {
+      if (!board) return;
+      if (w <= 0 || h <= 0) return;
+
+      const topLeft = calcNewFramePosition(board, w, h);
+      const points: [Point, Point] = [topLeft, [topLeft[0] + w, topLeft[1] + h]];
+      const frame = FrameTransforms.insertFrame(board, points);
+
+      // 选中并聚焦
+      clearSelectedElement(board);
+      const el = board.children.find((c) => c.id === frame.id);
+      if (el) addSelectedElement(board, el);
+
+      const container = PlaitBoard.getBoardContainer(board);
+      const vw = container.clientWidth;
+      const vh = container.clientHeight;
+      const padding = 80;
+      const scaleX = vw / (w + padding * 2);
+      const scaleY = vh / (h + padding * 2);
+      const zoom = Math.min(scaleX, scaleY, 2);
+      const cx = topLeft[0] + w / 2;
+      const cy = topLeft[1] + h / 2;
+      const origination: [number, number] = [
+        cx - vw / 2 / zoom,
+        cy - vh / 2 / zoom,
+      ];
+      BoardTransforms.updateViewport(board, origination, zoom);
+
+      onFrameAdded?.(frame);
+      onClose();
+    },
+    [board, onFrameAdded, onClose]
+  );
+
+  const handlePresetClick = useCallback(
+    (preset: PresetSize) => {
+      addFrame(preset.width, preset.height);
+    },
+    [addFrame]
+  );
+
+  const handleCustomAdd = useCallback(() => {
+    addFrame(customWidth, customHeight);
+  }, [addFrame, customWidth, customHeight]);
 
   const handleCustomChange = useCallback(() => {
     setSelectedPreset(null);
@@ -104,48 +145,12 @@ export const AddFrameDialog: React.FC<AddFrameDialogProps> = ({
     return `${selectedPreset.width}x${selectedPreset.height}`;
   }, [selectedPreset]);
 
-  const handleConfirm = useCallback(() => {
-    if (!board) return;
-    const w = finalWidth;
-    const h = finalHeight;
-    if (w <= 0 || h <= 0) return;
-
-    const topLeft = calcNewFramePosition(board, w, h);
-    const points: [Point, Point] = [topLeft, [topLeft[0] + w, topLeft[1] + h]];
-    const frame = FrameTransforms.insertFrame(board, points);
-
-    // 选中并聚焦
-    clearSelectedElement(board);
-    const el = board.children.find((c) => c.id === frame.id);
-    if (el) addSelectedElement(board, el);
-
-    const container = PlaitBoard.getBoardContainer(board);
-    const vw = container.clientWidth;
-    const vh = container.clientHeight;
-    const padding = 80;
-    const scaleX = vw / (w + padding * 2);
-    const scaleY = vh / (h + padding * 2);
-    const zoom = Math.min(scaleX, scaleY, 2);
-    const cx = topLeft[0] + w / 2;
-    const cy = topLeft[1] + h / 2;
-    const origination: [number, number] = [
-      cx - vw / 2 / zoom,
-      cy - vh / 2 / zoom,
-    ];
-    BoardTransforms.updateViewport(board, origination, zoom);
-
-    onFrameAdded?.(frame);
-    onClose();
-  }, [board, finalWidth, finalHeight, onFrameAdded, onClose]);
-
   return (
     <Dialog
       header="添加 Frame"
       visible={visible}
       onClose={onClose}
-      onConfirm={handleConfirm}
-      confirmBtn="添加"
-      cancelBtn="取消"
+      footer={null}
       width={480}
       destroyOnClose
     >
@@ -180,9 +185,9 @@ export const AddFrameDialog: React.FC<AddFrameDialogProps> = ({
           ))}
         </div>
 
-        <div className="add-frame-dialog__custom">
-          <div className="add-frame-dialog__custom-label">自定义尺寸</div>
-          <div className="add-frame-dialog__custom-inputs">
+        <div className="add-frame-dialog__footer">
+          <div className="add-frame-dialog__custom-section">
+            <span className="add-frame-dialog__custom-label">自定义</span>
             <div className="add-frame-dialog__input-group">
               <span className="add-frame-dialog__input-label">W</span>
               <InputNumber
@@ -191,10 +196,12 @@ export const AddFrameDialog: React.FC<AddFrameDialogProps> = ({
                   setCustomWidth(v as number);
                   handleCustomChange();
                 }}
+                onEnter={handleCustomAdd}
                 min={10}
                 max={10000}
                 theme="normal"
                 size="small"
+                style={{ width: 68 }}
               />
             </div>
             <span className="add-frame-dialog__input-sep">×</span>
@@ -206,17 +213,28 @@ export const AddFrameDialog: React.FC<AddFrameDialogProps> = ({
                   setCustomHeight(v as number);
                   handleCustomChange();
                 }}
+                onEnter={handleCustomAdd}
                 min={10}
                 max={10000}
                 theme="normal"
                 size="small"
+                style={{ width: 68 }}
               />
             </div>
+            <Button 
+              theme="primary" 
+              variant="text" 
+              shape="square" 
+              size="small"
+              icon={<AddIcon />} 
+              onClick={handleCustomAdd}
+              title="添加自定义尺寸 Frame"
+            />
           </div>
-        </div>
-
-        <div className="add-frame-dialog__hint">
-          <kbd>F</kbd> 也可以在画布上直接绘制 Frame
+          
+          <div className="add-frame-dialog__hint">
+            <kbd>F</kbd> 直接绘制
+          </div>
         </div>
       </div>
     </Dialog>

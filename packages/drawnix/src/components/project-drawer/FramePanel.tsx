@@ -5,7 +5,9 @@
  * 支持点击聚焦到对应 Frame 视图
  */
 
-import React, { useMemo, useCallback, useState } from 'react';
+import React, { useMemo, useCallback, useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
+import classNames from 'classnames';
 import { Input, Button, MessagePlugin, Tooltip } from 'tdesign-react';
 import { SearchIcon, EditIcon, DeleteIcon, ViewListIcon, AddIcon, PlayCircleIcon } from 'tdesign-icons-react';
 import {
@@ -15,10 +17,12 @@ import {
   Transforms,
   clearSelectedElement,
   addSelectedElement,
+  getSelectedElements,
 } from '@plait/core';
 import { PlaitFrame, isFrameElement } from '../../types/frame.types';
 import { FrameTransforms } from '../../plugins/with-frame';
 import { useDrawnix } from '../../hooks/use-drawnix';
+import { useDragSort } from '../../hooks/use-drag-sort';
 import { AddFrameDialog } from './AddFrameDialog';
 import { FrameSlideshow } from './FrameSlideshow';
 
@@ -37,6 +41,13 @@ export const FramePanel: React.FC = () => {
   const [selectedFrameId, setSelectedFrameId] = useState<string | null>(null);
   const [addDialogVisible, setAddDialogVisible] = useState(false);
   const [slideshowVisible, setSlideshowVisible] = useState(false);
+  const [slideshowInitialFrameId, setSlideshowInitialFrameId] = useState<string | undefined>();
+  const [contextMenu, setContextMenu] = useState<{
+    visible: boolean;
+    x: number;
+    y: number;
+    frame: PlaitFrame;
+  } | null>(null);
 
   // 收集画布中的所有 Frame 及其信息
   const frames: FrameInfo[] = useMemo(() => {
@@ -67,6 +78,14 @@ export const FramePanel: React.FC = () => {
       f.frame.name.toLowerCase().includes(query)
     );
   }, [frames, searchQuery]);
+
+  const frameIndexMap = useMemo(() => {
+    const map = new Map<string, number>();
+    frames.forEach((item, index) => {
+      map.set(item.frame.id, index);
+    });
+    return map;
+  }, [frames]);
 
   // 点击 Frame：选中并聚焦视图
   const handleFrameClick = useCallback(
@@ -137,8 +156,8 @@ export const FramePanel: React.FC = () => {
 
   // 删除 Frame
   const handleDelete = useCallback(
-    (frame: PlaitFrame, e: React.MouseEvent) => {
-      e.stopPropagation();
+    (frame: PlaitFrame, e?: React.MouseEvent) => {
+      e?.stopPropagation();
       if (!board) return;
       const index = board.children.findIndex((el) => el.id === frame.id);
       if (index !== -1) {
@@ -153,6 +172,91 @@ export const FramePanel: React.FC = () => {
       }
     },
     [board]
+  );
+
+  const reorderFrames = useCallback(
+    (fromIndex: number, toIndex: number) => {
+      if (!board) return;
+
+      const framePositions: number[] = [];
+      const orderedFrames: PlaitFrame[] = [];
+
+      board.children.forEach((element, index) => {
+        if (isFrameElement(element)) {
+          framePositions.push(index);
+          orderedFrames.push(element as PlaitFrame);
+        }
+      });
+
+      if (framePositions.length <= 1) return;
+
+      const nextFrames = [...orderedFrames];
+      const [moved] = nextFrames.splice(fromIndex, 1);
+      nextFrames.splice(toIndex, 0, moved);
+
+      for (let i = framePositions.length - 1; i >= 0; i -= 1) {
+        Transforms.removeNode(board, [framePositions[i]]);
+      }
+
+      for (let i = 0; i < framePositions.length; i += 1) {
+        Transforms.insertNode(board, nextFrames[i], [framePositions[i]]);
+      }
+    },
+    [board]
+  );
+
+  const { getDragProps } = useDragSort({
+    items: frames,
+    getId: (item) => item.frame.id,
+    onReorder: reorderFrames,
+    enabled: !searchQuery.trim(),
+  });
+
+  const closeContextMenu = useCallback(() => {
+    setContextMenu(null);
+  }, []);
+
+  useEffect(() => {
+    if (contextMenu?.visible) {
+      const handleClick = () => closeContextMenu();
+      document.addEventListener('click', handleClick);
+      document.addEventListener('contextmenu', handleClick);
+      return () => {
+        document.removeEventListener('click', handleClick);
+        document.removeEventListener('contextmenu', handleClick);
+      };
+    }
+  }, [contextMenu?.visible, closeContextMenu]);
+
+  const handleContextMenu = useCallback(
+    (e: React.MouseEvent, frame: PlaitFrame) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setSelectedFrameId(frame.id);
+      setContextMenu({
+        visible: true,
+        x: e.clientX,
+        y: e.clientY,
+        frame,
+      });
+    },
+    []
+  );
+
+  const handleContextMenuAction = useCallback(
+    (action: 'rename' | 'delete') => {
+      if (!contextMenu) return;
+      const frame = contextMenu.frame;
+      if (action === 'rename') {
+        setEditingId(frame.id);
+        setEditingName(frame.name);
+      }
+      if (action === 'delete') {
+        handleDelete(frame);
+      }
+      closeContextMenu();
+    },
+    [contextMenu, handleDelete, closeContextMenu]
   );
 
   if (!board) {
@@ -192,7 +296,13 @@ export const FramePanel: React.FC = () => {
             size="small"
             icon={<PlayCircleIcon />}
             disabled={frames.length === 0}
-            onClick={() => setSlideshowVisible(true)}
+            onClick={() => {
+              // 检测画布当前选中的 Frame，作为幻灯片起始页
+              const selected = getSelectedElements(board);
+              const selectedFrame = selected.find((el) => isFrameElement(el));
+              setSlideshowInitialFrameId(selectedFrame?.id);
+              setSlideshowVisible(true);
+            }}
           >
             幻灯片播放
           </Button>
@@ -213,10 +323,22 @@ export const FramePanel: React.FC = () => {
       ) : (
         <div className="frame-panel__list">
           {filteredFrames.map((info) => (
+            (() => {
+              const index = frameIndexMap.get(info.frame.id) ?? 0;
+              const dragProps = getDragProps(info.frame.id, index);
+              return (
             <div
               key={info.frame.id}
-              className={`frame-panel__item${selectedFrameId === info.frame.id ? ' frame-panel__item--active' : ''}`}
+              className={classNames('frame-panel__item', {
+                'frame-panel__item--active': selectedFrameId === info.frame.id,
+                'frame-panel__item--dragging': dragProps['data-dragging'],
+                'frame-panel__item--drag-over': dragProps['data-drag-over'],
+                'frame-panel__item--drag-before': dragProps['data-drag-position'] === 'before',
+                'frame-panel__item--drag-after': dragProps['data-drag-position'] === 'after',
+              })}
               onClick={() => handleFrameClick(info.frame)}
+              onContextMenu={(e) => handleContextMenu(e, info.frame)}
+              {...dragProps}
             >
               <div className="frame-panel__item-icon">
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -240,10 +362,10 @@ export const FramePanel: React.FC = () => {
                     value={editingName}
                     onChange={setEditingName}
                     size="small"
-                    autoFocus
+                    autofocus
                     onBlur={() => handleFinishRename(info.frame)}
                     onEnter={() => handleFinishRename(info.frame)}
-                    onClick={(e) => e.stopPropagation()}
+                    onClick={(context: { e: React.MouseEvent }) => context.e.stopPropagation()}
                   />
                 ) : (
                   <>
@@ -278,8 +400,33 @@ export const FramePanel: React.FC = () => {
                 />
               </div>
             </div>
+              );
+            })()
           ))}
         </div>
+      )}
+
+      {contextMenu?.visible && createPortal(
+        <div
+          className="project-drawer-context-menu"
+          style={{
+            position: 'fixed',
+            left: contextMenu.x,
+            top: contextMenu.y,
+            zIndex: 10000,
+          }}
+        >
+          <div className="project-drawer-context-menu__item" onClick={() => handleContextMenuAction('rename')}>
+            <EditIcon />
+            <span>重命名</span>
+          </div>
+          <div className="project-drawer-context-menu__divider" />
+          <div className="project-drawer-context-menu__item project-drawer-context-menu__item--danger" onClick={() => handleContextMenuAction('delete')}>
+            <DeleteIcon />
+            <span>删除</span>
+          </div>
+        </div>,
+        document.body
       )}
 
       {/* 添加 Frame 弹窗 */}
@@ -293,7 +440,11 @@ export const FramePanel: React.FC = () => {
       <FrameSlideshow
         visible={slideshowVisible}
         board={board}
-        onClose={() => setSlideshowVisible(false)}
+        initialFrameId={slideshowInitialFrameId}
+        onClose={() => {
+          setSlideshowVisible(false);
+          setSlideshowInitialFrameId(undefined);
+        }}
       />
     </div>
   );

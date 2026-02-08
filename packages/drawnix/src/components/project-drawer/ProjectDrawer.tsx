@@ -1407,26 +1407,6 @@ export const ProjectDrawer: React.FC<ProjectDrawerProps> = ({
     return tree.map(filterNode).filter((n): n is TreeNode => n !== null);
   }, [tree, searchQuery]);
 
-  // Header actions (only for boards tab)
-  const headerActions = activeTab === 'boards' ? (
-    <>
-      <Button
-        variant="text"
-        size="small"
-        icon={<AddIcon />}
-        onClick={() => handleCreateBoard()}
-        title="新建画板"
-      />
-      <Button
-        variant="text"
-        size="small"
-        icon={<FolderAddIcon />}
-        onClick={() => handleCreateFolder()}
-        title="新建文件夹"
-      />
-    </>
-  ) : null;
-
   // Tab switcher + filter section
   const tabSwitcher = (
     <div className="project-drawer-tabs">
@@ -1459,6 +1439,24 @@ export const ProjectDrawer: React.FC<ProjectDrawerProps> = ({
             prefixIcon={<SearchIcon />}
             size="small"
           />
+          <div className="project-drawer__actions">
+            <Button
+              variant="outline"
+              size="small"
+              icon={<AddIcon />}
+              onClick={() => handleCreateBoard()}
+            >
+              新建画板
+            </Button>
+            <Button
+              variant="outline"
+              size="small"
+              icon={<FolderAddIcon />}
+              onClick={() => handleCreateFolder()}
+            >
+              新建目录
+            </Button>
+          </div>
           {selectedBoardIds.size > 0 && (
             <div className="project-drawer__selection-bar">
               <span className="project-drawer__selection-count">
@@ -1526,7 +1524,6 @@ export const ProjectDrawer: React.FC<ProjectDrawerProps> = ({
         isOpen={isOpen}
         onClose={handleClose}
         title="项目"
-        headerActions={headerActions}
         filterSection={filterSection}
         footer={footerSection}
         position="toolbar-right"

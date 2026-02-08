@@ -115,7 +115,7 @@ export function App() {
           
           // 查找已有的安全模式画板（名称以 "安全模式" 开头且元素为空）
           const allBoards = workspaceService.getAllBoards();
-          let safeModeBoard = allBoards.find(
+          const safeModeBoard = allBoards.find(
             b => b.name.startsWith('安全模式') && (!b.elements || b.elements.length === 0)
           );
           

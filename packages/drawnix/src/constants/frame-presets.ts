@@ -19,6 +19,14 @@ export interface PresetCategory {
 
 export const PRESET_SIZES: PresetCategory[] = [
   {
+    category: '演示文稿',
+    categoryEn: 'Presentation',
+    items: [
+      { label: 'PPT 16:9', labelEn: 'PPT 16:9', width: 1920, height: 1080 },
+      { label: 'PPT 4:3', labelEn: 'PPT 4:3', width: 1024, height: 768 },
+    ],
+  },
+  {
     category: '手机屏幕',
     categoryEn: 'Phone',
     items: [
@@ -33,14 +41,6 @@ export const PRESET_SIZES: PresetCategory[] = [
     items: [
       { label: 'iPad', labelEn: 'iPad', width: 768, height: 1024 },
       { label: 'iPad Pro 12.9"', labelEn: 'iPad Pro 12.9"', width: 1024, height: 1366 },
-    ],
-  },
-  {
-    category: '演示文稿',
-    categoryEn: 'Presentation',
-    items: [
-      { label: 'PPT 16:9', labelEn: 'PPT 16:9', width: 1920, height: 1080 },
-      { label: 'PPT 4:3', labelEn: 'PPT 4:3', width: 1024, height: 768 },
     ],
   },
   {

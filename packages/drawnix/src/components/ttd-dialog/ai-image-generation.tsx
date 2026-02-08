@@ -37,6 +37,9 @@ interface AIImageGenerationProps {
   initialWidth?: number;
   initialHeight?: number;
   initialResultUrl?: string;
+  initialAspectRatio?: string;
+  targetFrameId?: string;
+  targetFrameDimensions?: { width: number; height: number };
   selectedModel?: string;
   onModelChange?: (value: string) => void;
 }
@@ -48,13 +51,16 @@ const AIImageGeneration = ({
   initialWidth,
   initialHeight,
   initialResultUrl,
+  initialAspectRatio,
+  targetFrameId,
+  targetFrameDimensions,
   selectedModel,
   onModelChange,
 }: AIImageGenerationProps = {}) => {
   const [prompt, setPrompt] = useState(initialPrompt);
   const [width, setWidth] = useState<number | string>(initialWidth || 1024);
   const [height, setHeight] = useState<number | string>(initialHeight || 1024);
-  const [aspectRatio, setAspectRatio] = useState<string>(DEFAULT_ASPECT_RATIO);
+  const [aspectRatio, setAspectRatio] = useState<string>(initialAspectRatio || DEFAULT_ASPECT_RATIO);
   const [error, setError] = useState<string | null>(null);
   const [uploadedImages, setUploadedImages] =
     useState<ReferenceImage[]>(initialImages);
@@ -100,6 +106,7 @@ const AIImageGeneration = ({
       width: initialWidth,
       height: initialHeight,
       result: initialResultUrl,
+      aspectRatio: initialAspectRatio,
     });
 
     // Skip if we've already processed these exact props
@@ -116,6 +123,8 @@ const AIImageGeneration = ({
     setUploadedImages(initialImages || []);
     if (initialWidth) setWidth(initialWidth);
     if (initialHeight) setHeight(initialHeight);
+    // 如果有 Frame 匹配的宽高比，自动设置
+    if (initialAspectRatio) setAspectRatio(initialAspectRatio);
   }, [
     initialPrompt,
     initialImages,
@@ -123,6 +132,7 @@ const AIImageGeneration = ({
     initialWidth,
     initialHeight,
     initialResultUrl,
+    initialAspectRatio,
     isManualEdit,
   ]);
 
@@ -285,6 +295,8 @@ const AIImageGeneration = ({
             batchIndex: i + 1,
             batchTotal: count,
             autoInsertToCanvas: true,
+            targetFrameId,
+            targetFrameDimensions,
           };
 
           const task = createTask(taskParams, TaskType.IMAGE);
@@ -336,6 +348,8 @@ const AIImageGeneration = ({
         batchId: `image_single_${Date.now()}`,
         batchIndex: 1,
         batchTotal: 1,
+        targetFrameId,
+        targetFrameDimensions,
       };
 
       // 创建任务并添加到队列

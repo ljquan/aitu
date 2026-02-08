@@ -13,7 +13,7 @@ import { DEFAULT_RECURSION_GUARD_CONFIG } from './types';
  */
 export class RecursionGuard {
   private config: RecursionGuardConfig;
-  private currentIteration: number = 0;
+  private currentIteration = 0;
 
   constructor(config: Partial<RecursionGuardConfig> = {}) {
     this.config = { ...DEFAULT_RECURSION_GUARD_CONFIG, ...config };

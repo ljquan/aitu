@@ -2495,7 +2495,7 @@ sw.addEventListener('fetch', (event: FetchEvent) => {
           // 克隆请求以读取 body
           const requestClone = event.request.clone();
           let requestBody: string | undefined;
-          let requestHeaders: Record<string, string> = {};
+          const requestHeaders: Record<string, string> = {};
 
           // 提取请求头
           event.request.headers.forEach((value, key) => {
@@ -3934,7 +3934,7 @@ async function handleImageRequestInternal(
   requestUrl: string,
   dedupeKey: string,
   requestId: string,
-  bypassCache: boolean = false,
+  bypassCache = false,
   requestedThumbnailSize?: 'small' | 'large'
 ): Promise<Response> {
   try {
@@ -4047,7 +4047,7 @@ async function handleImageRequestInternal(
 
     // 尝试多种获取方式，每种方式都支持重试和域名切换
     let response;
-    let fetchOptions = [
+    const fetchOptions = [
       // 1. 优先尝试cors模式（可以缓存响应）
       {
         method: 'GET',
@@ -4095,7 +4095,7 @@ async function handleImageRequestInternal(
         // console.log(`Service Worker [${requestId}]: 原始URL失败，尝试备用域名:`, currentUrl);
       }
 
-      for (let options of fetchOptions) {
+      for (const options of fetchOptions) {
         try {
           // console.log(`Service Worker [${requestId}]: Trying fetch with options (${isUsingFallback ? 'fallback' : 'original'} URL, mode: ${options.mode || 'default'}):`, options);
 

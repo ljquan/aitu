@@ -13,22 +13,15 @@
 // ============================================================================
 
 // Re-export all core types from shared module
-export * from '../../../../../packages/drawnix/src/types/shared/core.types';
-
 // Import types for use in this file
 // Note: TaskType is an enum used as a value, so it cannot be type-only import
 import {
   TaskType,
 } from '../../../../../packages/drawnix/src/types/shared/core.types';
 
-import type {
-  ChatToolCall,
-  GenerationParams,
-  TaskResult,
-  TaskError,
-  TaskStatus,
-  TaskExecutionPhase,
-} from '../../../../../packages/drawnix/src/types/shared/core.types';
+import { TaskStatus } from '@drawnix/drawnix';
+
+export * from '../../../../../packages/drawnix/src/types/shared/core.types';
 
 // ============================================================================
 // Task Config

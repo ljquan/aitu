@@ -715,6 +715,39 @@ export function findUnsupportedElementsInPath(
 }
 
 /**
+ * 查找橡皮擦路径上不支持精确擦除的元素（用于直接删除）
+ */
+export function findUnsupportedElementsInEraserPath(
+  board: PlaitBoard,
+  eraserPath: Point[],
+  eraserWidth: number
+): PlaitElement[] {
+  if (eraserPath.length < 2) return [];
+
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const p of eraserPath) {
+    minX = Math.min(minX, p[0] - eraserWidth);
+    minY = Math.min(minY, p[1] - eraserWidth);
+    maxX = Math.max(maxX, p[0] + eraserWidth);
+    maxY = Math.max(maxY, p[1] + eraserWidth);
+  }
+
+  const result: PlaitElement[] = [];
+  for (const element of board.children) {
+    const elementRect = getElementBoundingBox(element);
+    if (!elementRect) continue;
+
+    const { x: ex, y: ey, width: ew, height: eh } = elementRect;
+    if (ex + ew >= minX && ex <= maxX && ey + eh >= minY && ey <= maxY) {
+      if (getUnsupportedEraseReason(element)) {
+        result.push(element);
+      }
+    }
+  }
+  return result;
+}
+
+/**
  * 执行精确擦除操作
  * @param board 画板
  * @param eraserPath 橡皮擦路径点

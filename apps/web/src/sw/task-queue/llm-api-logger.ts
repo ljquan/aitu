@@ -218,8 +218,8 @@ function compactLog(log: LLMApiLog): Partial<LLMApiLog> {
  * @param filter 过滤条件
  */
 export async function getLLMApiLogsPaginated(
-  page: number = 1, 
-  pageSize: number = 20,
+  page = 1, 
+  pageSize = 20,
   filter?: { taskType?: string; status?: string }
 ): Promise<{
   logs: Partial<LLMApiLog>[];

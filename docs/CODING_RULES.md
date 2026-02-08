@@ -16,6 +16,7 @@
 - [Service Worker 规范](#service-worker-规范)
 - [缓存与存储规范](#缓存与存储规范)
 - [API 与任务处理规范](#api-与任务处理规范)
+- [Plait 插件规范](#plait-插件规范)
 - [UI 交互规范](#ui-交互规范)
 - [E2E 测试规范](#e2e-测试规范)
 - [数据安全规范](#数据安全规范)
@@ -2719,6 +2720,31 @@ const isActive = board.pointer === FreehandShape.laserPointer;
 3. 快捷键切换（V/H/L/E 等）只需更新 pointer 一处
 4. 插件中通过 `PlaitBoard.isPointer(board, xxx)` 判断是否激活，逻辑清晰
 
+### Pointer 双更新：board 和 React context 必须同步
+
+**场景**: 切换或恢复工具 pointer 时，只更新了 Plait board 的 pointer 而忘记更新 React context（`appState.pointer`），导致 UI 状态残留（如橡皮擦工具栏在退出幻灯片后仍然显示）
+
+❌ **错误示例**:
+```typescript
+// 退出幻灯片时只恢复了 board pointer
+const handleClose = () => {
+  BoardTransforms.updatePointerType(board, savedPointer);
+  // 遗漏：React context 中的 appState.pointer 仍是 FreehandShape.eraser
+  // 橡皮擦工具栏判断 appState.pointer === FreehandShape.eraser 仍为 true
+};
+```
+
+✅ **正确示例**:
+```typescript
+// 同时更新 board 和 React context
+const handleClose = () => {
+  BoardTransforms.updatePointerType(board, savedPointer);
+  setPointer(savedPointer);  // 同步更新 React context
+};
+```
+
+**原因**: Pointer 状态存在于两层：Plait board（`board.pointer`）和 React context（`appState.pointer`）。UI 组件（如橡皮擦工具栏）依赖 React context 判断显隐，只更新 board 不会触发 React 重渲染，导致 UI 与实际状态不一致。任何修改 pointer 的地方都必须同时调用 `BoardTransforms.updatePointerType` 和 `setPointer`。
+
 ### Plait 选中状态渲染触发
 
 **场景**: 在异步回调（如 `setTimeout`）中使用 `addSelectedElement` 选中元素时
@@ -2842,6 +2868,97 @@ const elementRect = getRectangleByElements(board, [element], false);
 - `PlaitElement.getElementG(element)` - 注意这个不需要 board
 
 **原因**: Plait 的大多数工具函数需要 board 作为上下文，用于访问视口、缩放比例等信息。漏掉 board 参数会导致运行时错误，且错误信息可能难以理解（如将 elements 数组误认为 board 对象导致的方法调用错误）。
+
+### 交互插件必须覆盖所有元素类型
+
+**场景**: 橡皮擦、选择、拖拽等交互插件只处理了部分元素类型，新增元素类型后遗漏更新
+
+❌ **错误示例**:
+```typescript
+// 橡皮擦只处理 Freehand 元素，Frame/Image/Video 完全无法擦除
+const checkAndMarkFreehandElementsForDeletion = (point: Point) => {
+    const freehandElements = board.children.filter((element) =>
+        Freehand.isFreehand(element)
+    ) as Freehand[];
+    // 只遍历 freehand，其他元素类型被忽略
+};
+```
+
+✅ **正确示例**:
+```typescript
+// 遍历所有 children，按类型分别做命中检测
+const checkAndMarkElementsForDeletion = (point: Point) => {
+    board.children.forEach((element) => {
+        if (elementsToDelete.has(element.id)) return;
+        let hit = false;
+        if (Freehand.isFreehand(element)) {
+            hit = isHitFreehandWithRadius(board, element, viewBoxPoint, hitRadius);
+        } else if (isErasableRectElement(element)) {
+            hit = isHitRectElement(element, viewBoxPoint, hitRadius);
+        }
+        if (hit) {
+            PlaitElement.getElementG(element).style.opacity = '0.2';
+            elementsToDelete.add(element.id);
+        }
+    });
+};
+```
+
+**原因**: 新增元素类型（如 Frame、Video）后，所有交互插件（橡皮擦、选择、碰撞检测等）都需要更新以支持新类型。仅过滤特定类型会导致其他类型的元素无法被交互。
+
+### createPortal 到 document.body 会脱离 Plait React Context
+
+**场景**: 在 `createPortal(... document.body)` 渲染的组件中使用 `useBoard()` 等 Plait hooks
+
+❌ **错误示例**:
+```typescript
+// FrameSlideshow 通过 createPortal 渲染到 document.body
+// 内部使用 PencilSettingsToolbar，它调用 useBoard()
+// 报错：The `useBoard` hook must be used inside the <Plait> component's context
+return createPortal(
+    <PencilSettingsToolbar />,  // 内部调用 useBoard() → 报错
+    document.body
+);
+```
+
+✅ **正确示例**:
+```typescript
+// 通过 props 传递 board，直接调用 Plait API
+const FrameSlideshow: React.FC<{ board: PlaitBoard }> = ({ board }) => {
+    const settings = getFreehandSettings(board);
+    const handleColorChange = (color: string) => {
+        setFreehandStrokeColor(board, color);
+    };
+    // 内联实现设置面板，不依赖 useBoard()
+};
+```
+
+**原因**: `createPortal` 渲染到 `document.body` 会脱离 `<Plait>` 组件树，React Context 无法穿透。必须通过 props 传递 `board` 并直接调用 Plait API。
+
+### 蒙层挖洞的 pointer-events 设置
+
+**场景**: 全屏蒙层遮住画布，中间留出"窗口"区域允许交互（如幻灯片播放）
+
+❌ **错误示例**:
+```scss
+// 蒙层容器设置 pointer-events: auto，阻挡了窗口区域的画布交互
+.frame-slideshow__mask {
+    pointer-events: auto;  // 整个容器拦截事件，画布无法交互
+}
+```
+
+✅ **正确示例**:
+```scss
+// 容器透传事件，只有实际遮挡区域拦截
+.frame-slideshow__mask {
+    pointer-events: none;  // 容器不拦截
+}
+.frame-slideshow__mask-block {
+    pointer-events: auto;  // 只有四块遮挡区域拦截事件
+}
+```
+
+**原因**: 蒙层容器覆盖整个视口，如果设置 `pointer-events: auto` 会阻挡中间"窗口"区域的画布事件。正确做法是容器 `pointer-events: none`，仅四块实际遮挡的 div 设置 `pointer-events: auto`。
 
 ### 禁止自动删除用户数据
 
@@ -6505,6 +6622,62 @@ const matchesSource = !filters.activeSource || filters.activeSource === 'ALL' ||
 ```
 
 **原因**: 初始状态下筛选变量可能为 `undefined`。进行逻辑判断时，必须同时考虑 `undefined`、`null` 和 `'ALL'` 这几种代表“不筛选”的情况，否则会导致筛选结果意外为空。
+
+---
+
+
+## Plait 插件规范
+
+#### 自定义组件 onContextChanged 必须处理 viewport 变化
+
+**场景**: 创建自定义 Plait 组件（继承 `PlaitPluginElementComponent`）时，选择框（蓝色虚线 + 控制点）在缩放/平移画布后与元素偏移。
+
+❌ **错误示例**:
+```typescript
+// 错误：onContextChanged 没有处理 viewport 变化
+onContextChanged(
+  value: PlaitPluginElementContext<MyElement, PlaitBoard>,
+  previous: PlaitPluginElementContext<MyElement, PlaitBoard>
+): void {
+  if (value.element !== previous.element || value.hasThemeChanged) {
+    this.activeGenerator.processDrawing(this.element, PlaitBoard.getActiveHost(this.board), { selected: this.selected });
+  } else {
+    const needUpdate = value.selected !== previous.selected;
+    if (needUpdate || value.selected) {
+      this.activeGenerator.processDrawing(this.element, PlaitBoard.getActiveHost(this.board), { selected: this.selected });
+    }
+  }
+  // 问题：缩放/平移画布后，选择框位置不更新，与元素产生偏移
+}
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：检测 viewport 变化并重绘选择框（参考 ToolComponent）
+onContextChanged(
+  value: PlaitPluginElementContext<MyElement, PlaitBoard>,
+  previous: PlaitPluginElementContext<MyElement, PlaitBoard>
+): void {
+  const viewportChanged =
+    value.board.viewport.zoom !== previous.board.viewport.zoom ||
+    value.board.viewport.offsetX !== previous.board.viewport.offsetX ||
+    value.board.viewport.offsetY !== previous.board.viewport.offsetY;
+
+  if (value.element !== previous.element || value.hasThemeChanged) {
+    this.activeGenerator.processDrawing(this.element, PlaitBoard.getActiveHost(this.board), { selected: this.selected });
+  } else if (viewportChanged && value.selected) {
+    // viewport 改变且元素被选中时，更新选择框位置
+    this.activeGenerator.processDrawing(this.element, PlaitBoard.getActiveHost(this.board), { selected: this.selected });
+  } else {
+    const needUpdate = value.selected !== previous.selected;
+    if (needUpdate || value.selected) {
+      this.activeGenerator.processDrawing(this.element, PlaitBoard.getActiveHost(this.board), { selected: this.selected });
+    }
+  }
+}
+```
+
+**原因**: 选择框渲染在 `board-active-svg`（独立 SVG，无 viewBox），坐标通过 `toActiveRectangleFromViewBoxRectangle` 实时计算。而元素渲染在 `board-host-svg`（有 viewBox 自动映射坐标）。当 viewport 变化时，host-svg 中的元素位置自动调整，但 active-svg 上的选择框必须手动重新计算坐标才能对齐。`ToolComponent` 已正确实现了此模式。
 
 ---
 

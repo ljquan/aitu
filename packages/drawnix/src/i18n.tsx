@@ -33,13 +33,6 @@ export interface Translations {
   'toolbar.eraserShape.square': string;
   'toolbar.laserPointer': string;
   'toolbar.frame': string;
-  'toolbar.preciseEraser': string;
-  'toolbar.preciseEraserTip': string;
-  'toolbar.preciseEraser.unsupported.openPath': string;
-  'toolbar.preciseEraser.unsupported.image': string;
-  'toolbar.preciseEraser.unsupported.text': string;
-  'toolbar.preciseEraser.unsupported.line': string;
-  'toolbar.preciseEraser.unsupported.other': string;
   'toolbar.fillColor': string;
   'toolbar.fontColor': string;
   'toolbar.fontSize': string;
@@ -228,13 +221,6 @@ const translations: Record<Language, Translations> = {
     'toolbar.eraserShape.square': '方形',
     'toolbar.laserPointer': '激光笔 — L',
     'toolbar.frame': 'Frame 容器 — F',
-    'toolbar.preciseEraser': '精确擦除',
-    'toolbar.preciseEraserTip': '只擦除经过的区域，而不是整个图形',
-    'toolbar.preciseEraser.unsupported.openPath': '精确擦除不支持线条，将删除整条线',
-    'toolbar.preciseEraser.unsupported.image': '精确擦除不支持图片元素',
-    'toolbar.preciseEraser.unsupported.text': '精确擦除不支持文本元素',
-    'toolbar.preciseEraser.unsupported.line': '精确擦除不支持线条元素',
-    'toolbar.preciseEraser.unsupported.other': '精确擦除不支持该元素类型',
     'toolbar.fillColor': '填充颜色',
     'toolbar.fontColor': '字体颜色',
     'toolbar.fontSize': '字号',
@@ -416,13 +402,6 @@ const translations: Record<Language, Translations> = {
     'toolbar.eraserShape.square': 'Square',
     'toolbar.laserPointer': 'Laser Pointer — L',
     'toolbar.frame': 'Frame Container — F',
-    'toolbar.preciseEraser': 'Precise',
-    'toolbar.preciseEraserTip': 'Erase only the path area instead of the whole shape',
-    'toolbar.preciseEraser.unsupported.openPath': 'Precise erase does not support lines, will delete entire line',
-    'toolbar.preciseEraser.unsupported.image': 'Precise erase does not support images',
-    'toolbar.preciseEraser.unsupported.text': 'Precise erase does not support text',
-    'toolbar.preciseEraser.unsupported.line': 'Precise erase does not support lines',
-    'toolbar.preciseEraser.unsupported.other': 'Precise erase does not support this element type',
     'toolbar.fillColor': 'Fill Color',
     'toolbar.fontColor': 'Font Color',
     'toolbar.fontSize': 'Font Size',

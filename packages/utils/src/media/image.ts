@@ -454,7 +454,7 @@ export function isWhiteBorderPixel(
   r: number,
   g: number,
   b: number,
-  threshold: number = 245
+  threshold = 245
 ): boolean {
   return r >= threshold && g >= threshold && b >= threshold;
 }
@@ -473,8 +473,8 @@ export function isWhiteBorderPixel(
  */
 export function trimBorders(
   imageData: ImageData,
-  borderRatio: number = 0.5,
-  maxTrimRatio: number = 0.15
+  borderRatio = 0.5,
+  maxTrimRatio = 0.15
 ): BorderTrimResult {
   const { width, height, data } = imageData;
 
@@ -547,7 +547,7 @@ export function trimBorders(
  */
 export function trimCanvasBorders(
   sourceCanvas: HTMLCanvasElement,
-  minSize: number = 10
+  minSize = 10
 ): HTMLCanvasElement | null {
   const ctx = sourceCanvas.getContext('2d', { willReadFrequently: true });
   if (!ctx) return null;

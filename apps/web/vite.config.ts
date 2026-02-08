@@ -58,7 +58,7 @@ function precacheManifestPlugin(): Plugin {
         const manifest: { url: string; revision: string }[] = [];
 
         // 递归扫描目录
-        function scanDir(dir: string, base: string = '') {
+        function scanDir(dir: string, base = '') {
           if (!fs.existsSync(dir)) return;
           
           const entries = fs.readdirSync(dir, { withFileTypes: true });

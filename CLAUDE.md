@@ -125,6 +125,7 @@ Service Worker (后台执行)
 - **工具互斥通过 `board.pointer` 管理**：新增工具类型应加入对应枚举（如 `FreehandShape`），通过 Plait 的 `board.pointer` 单值机制自动互斥，禁止使用独立布尔状态（如 `xxxActive`）手动管理
 - **Viewport 缩放+平移用 `updateViewport` 一步完成**：需要同时改变 zoom 和 origination 时，使用 `BoardTransforms.updateViewport(board, origination, zoom)` 一次性设置；禁止 `updateZoom()` + `moveToCenter()` 分两步调用，`updateZoom` 会先改变视口位置，导致 `moveToCenter` 基于错误的视口状态计算偏移。`origination` 是视口左上角在世界坐标中的位置，居中公式：`origination = [centerX - viewportWidth/2/zoom, centerY - viewportHeight/2/zoom]`
 - **全屏展示画布局部内容用「viewport 对准 + 隐藏 UI + 蒙层挖洞」**：需要全屏/沉浸式展示某个区域（如 Frame 幻灯片播放）时，三步走：① viewport 对准目标区域（`updateViewport`）；② 给 `document.documentElement` 添加 CSS class（如 `slideshow-active`），用 `display: none !important` 隐藏所有 UI 覆盖层（工具栏、抽屉、面板、输入栏等）；③ 在画布上方渲染全屏蒙层，用四块黑色 div 围住目标区域，中间留出"窗口"。注意：不要用 `toImage` 截图方案（`<defs>` 引用丢失、子元素绑定不完全导致内容缺失），也不要仅操纵 viewport 而不隐藏 UI（抽屉/工具栏会露出来）
+- **自定义组件 `onContextChanged` 必须处理 viewport 变化**：自定义 Plait 组件（如 `FrameComponent`、`FreehandComponent`、`PenPathComponent`）的 `onContextChanged` 中，必须检测 viewport 变化（`board.viewport.zoom/offsetX/offsetY`）并在元素被选中时重绘选择框（`activeGenerator.processDrawing`）。选择框渲染在 `board-active-svg`（无 viewBox，坐标通过 `toActiveRectangleFromViewBoxRectangle` 实时计算），而元素渲染在 `board-host-svg`（有 viewBox 自动映射），viewport 变化时选择框不会自动跟随，必须手动重绘。参考 `ToolComponent.onContextChanged` 的实现模式
 
 ---
 

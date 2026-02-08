@@ -44,13 +44,11 @@ export interface FreehandSettings {
   eraserWidth: number;
   eraserShape: BrushShape;
   pressureEnabled: boolean;
-  preciseEraserEnabled: boolean;
 }
 
 // localStorage 存储键
 const STORAGE_KEY = 'aitu_freehand_settings';
 
-// 默认画笔设置（精准擦除默认开启）
 const DEFAULT_FREEHAND_SETTINGS: FreehandSettings = {
   strokeWidth: 2,
   strokeColor: DEFAULT_COLOR,
@@ -59,7 +57,6 @@ const DEFAULT_FREEHAND_SETTINGS: FreehandSettings = {
   eraserWidth: 20,
   eraserShape: BrushShape.circle,
   pressureEnabled: false,
-  preciseEraserEnabled: true, // 默认开启精准擦除
 };
 
 // 使用 WeakMap 存储每个 board 的画笔设置
@@ -103,7 +100,6 @@ function persistSettings(settings: FreehandSettings): void {
       eraserWidth: settings.eraserWidth,
       eraserShape: settings.eraserShape,
       pressureEnabled: settings.pressureEnabled,
-      preciseEraserEnabled: settings.preciseEraserEnabled,
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(toPersist));
     cachedPersistedSettings = toPersist;
@@ -192,13 +188,6 @@ export const setEraserShape = (board: PlaitBoard, eraserShape: EraserShape) => {
  */
 export const setFreehandPressureEnabled = (board: PlaitBoard, pressureEnabled: boolean) => {
   updateAndPersist(board, { pressureEnabled });
-};
-
-/**
- * 设置精确橡皮擦开关
- */
-export const setPreciseEraserEnabled = (board: PlaitBoard, preciseEraserEnabled: boolean) => {
-  updateAndPersist(board, { preciseEraserEnabled });
 };
 
 /**
