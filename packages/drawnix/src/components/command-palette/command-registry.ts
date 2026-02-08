@@ -8,6 +8,7 @@ import { BoardCreationMode, setCreationMode } from '@plait/common';
 import { MindPointerType } from '@plait/mind';
 import { ArrowLineShape, BasicShapes } from '@plait/draw';
 import { FreehandShape } from '../../plugins/freehand/type';
+import { LassoPointerType } from '../../plugins/with-lasso-selection';
 import { PenShape } from '../../plugins/pen/type';
 import { saveAsImage } from '../../utils/image';
 import { saveAsJSON } from '../../data/json';
@@ -172,6 +173,17 @@ export function buildDefaultCommands(
         updateAppState({ pointer: FramePointerType });
       },
     },
+    {
+      id: 'tool-lasso',
+      label: isZh ? '套索选择' : 'Lasso Select',
+      keywords: ['lasso', 'select', 'freeform', '套索', '自由选择'],
+      category: 'tool',
+      shortcut: 'Q',
+      perform: (board) => {
+        BoardTransforms.updatePointerType(board, LassoPointerType);
+        updateAppState({ pointer: LassoPointerType });
+      },
+    },
   ];
 
   const editCommands: CommandItem[] = [
@@ -284,18 +296,6 @@ export function buildDefaultCommands(
   ];
 
   const utilCommands: CommandItem[] = [
-    {
-      id: 'util-laser-pointer',
-      label: isZh ? '激光笔' : 'Laser Pointer',
-      keywords: ['laser', 'pointer', 'present', '激光', '笔', '演示'],
-      category: 'tool',
-      shortcut: 'L',
-      perform: () => {
-        setCreationMode(board, BoardCreationMode.drawing);
-        BoardTransforms.updatePointerType(board, FreehandShape.laserPointer);
-        updateAppState({ pointer: FreehandShape.laserPointer });
-      },
-    },
     {
       id: 'util-canvas-search',
       label: isZh ? '搜索画布内容' : 'Search Canvas',

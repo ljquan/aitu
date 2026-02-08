@@ -90,6 +90,7 @@ import { ToolWinBoxManager } from './components/toolbox-drawer/ToolWinBoxManager
 import { withDefaultFill } from './plugins/with-default-fill';
 import { withGradientFill } from './plugins/with-gradient-fill';
 import { withFrameResize } from './plugins/with-frame-resize';
+import { withLassoSelection } from './plugins/with-lasso-selection';
 import { API_AUTH_ERROR_EVENT, ApiAuthErrorDetail } from './utils/api-auth-error-event';
 import { MessagePlugin } from 'tdesign-react';
 import { calculateEditedImagePoints } from './utils/image';
@@ -570,6 +571,7 @@ export const Drawnix: React.FC<DrawnixProps> = ({
     withFrameResize, // Frame 缩放 - 拖拽缩放 Frame 容器
     withDefaultFill, // 默认填充 - 让新创建的图形有白色填充，方便双击编辑
     withGradientFill, // 渐变填充 - 支持渐变和图片填充渲染
+    withLassoSelection, // 套索选择 - 自由路径框选元素
     withTracking,
   ];
 

@@ -17,6 +17,7 @@ import { AlignmentTransforms } from '../transforms/alignment';
 import { DistributeTransforms } from '../transforms/distribute';
 import { BooleanTransforms } from '../transforms/boolean';
 import { FramePointerType } from './with-frame';
+import { LassoPointerType } from './with-lasso-selection';
 
 export const buildDrawnixHotkeyPlugin = (
   updateAppState: (appState: Partial<DrawnixState>) => void
@@ -190,6 +191,10 @@ export const buildDrawnixHotkeyPlugin = (
               PlaitPointerType.selection
             );
             updateAppState({ pointer: PlaitPointerType.selection });
+          }
+          if (event.key === 'q') {
+            BoardTransforms.updatePointerType(board, LassoPointerType);
+            updateAppState({ pointer: LassoPointerType });
           }
           if (event.key === 'm') {
             setCreationMode(board, BoardCreationMode.dnd);

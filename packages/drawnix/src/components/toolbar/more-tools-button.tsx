@@ -12,6 +12,7 @@ import {
   MoreIcon,
   HandIcon,
   SelectionIcon,
+  LassoIcon,
   MindIcon,
   TextIcon,
   FeltTipPenIcon,
@@ -44,6 +45,7 @@ import { ArrowLineShape, BasicShapes, DrawPointerType } from '@plait/draw';
 import { BoardCreationMode, setCreationMode } from '@plait/common';
 import { FreehandShape } from '../../plugins/freehand/type';
 import { PenShape } from '../../plugins/pen/type';
+import { LassoPointerType } from '../../plugins/with-lasso-selection';
 import { finishPenOnToolSwitch } from '../../plugins/pen/with-pen-create';
 import {
   DrawnixPointerType,
@@ -79,6 +81,7 @@ interface ButtonMeta {
 const BUTTON_META_MAP: Record<string, ButtonMeta> = {
   'hand': { icon: <HandIcon />, titleKey: 'toolbar.hand', pointer: PlaitPointerType.hand },
   'selection': { icon: <SelectionIcon />, titleKey: 'toolbar.selection', pointer: PlaitPointerType.selection },
+  'lasso': { icon: <LassoIcon />, titleKey: 'toolbar.lasso', pointer: LassoPointerType },
   'mind': { icon: <MindIcon />, titleKey: 'toolbar.mind', pointer: MindPointerType.mind },
   'text': { icon: <TextIcon />, titleKey: 'toolbar.text', pointer: BasicShapes.text },
   'freehand': { icon: <FeltTipPenIcon />, titleKey: 'toolbar.pen', pointer: FreehandShape.feltTipPen, hasPopup: true, popupKey: 'freehand' },

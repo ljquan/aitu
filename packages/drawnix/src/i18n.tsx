@@ -8,6 +8,7 @@ export interface Translations {
   // Toolbar items
   'toolbar.hand': string;
   'toolbar.selection': string;
+  'toolbar.lasso': string;
   'toolbar.mind': string;
   'toolbar.text': string;
   'toolbar.pen': string;
@@ -192,6 +193,7 @@ const translations: Record<Language, Translations> = {
     // Toolbar items
     'toolbar.hand': '手形工具 — H',
     'toolbar.selection': '选择 — V',
+    'toolbar.lasso': '套索选择 — Q',
     'toolbar.mind': '思维导图 — M',
     'toolbar.text': '文本 — T',
     'toolbar.pen': '画笔 — P',
@@ -373,6 +375,7 @@ const translations: Record<Language, Translations> = {
     // Toolbar items
     'toolbar.hand': 'Hand — H',
     'toolbar.selection': 'Selection — V',
+    'toolbar.lasso': 'Lasso Select — Q',
     'toolbar.mind': 'Mind — M',
     'toolbar.text': 'Text — T',
     'toolbar.pen': 'Pen — P',

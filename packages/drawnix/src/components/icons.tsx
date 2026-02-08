@@ -1548,3 +1548,24 @@ export const FrameContainerIcon: React.FC<React.SVGProps<SVGSVGElement> & { size
     <text x="3" y="3" fontSize="4" fill="currentColor" stroke="none" fontFamily="system-ui" fontWeight="500">F</text>
   </svg>
 );
+
+// 套索选择图标
+export const LassoIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 24, ...props }) => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    width={size}
+    height={size}
+    {...props}
+  >
+    <path d="M12 4C7.58 4 4 6.69 4 10c0 2.05 1.3 3.86 3.3 5.04" />
+    <path d="M20 10c0-3.31-3.58-6-8-6" strokeDasharray="3 2" />
+    <circle cx="12" cy="14" r="3" />
+    <path d="M12 17v4" />
+    <path d="M10 21h4" />
+  </svg>
+);

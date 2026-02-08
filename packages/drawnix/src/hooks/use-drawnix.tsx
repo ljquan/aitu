@@ -8,6 +8,7 @@ import { MindPointerType } from '@plait/mind';
 import { DrawPointerType } from '@plait/draw';
 import { FreehandShape } from '../plugins/freehand/type';
 import { PenShape } from '../plugins/pen/type';
+import { LassoPointerType } from '../plugins/with-lasso-selection';
 import { Editor } from 'slate';
 import { LinkElement } from '@plait/common';
 
@@ -24,7 +25,8 @@ export type DrawnixPointerType =
   | DrawPointerType
   | FreehandShape
   | PenShape
-  | typeof import('../plugins/with-frame').FramePointerType;
+  | typeof import('../plugins/with-frame').FramePointerType
+  | typeof LassoPointerType;
 
 export interface DrawnixBoard extends PlaitBoard {
   appState: DrawnixState;
