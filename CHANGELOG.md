@@ -1,3 +1,20 @@
+## 0.5.91 (2026-02-08)
+
+### 🩹 Fixes
+
+- 视频任务状态 ([ea3c2ccc](https://github.com/ljquan/aitu/commit/ea3c2ccc))
+
+### 🔧 Chores
+
+- docs(claude): 添加新规则 - 数值范围转换规则、列表索引ID追踪 ([fbb91726](https://github.com/ljquan/aitu/commit/fbb91726))
+- refactor: remove unused SW RPC methods and optimize communication ([e36bbc76](https://github.com/ljquan/aitu/commit/e36bbc76))
+- fixed:本次修改解决了ai生成图片中点击提示的下拉框手机端溢出问题&agent生成长方形图片容器溢出问题 ([64c4da2d](https://github.com/ljquan/aitu/commit/64c4da2d))
+
+### ❤️  Thank You
+
+- liquid <ljquan@qq.com>
+- liangyufeng <l.yfeng@qq.com>
+
 ## 0.5.90 (2026-02-08)
 
 ### 🚀 Features
