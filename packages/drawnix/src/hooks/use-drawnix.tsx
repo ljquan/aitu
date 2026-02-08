@@ -23,7 +23,8 @@ export type DrawnixPointerType =
   | MindPointerType
   | DrawPointerType
   | FreehandShape
-  | PenShape;
+  | PenShape
+  | typeof import('../plugins/with-frame').FramePointerType;
 
 export interface DrawnixBoard extends PlaitBoard {
   appState: DrawnixState;

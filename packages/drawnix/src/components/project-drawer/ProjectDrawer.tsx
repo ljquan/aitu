@@ -37,6 +37,7 @@ import {
   MoveIcon,
   DownloadIcon,
   UploadIcon,
+  ViewListIcon,
 } from 'tdesign-icons-react';
 import { useWorkspace } from '../../hooks/useWorkspace';
 import {
@@ -49,6 +50,7 @@ import {
 import { BaseDrawer } from '../side-drawer';
 import { workspaceExportService } from '../../services/workspace-export-service';
 import { safeReload } from '../../utils/active-tasks';
+import { FramePanel } from './FramePanel';
 import './project-drawer.scss';
 
 export interface ProjectDrawerProps {
@@ -945,6 +947,7 @@ export const ProjectDrawer: React.FC<ProjectDrawerProps> = ({
     switchBoard,
   } = useWorkspace();
 
+  const [activeTab, setActiveTab] = useState<'boards' | 'frames'>('boards');
   const [searchQuery, setSearchQuery] = useState('');
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<{
@@ -1404,8 +1407,8 @@ export const ProjectDrawer: React.FC<ProjectDrawerProps> = ({
     return tree.map(filterNode).filter((n): n is TreeNode => n !== null);
   }, [tree, searchQuery]);
 
-  // Header actions
-  const headerActions = (
+  // Header actions (only for boards tab)
+  const headerActions = activeTab === 'boards' ? (
     <>
       <Button
         variant="text"
@@ -1422,46 +1425,70 @@ export const ProjectDrawer: React.FC<ProjectDrawerProps> = ({
         title="新建文件夹"
       />
     </>
+  ) : null;
+
+  // Tab switcher + filter section
+  const tabSwitcher = (
+    <div className="project-drawer-tabs">
+      <button
+        className={`project-drawer-tabs__tab${activeTab === 'boards' ? ' project-drawer-tabs__tab--active' : ''}`}
+        onClick={() => setActiveTab('boards')}
+      >
+        <ArtboardIcon />
+        画布管理
+      </button>
+      <button
+        className={`project-drawer-tabs__tab${activeTab === 'frames' ? ' project-drawer-tabs__tab--active' : ''}`}
+        onClick={() => setActiveTab('frames')}
+      >
+        <ViewListIcon />
+        Frame 管理
+      </button>
+    </div>
   );
 
-  // Search filter section
   const filterSection = (
     <div className="project-drawer__filter-section">
-      <Input
-        placeholder="搜索..."
-        value={searchQuery}
-        onChange={setSearchQuery}
-        prefixIcon={<SearchIcon />}
-        size="small"
-      />
-      {selectedBoardIds.size > 0 && (
-        <div className="project-drawer__selection-bar">
-          <span className="project-drawer__selection-count">
-            已选择 {selectedBoardIds.size} 个画板
-          </span>
-          <Button
-            variant="text"
+      {tabSwitcher}
+      {activeTab === 'boards' && (
+        <>
+          <Input
+            placeholder="搜索..."
+            value={searchQuery}
+            onChange={setSearchQuery}
+            prefixIcon={<SearchIcon />}
             size="small"
-            theme="danger"
-            icon={<DeleteIcon />}
-            onClick={() => handleDeleteMultipleConfirm(Array.from(selectedBoardIds))}
-          >
-            删除
-          </Button>
-          <Button
-            variant="text"
-            size="small"
-            onClick={() => setSelectedBoardIds(new Set())}
-          >
-            取消
-          </Button>
-        </div>
+          />
+          {selectedBoardIds.size > 0 && (
+            <div className="project-drawer__selection-bar">
+              <span className="project-drawer__selection-count">
+                已选择 {selectedBoardIds.size} 个画板
+              </span>
+              <Button
+                variant="text"
+                size="small"
+                theme="danger"
+                icon={<DeleteIcon />}
+                onClick={() => handleDeleteMultipleConfirm(Array.from(selectedBoardIds))}
+              >
+                删除
+              </Button>
+              <Button
+                variant="text"
+                size="small"
+                onClick={() => setSelectedBoardIds(new Set())}
+              >
+                取消
+              </Button>
+            </div>
+          )}
+        </>
       )}
     </div>
   );
 
-  // Footer with import/export buttons
-  const footerSection = (
+  // Footer with import/export buttons (only for boards tab)
+  const footerSection = activeTab === 'boards' ? (
     <div className="project-drawer__footer-actions">
       <Button
         variant="outline"
@@ -1491,7 +1518,7 @@ export const ProjectDrawer: React.FC<ProjectDrawerProps> = ({
         onChange={handleFileSelect}
       />
     </div>
-  );
+  ) : null;
 
   return (
     <>
@@ -1510,7 +1537,9 @@ export const ProjectDrawer: React.FC<ProjectDrawerProps> = ({
         contentClassName="project-drawer__content"
         data-testid="project-drawer"
       >
-        {isLoading ? (
+        {activeTab === 'frames' ? (
+          <FramePanel />
+        ) : isLoading ? (
           <div className="project-drawer__loading">加载中...</div>
         ) : filteredTree.length === 0 ? (
           <div className="project-drawer__empty">

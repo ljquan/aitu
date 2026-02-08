@@ -123,6 +123,7 @@ Service Worker (后台执行)
 
 - **新画布功能必须作为 Plait 插件**：涉及画布交互的功能（如激光笔、画笔变体）必须实现为 `withXxx` 插件复用 Generator/Smoother 等已有基础设施，禁止使用独立 React 组件 + SVG overlay（坐标系不一致、事件冲突）
 - **工具互斥通过 `board.pointer` 管理**：新增工具类型应加入对应枚举（如 `FreehandShape`），通过 Plait 的 `board.pointer` 单值机制自动互斥，禁止使用独立布尔状态（如 `xxxActive`）手动管理
+- **Viewport 缩放+平移用 `updateViewport` 一步完成**：需要同时改变 zoom 和 origination 时，使用 `BoardTransforms.updateViewport(board, origination, zoom)` 一次性设置；禁止 `updateZoom()` + `moveToCenter()` 分两步调用，`updateZoom` 会先改变视口位置，导致 `moveToCenter` 基于错误的视口状态计算偏移。`origination` 是视口左上角在世界坐标中的位置，居中公式：`origination = [centerX - viewportWidth/2/zoom, centerY - viewportHeight/2/zoom]`
 
 ---
 

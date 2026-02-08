@@ -729,6 +729,34 @@ const handlePointerMove = (event: PointerEvent) => {
 
 **原因**: `PointerEvent.pressure` 只有压感笔（Apple Pencil、Wacom）才提供真实值（0-1）。鼠标点击固定返回 0.5，触控板也是 0.5。对于不支持压力的设备，应使用绘制速度模拟：慢速 → 高压力（粗），快速 → 低压力（细）。
 
+#### Plait Board Viewport 缩放+平移
+**场景**: 需要将画布视图移动到某个元素并调整缩放时
+
+❌ **错误示例**:
+```typescript
+// 错误：分两步操作，updateZoom 先改变视口位置，moveToCenter 基于错误状态计算
+BoardTransforms.updateZoom(board, zoom);
+BoardTransforms.moveToCenter(board, [centerX, centerY]);
+// 结果：视口位置错乱，元素不在视口中心
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：使用 updateViewport 一次性设置 origination 和 zoom
+const container = PlaitBoard.getBoardContainer(board);
+const viewportWidth = container.clientWidth;
+const viewportHeight = container.clientHeight;
+
+// origination 是视口左上角在世界坐标中的位置
+const origination: [number, number] = [
+  centerX - viewportWidth / 2 / zoom,
+  centerY - viewportHeight / 2 / zoom,
+];
+BoardTransforms.updateViewport(board, origination, zoom);
+```
+
+**原因**: `updateZoom` 会以视口中心为锚点重新计算 origination，改变视口位置。随后 `moveToCenter` 内部依赖 `getSelectedElements` 并基于已被 zoom 改变后的视口状态计算偏移，导致最终位置不正确。使用 `updateViewport` 可以原子性地同时设置缩放和位置。
+
 #### Security Guidelines
 - Validate and sanitize all user input
 - Never hardcode sensitive information (API keys, etc.)

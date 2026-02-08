@@ -16,6 +16,7 @@ import { DistributeTransforms } from '../../transforms/distribute';
 import { BooleanTransforms } from '../../transforms/boolean';
 import { CommandItem } from './command-palette.types';
 import { Language } from '../../i18n';
+import { FramePointerType } from '../../plugins/with-frame';
 
 export type CommandRegistryUpdater = (appState: Record<string, any>) => void;
 
@@ -145,6 +146,30 @@ export function buildDefaultCommands(
         setCreationMode(board, BoardCreationMode.drawing);
         BoardTransforms.updatePointerType(board, FreehandShape.eraser);
         updateAppState({ pointer: FreehandShape.eraser });
+      },
+    },
+    {
+      id: 'tool-laser-pointer',
+      label: isZh ? '激光笔' : 'Laser Pointer',
+      keywords: ['laser', 'pointer', 'present', '激光', '演示'],
+      category: 'tool',
+      shortcut: 'L',
+      perform: (board) => {
+        setCreationMode(board, BoardCreationMode.drawing);
+        BoardTransforms.updatePointerType(board, FreehandShape.laserPointer);
+        updateAppState({ pointer: FreehandShape.laserPointer });
+      },
+    },
+    {
+      id: 'tool-frame',
+      label: isZh ? 'Frame 容器' : 'Frame Container',
+      keywords: ['frame', 'container', 'group', 'section', '容器', '分区', '框架'],
+      category: 'tool',
+      shortcut: 'F',
+      perform: (board) => {
+        setCreationMode(board, BoardCreationMode.drawing);
+        BoardTransforms.updatePointerType(board, FramePointerType);
+        updateAppState({ pointer: FramePointerType });
       },
     },
   ];

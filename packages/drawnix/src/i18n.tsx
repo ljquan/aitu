@@ -32,6 +32,7 @@ export interface Translations {
   'toolbar.eraserShape.circle': string;
   'toolbar.eraserShape.square': string;
   'toolbar.laserPointer': string;
+  'toolbar.frame': string;
   'toolbar.preciseEraser': string;
   'toolbar.preciseEraserTip': string;
   'toolbar.preciseEraser.unsupported.openPath': string;
@@ -226,6 +227,7 @@ const translations: Record<Language, Translations> = {
     'toolbar.eraserShape.circle': '圆形',
     'toolbar.eraserShape.square': '方形',
     'toolbar.laserPointer': '激光笔 — L',
+    'toolbar.frame': 'Frame 容器 — F',
     'toolbar.preciseEraser': '精确擦除',
     'toolbar.preciseEraserTip': '只擦除经过的区域，而不是整个图形',
     'toolbar.preciseEraser.unsupported.openPath': '精确擦除不支持线条，将删除整条线',
@@ -413,6 +415,7 @@ const translations: Record<Language, Translations> = {
     'toolbar.eraserShape.circle': 'Circle',
     'toolbar.eraserShape.square': 'Square',
     'toolbar.laserPointer': 'Laser Pointer — L',
+    'toolbar.frame': 'Frame Container — F',
     'toolbar.preciseEraser': 'Precise',
     'toolbar.preciseEraserTip': 'Erase only the path area instead of the whole shape',
     'toolbar.preciseEraser.unsupported.openPath': 'Precise erase does not support lines, will delete entire line',

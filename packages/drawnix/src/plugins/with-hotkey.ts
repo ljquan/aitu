@@ -16,6 +16,7 @@ import { ArrowLineShape, BasicShapes } from '@plait/draw';
 import { AlignmentTransforms } from '../transforms/alignment';
 import { DistributeTransforms } from '../transforms/distribute';
 import { BooleanTransforms } from '../transforms/boolean';
+import { FramePointerType } from './with-frame';
 
 export const buildDrawnixHotkeyPlugin = (
   updateAppState: (appState: Partial<DrawnixState>) => void
@@ -220,6 +221,11 @@ export const buildDrawnixHotkeyPlugin = (
               BoardTransforms.updatePointerType(board, ArrowLineShape.straight);
               updateAppState({ pointer: ArrowLineShape.straight });
             }
+          }
+          if (event.key === 'f') {
+            setCreationMode(board, BoardCreationMode.drawing);
+            BoardTransforms.updatePointerType(board, FramePointerType);
+            updateAppState({ pointer: FramePointerType });
           }
           if (event.key === 'r' || event.key === 'o' || event.key === 't') {
             const keyToPointer = {

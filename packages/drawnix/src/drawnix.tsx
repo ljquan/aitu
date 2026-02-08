@@ -82,11 +82,14 @@ import { SyncSettings } from './components/sync-settings';
 import { usePencilCursor } from './hooks/usePencilCursor';
 import { useToolFromUrl } from './hooks/useToolFromUrl';
 import { withArrowLineAutoCompleteExtend } from './plugins/with-arrow-line-auto-complete-extend';
+import { withFlowchartShortcut } from './plugins/with-flowchart-shortcut';
+import { withFrame } from './plugins/with-frame';
 import { AutoCompleteShapePicker } from './components/auto-complete-shape-picker';
 import { useAutoCompleteShapePicker } from './hooks/useAutoCompleteShapePicker';
 import { ToolWinBoxManager } from './components/toolbox-drawer/ToolWinBoxManager';
 import { withDefaultFill } from './plugins/with-default-fill';
 import { withGradientFill } from './plugins/with-gradient-fill';
+import { withFrameResize } from './plugins/with-frame-resize';
 import { API_AUTH_ERROR_EVENT, ApiAuthErrorDetail } from './utils/api-auth-error-event';
 import { MessagePlugin } from 'tdesign-react';
 import { calculateEditedImagePoints } from './utils/image';
@@ -562,6 +565,9 @@ export const Drawnix: React.FC<DrawnixProps> = ({
     withToolFocus, // 工具焦点管理 - 双击编辑
     withWorkZone, // 工作区元素 - 在画布上显示工作流进度
     withArrowLineAutoCompleteExtend, // 自动完成形状选择 - hover 中点时选择下一个节点形状
+    withFlowchartShortcut, // 流程图快速创建 - 方向键创建连接节点，Tab 导航
+    withFrame, // Frame 容器 - 分组管理画布元素
+    withFrameResize, // Frame 缩放 - 拖拽缩放 Frame 容器
     withDefaultFill, // 默认填充 - 让新创建的图形有白色填充，方便双击编辑
     withGradientFill, // 渐变填充 - 支持渐变和图片填充渲染
     withTracking,

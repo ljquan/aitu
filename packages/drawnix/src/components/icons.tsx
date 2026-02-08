@@ -1540,3 +1540,11 @@ export const CleanBrokenLinksIcon: React.FC<React.SVGProps<SVGSVGElement> & { si
     <path d="M16 18h4" stroke="white" strokeWidth="2" />
   </svg>
 );
+
+// Frame 容器图标
+export const FrameContainerIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 16, ...props }) => (
+  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" xmlns="http://www.w3.org/2000/svg" width={size} height={size} {...props}>
+    <rect x="1.5" y="3.5" width="13" height="11" rx="1" strokeWidth="1.2" strokeDasharray="3 2" />
+    <text x="3" y="3" fontSize="4" fill="currentColor" stroke="none" fontFamily="system-ui" fontWeight="500">F</text>
+  </svg>
+);
