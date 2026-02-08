@@ -1,3 +1,18 @@
+## 0.5.90 (2026-02-08)
+
+### 🚀 Features
+
+- 添加套索选择工具及工具栏/命令面板集成 ([0d5e1d82](https://github.com/ljquan/aitu/commit/0d5e1d82))
+
+### 🔧 Chores
+
+- 更新应用版本至 0.5.89 ([8ff11e56](https://github.com/ljquan/aitu/commit/8ff11e56))
+- docs(claude): 添加新规则 - 编程式选中元素需用 addSelectionWithTemporaryElements 触发渲染 ([a2b0cd01](https://github.com/ljquan/aitu/commit/a2b0cd01))
+
+### ❤️  Thank You
+
+- liquid <ljquan@qq.com>
+
 ## 0.5.89 (2026-02-08)
 
 ### 🚀 Features

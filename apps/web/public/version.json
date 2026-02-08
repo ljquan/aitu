@@ -1,9 +1,8 @@
 {
-  "version": "0.5.89",
-  "buildTime": "2026-02-08T08:47:43.284Z",
+  "version": "0.5.90",
+  "buildTime": "2026-02-08T13:01:01.421Z",
   "gitCommit": "unknown",
   "changelog": [
-    "implement new canvas features and command palette",
-    "添加 Frame 和幻灯片播放功能"
+    "添加套索选择工具及工具栏/命令面板集成"
   ]
 }
