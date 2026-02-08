@@ -6,8 +6,8 @@
  */
 
 import React, { useMemo, useCallback, useState } from 'react';
-import { Input, Button, MessagePlugin } from 'tdesign-react';
-import { SearchIcon, EditIcon, DeleteIcon, ViewListIcon } from 'tdesign-icons-react';
+import { Input, Button, MessagePlugin, Tooltip } from 'tdesign-react';
+import { SearchIcon, EditIcon, DeleteIcon, ViewListIcon, AddIcon, PlayCircleIcon } from 'tdesign-icons-react';
 import {
   PlaitBoard,
   BoardTransforms,
@@ -19,6 +19,8 @@ import {
 import { PlaitFrame, isFrameElement } from '../../types/frame.types';
 import { FrameTransforms } from '../../plugins/with-frame';
 import { useDrawnix } from '../../hooks/use-drawnix';
+import { AddFrameDialog } from './AddFrameDialog';
+import { FrameSlideshow } from './FrameSlideshow';
 
 interface FrameInfo {
   frame: PlaitFrame;
@@ -33,6 +35,8 @@ export const FramePanel: React.FC = () => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
   const [selectedFrameId, setSelectedFrameId] = useState<string | null>(null);
+  const [addDialogVisible, setAddDialogVisible] = useState(false);
+  const [slideshowVisible, setSlideshowVisible] = useState(false);
 
   // 收集画布中的所有 Frame 及其信息
   const frames: FrameInfo[] = useMemo(() => {
@@ -172,6 +176,29 @@ export const FramePanel: React.FC = () => {
         />
       </div>
 
+      {/* 操作栏 */}
+      <div className="frame-panel__actions">
+        <Button
+          variant="outline"
+          size="small"
+          icon={<AddIcon />}
+          onClick={() => setAddDialogVisible(true)}
+        >
+          添加 Frame
+        </Button>
+        <Tooltip content={frames.length === 0 ? '没有 Frame 可播放' : '全屏播放所有 Frame'} theme="light">
+          <Button
+            variant="outline"
+            size="small"
+            icon={<PlayCircleIcon />}
+            disabled={frames.length === 0}
+            onClick={() => setSlideshowVisible(true)}
+          >
+            幻灯片播放
+          </Button>
+        </Tooltip>
+      </div>
+
       {/* Frame 列表 */}
       {filteredFrames.length === 0 ? (
         <div className="frame-panel__empty">
@@ -254,6 +281,20 @@ export const FramePanel: React.FC = () => {
           ))}
         </div>
       )}
+
+      {/* 添加 Frame 弹窗 */}
+      <AddFrameDialog
+        visible={addDialogVisible}
+        board={board}
+        onClose={() => setAddDialogVisible(false)}
+      />
+
+      {/* 幻灯片播放 */}
+      <FrameSlideshow
+        visible={slideshowVisible}
+        board={board}
+        onClose={() => setSlideshowVisible(false)}
+      />
     </div>
   );
 };

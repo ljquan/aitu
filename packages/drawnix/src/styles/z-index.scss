@@ -87,6 +87,7 @@ $z-image-viewer-close: 8020;
 // ==========================================
 $z-loading: 9000;
 $z-system-error: 9100;
+$z-slideshow: 9500;
 $z-debug: 9999;
 
 // ==========================================
@@ -130,6 +131,7 @@ $z-index-map: (
   'image-viewer-close': $z-image-viewer-close,
   'loading': $z-loading,
   'system-error': $z-system-error,
+  'slideshow': $z-slideshow,
   'debug': $z-debug,
 );
 

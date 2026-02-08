@@ -738,3 +738,37 @@
     }
 }
 
+// ============================================================================
+// Slideshow Mode: 隐藏所有 UI 覆盖层，只保留画布内容
+// ============================================================================
+.slideshow-active {
+    // 工具栏
+    .unified-toolbar,
+    .popup-toolbar,
+    .pencil-mode-toolbar,
+    .pencil-settings-toolbar,
+    .pen-settings-toolbar,
+    .eraser-settings-toolbar,
+    .quick-creation-toolbar,
+    .app-toolbar,
+    // 抽屉和面板
+    .project-drawer,
+    .chat-drawer,
+    .toolbox-drawer,
+    .performance-panel,
+    // 输入栏和导航
+    .ai-input-bar,
+    .view-navigation,
+    .version-update-prompt,
+    .active-task-warning,
+    // 弹出层
+    .command-palette,
+    .canvas-search,
+    .multi-selection-handles,
+    .auto-complete-shape-picker,
+    .link-popup,
+    .tool-winbox-manager {
+        display: none !important;
+    }
+}
+
