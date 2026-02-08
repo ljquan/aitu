@@ -219,6 +219,75 @@ Service Worker (后台执行)
 13. **CPU 密集型循环需 yield**：大量 JSON.stringify/加密等操作的循环，每 3-5 次迭代调用 `await yieldToMain()` 让出主线程
 14. **跨 React Root 状态共享**：Plait 文本组件通过 `createRoot` 渲染在独立 React 树中，Context 无法穿透；需用 `useSyncExternalStore` + 模块级 store 共享状态
 15. **列表索引引用须用 ID 追踪**：当 Viewer/弹窗通过 `currentIndex` 引用列表项时，若列表可能动态变化（新项插入/删除），必须通过 item ID 在列表变化后修正索引，否则会显示错误的内容
+16. **RxJS 事件/全局 Store 传递的对象必须是新引用**：当 Service 通过 RxJS Subject 推送事件、或通过 `getAllXxx()` 返回内存中的对象时，React 组件的 `React.memo` 自定义比较函数比较的是属性值而非引用。如果原地修改对象再 emit，`prev.task.progress === next.task.progress` 看到的是同一个已变异对象的同一个值 → 永远相等 → 不重渲染。**必须创建新对象后再存入 Map 并 emit**
+
+#### RxJS 事件传递对象引用导致 React.memo 失效
+
+**场景**: Service 层通过 RxJS Subject 推送任务更新事件，多个 React 组件通过不同方式消费（增量替换 vs 全量快照），但 `TaskItem` 共用同一个 `React.memo` 自定义比较
+
+❌ **错误示例**:
+```typescript
+// Service: 原地修改对象再 emit
+onProgress: (progress) => {
+  const localTask = this.tasks.get(taskId);
+  localTask.progress = progress;         // 原地修改
+  localTask.updatedAt = Date.now();
+  this.emitEvent('taskUpdated', localTask); // 传递同一引用
+}
+
+// Hook A（增量替换）：event.task 与数组中旧对象是同一引用
+setTasks(prev => prev.map(t => t.id === event.task.id ? event.task : t));
+// React.memo: prev.task === next.task（同一对象）→ 不渲染
+
+// Hook B（全量快照）：getAllTasks() 返回 Map 中的原始对象
+setTasks(taskQueueService.getAllTasks());
+// React.memo: prev.task.progress === next.task.progress（同一对象，值已被改过）→ 不渲染
+```
+
+✅ **正确示例**:
+```typescript
+// Service: 创建新对象存入 Map 再 emit
+onProgress: (progress) => {
+  const localTask = this.tasks.get(taskId);
+  const updatedTask = { ...localTask, progress, updatedAt: Date.now() };
+  this.tasks.set(taskId, updatedTask);         // 新对象存入 Map
+  this.emitEvent('taskUpdated', updatedTask);  // 新引用
+}
+
+// emitEvent 中额外浅拷贝（双保险）
+private emitEvent(type, task) {
+  this.taskUpdates$.next({ type, task: { ...task }, timestamp: Date.now() });
+}
+```
+
+**原因**: React.memo 的自定义比较函数比较的是属性值，但如果 `prev.task` 和 `next.task` 指向同一个被原地修改的对象，所有属性比较都会返回 `true`（值已经被改过了）。必须确保每次更新都产生新的对象引用，让 `prev.task.progress !== next.task.progress` 成立。
+
+### API 错误字段类型安全
+
+**场景**: 处理外部 API 返回的 error 字段时，`error` 可能是字符串也可能是对象
+
+❌ **错误示例**:
+```typescript
+// API 返回：{ error: { code: "generation_failed", message: "[403]..." } }
+const data = await response.json();
+throw new Error(data.error || data.message || 'Failed');
+// data.error 是对象 → new Error({...}) → error.message = "[object Object]"
+```
+
+✅ **正确示例**:
+```typescript
+const data = await response.json();
+const errMsg = typeof data.error === 'string'
+  ? data.error
+  : (data.error?.message || data.message || 'Failed');
+const error = new Error(errMsg);
+if (typeof data.error === 'object' && data.error?.code) {
+  (error as any).code = data.error.code;
+}
+throw error;
+```
+
+**原因**: `new Error(value)` 内部调用 `String(value)`，对象会变成 `"[object Object]"`。API 的 `error` 字段格式不统一（有的返回字符串，有的返回 `{ code, message }` 对象），必须用 `typeof` 区分处理。
 
 ### 数值范围转换规则
 
