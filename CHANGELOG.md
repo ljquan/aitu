@@ -1,3 +1,22 @@
+## 0.5.89 (2026-02-08)
+
+### 🚀 Features
+
+- 添加 Frame 和幻灯片播放功能 ([c9859671](https://github.com/ljquan/aitu/commit/c9859671))
+- implement new canvas features and command palette ([47dfcf12](https://github.com/ljquan/aitu/commit/47dfcf12))
+
+### 🔧 Chores
+
+- update version to 0.5.88 and improve task storage handling ([1adae49f](https://github.com/ljquan/aitu/commit/1adae49f))
+- docs(claude): 添加新规则 - 自定义 Plait 组件 onContextChanged 必须处理 viewport 变化 ([bfad96d5](https://github.com/ljquan/aitu/commit/bfad96d5))
+- docs(claude): 更新规则 - 全屏展示画布局部内容改用 viewport+隐藏UI+蒙层挖洞方案 ([e09e0e80](https://github.com/ljquan/aitu/commit/e09e0e80))
+- docs(claude): 添加新规则 - 全屏展示画布局部内容用 toImage 截图独立渲染 ([649c02bf](https://github.com/ljquan/aitu/commit/649c02bf))
+- docs(claude): 添加新规则 - Plait Board Viewport 缩放+平移用 updateViewport 一步完成 ([643cc38d](https://github.com/ljquan/aitu/commit/643cc38d))
+
+### ❤️  Thank You
+
+- liquid <ljquan@qq.com>
+
 ## 0.5.87 (2026-02-07)
 
 ### 🚀 Features
