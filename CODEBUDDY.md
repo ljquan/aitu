@@ -833,6 +833,43 @@ BoardTransforms.updateViewport(board, savedOrigination, savedZoom);
 
 **原因**: `toImage` 截图方案看似干净，但实际有严重缺陷——SVG 中的 `<defs>`（渐变、图案填充）引用会丢失，子元素如果不是通过 `frameId` 绑定而是空间重叠则无法获取，导致截图内容缺失。而仅操纵 viewport 不隐藏 UI 会导致抽屉、工具栏等透过蒙层露出。正确方案是三者结合：viewport 对准确保画布原生渲染（所见即所得）、CSS 隐藏 UI 确保干净背景、蒙层挖洞聚焦目标区域。
 
+#### 编程式选中元素需用 addSelectionWithTemporaryElements 触发渲染
+**场景**: 在自定义插件中编程式选中多个元素后，需要立即显示选中框（如套索选择、批量选中）
+
+❌ **错误示例**:
+```typescript
+// 错误：cacheSelectedElements 只缓存数据，不触发 onChange，选中框不会渲染
+import { cacheSelectedElements } from '@plait/core';
+
+function updateLassoSelection(board: PlaitBoard, hitElements: PlaitElement[]) {
+  cacheSelectedElements(board, hitElements);
+  // 选中框不显示！因为没有触发 onChange 回调链
+}
+
+// addSelectedElement 内部也只是调用 cacheSelectedElements，同样不会触发渲染
+clearSelectedElement(board);
+addSelectedElement(board, element);
+// 在某些场景下选中框可能不会立即显示
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：使用 Transforms.addSelectionWithTemporaryElements 触发完整渲染
+import { Transforms } from '@plait/core';
+
+function updateLassoSelection(board: PlaitBoard, hitElements: PlaitElement[]) {
+  if (hitElements.length > 0) {
+    Transforms.addSelectionWithTemporaryElements(board, hitElements);
+    // 内部流程：
+    // 1. 将 elements 存入 BOARD_TO_TEMPORARY_ELEMENTS
+    // 2. setTimeout 中调用 Transforms.setSelection 触发 onChange
+    // 3. onChange 检测到 temporaryElements，执行 cacheSelectedElements 并渲染选中框
+  }
+}
+```
+
+**原因**: Plait 框架的选中框渲染由 `onChange` 回调链驱动，而 `onChange` 只在 `Transforms.setSelection` 等操作产生 operation 时才会触发。`cacheSelectedElements` 和 `addSelectedElement` 只是在 `BOARD_TO_SELECTED_ELEMENT` WeakMap 中存储数据，不产生 operation，因此不会触发渲染。`Transforms.addSelectionWithTemporaryElements` 是框架提供的标准 API，专门用于自定义选择逻辑（如套索选择、粘贴后选中等）需要同时缓存元素并触发渲染的场景。注意：正常的鼠标点击/框选交互由 `withSelection` 插件自动处理，无需手动调用。
+
 #### Security Guidelines
 - Validate and sanitize all user input
 - Never hardcode sensitive information (API keys, etc.)
