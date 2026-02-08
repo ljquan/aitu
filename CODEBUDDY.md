@@ -757,6 +757,54 @@ BoardTransforms.updateViewport(board, origination, zoom);
 
 **原因**: `updateZoom` 会以视口中心为锚点重新计算 origination，改变视口位置。随后 `moveToCenter` 内部依赖 `getSelectedElements` 并基于已被 zoom 改变后的视口状态计算偏移，导致最终位置不正确。使用 `updateViewport` 可以原子性地同时设置缩放和位置。
 
+#### 全屏展示画布局部内容用 toImage 截图独立渲染
+**场景**: 需要全屏/沉浸式展示画布中某个区域的内容时（如 Frame 幻灯片播放、元素预览）
+
+❌ **错误示例**:
+```typescript
+// 错误：通过操纵画布 viewport 实现全屏展示，用户仍能看到画布 UI，无法专注
+const focusFrame = (frame: PlaitFrame) => {
+  const rect = RectangleClient.getRectangleByPoints(frame.points);
+  const zoom = Math.min(window.innerWidth / rect.width, window.innerHeight / rect.height);
+  const origination: [number, number] = [
+    rect.x + rect.width / 2 - window.innerWidth / 2 / zoom,
+    rect.y + rect.height / 2 - window.innerHeight / 2 / zoom,
+  ];
+  BoardTransforms.updateViewport(board, origination, zoom);
+};
+// 问题：画布工具栏、侧边栏、底部栏仍然可见，用户无法专注于内容
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：使用 toImage 将目标元素渲染为图片，在独立全屏蒙层中呈现
+import { toImage } from '@plait/core';
+import { FrameTransforms } from '../../plugins/with-frame';
+
+const captureFrameAsImage = async (board: PlaitBoard, frame: PlaitFrame) => {
+  const children = FrameTransforms.getFrameChildren(board, frame);
+  const elements = [frame, ...children];
+  // 按 board.children 顺序排序保持层级
+  const sorted = elements.slice().sort((a, b) => {
+    const iA = board.children.findIndex(c => c.id === a.id);
+    const iB = board.children.findIndex(c => c.id === b.id);
+    return iA - iB;
+  });
+  return await toImage(board, {
+    elements: sorted,
+    fillStyle: 'white',
+    inlineStyleClassNames: '.extend,.emojis,.text',
+    padding: 0,
+    ratio: 2,
+  });
+};
+
+// 进入幻灯片时预生成所有截图，在黑色蒙层中逐张展示
+// 完全不操作画布 viewport，退出时无需恢复状态
+```
+
+**原因**: 操纵画布 viewport 只是改变了视图的缩放和位置，画布上的所有 UI（工具栏、侧边栏、抽屉、底部输入栏等）仍然可见，用户无法沉浸式专注于内容。使用 `toImage` 渲染为独立图片，配合全屏黑色蒙层呈现，可以实现干净的展示效果。注意：截图 Frame 时需要包含 Frame 本身及其通过 `frameId` 绑定的所有子元素。
+
 #### Security Guidelines
 - Validate and sanitize all user input
 - Never hardcode sensitive information (API keys, etc.)
