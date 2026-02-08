@@ -161,16 +161,6 @@ export class SWChannelManager {
   }
 
   /**
-   * 更新调试客户端状态并触发回调
-   */
-  private notifyDebugClientCountChanged(): void {
-    if (this.onDebugClientCountChanged) {
-      const count = this.getDebugClientCount();
-      this.onDebugClientCountChanged(count);
-    }
-  }
-
-  /**
    * 获取单例实例
    */
   static getInstance(sw: ServiceWorkerGlobalScope): SWChannelManager {
@@ -222,7 +212,7 @@ export class SWChannelManager {
     const clientChannel = this.channels.get(clientId);
     if (clientChannel && isDebug) {
       clientChannel.isDebugClient = true;
-      this.notifyDebugClientCountChanged();
+      this.onDebugClientCountChanged?.(this.getDebugClientCount());
     }
   }
 
@@ -266,14 +256,6 @@ export class SWChannelManager {
   }
 
   /**
-   * 检查客户端是否是调试面板
-   */
-  private isDebugClientById(clientId: string): boolean {
-    const clientChannel = this.channels.get(clientId);
-    return clientChannel?.isDebugClient ?? false;
-  }
-
-  /**
    * 包装 RPC 处理器，添加日志记录
    * 将 postmessage-duplex 的 RPC 调用记录到 postmessage-logger
    */
@@ -288,7 +270,7 @@ export class SWChannelManager {
       const requestId = rawData?.requestId;
       
       // 跳过调试面板客户端的日志记录
-      const shouldLog = isPostMessageLoggerDebugMode() && !this.isDebugClientById(clientId);
+      const shouldLog = isPostMessageLoggerDebugMode() && !(this.channels.get(clientId)?.isDebugClient ?? false);
       
       // 记录收到的 RPC 请求并广播
       if (shouldLog) {
@@ -348,27 +330,7 @@ export class SWChannelManager {
   private createSubscribeMap(clientId: string): Record<string, (data: any) => any> {
     return {
       // ============================================================================
-      // 已废弃的 RPC（返回 stub 响应，保持向后兼容）
-      // 任务/工作流/聊天/执行器逻辑已迁移到主线程
-      // ============================================================================
-      
-      [RPC_METHODS.INIT]: async () => ({ success: true }),
-      [RPC_METHODS.TASK_CREATE]: async () => ({ success: false, error: 'Deprecated: use main thread executor' }),
-      [RPC_METHODS.TASK_CANCEL]: async () => ({ success: true }),
-      [RPC_METHODS.TASK_RETRY]: async () => ({ success: false, error: 'Deprecated' }),
-      [RPC_METHODS.TASK_DELETE]: async () => ({ success: true }),
-      [RPC_METHODS.TASK_MARK_INSERTED]: async () => ({ success: true }),
-      [RPC_METHODS.TASK_GET]: async () => ({ success: false, error: 'Deprecated' }),
-      [RPC_METHODS.CHAT_START]: async () => ({ success: false, error: 'Deprecated' }),
-      [RPC_METHODS.CHAT_STOP]: async () => ({ success: true }),
-      [RPC_METHODS.CHAT_GET_CACHED]: async () => ({ success: false }),
-      [RPC_METHODS.WORKFLOW_SUBMIT]: async () => ({ success: false, error: 'Deprecated: use main thread engine' }),
-      [RPC_METHODS.WORKFLOW_CANCEL]: async () => ({ success: true }),
-      [RPC_METHODS.WORKFLOW_CLAIM]: async () => ({ success: false }),
-      [RPC_METHODS.EXECUTOR_EXECUTE]: async () => ({ success: false, error: 'Deprecated' }),
-
-      // ============================================================================
-      // 仍然活跃的 RPC
+      // RPC Handlers
       // ============================================================================
       
       // Thumbnail (图片缩略图，由 SW 生成)
@@ -479,40 +441,6 @@ export class SWChannelManager {
     } catch (error: any) {
       console.error('[SWChannelManager] Thumbnail generation failed:', error);
       return { success: false, error: error.message };
-    }
-  }
-
-  /**
-   * 请求视频缩略图生成
-   * 使用 publish 直接向主线程发起请求并等待响应（双工通讯）
-   */
-  async requestVideoThumbnail(url: string, timeoutMs = 30000): Promise<string | null> {
-    // 找到一个可用的 channel 来发送请求
-    const clientChannel = this.channels.values().next().value as ClientChannel | undefined;
-    if (!clientChannel) {
-      return null;
-    }
-    
-    try {
-      // 使用 withTimeout 工具控制超时
-      const response = await withTimeout(
-        clientChannel.channel.publish('thumbnail:generate', { url }),
-        timeoutMs,
-        null
-      );
-      
-      if (!response || typeof response !== 'object') {
-        return null;
-      }
-      
-      const result = response as { data?: { thumbnailUrl?: string; error?: string } };
-      if (result.data?.error) {
-        return null;
-      }
-      
-      return result.data?.thumbnailUrl || null;
-    } catch {
-      return null;
     }
   }
 
@@ -963,7 +891,7 @@ export class SWChannelManager {
   // CDN RPC 处理器
   // ============================================================================
 
-  private async handleCDNGetStatus(): Promise<{ status: Record<string, unknown> }> {
+  private async handleCDNGetStatus(): Promise<{ status: unknown }> {
     try {
       const { getCDNStatusReport } = await import('../index');
       return { status: getCDNStatusReport() };
@@ -1241,7 +1169,7 @@ export class SWChannelManager {
 
     // 如果有调试客户端被移除，通知状态变化
     if (debugClientRemoved) {
-      this.notifyDebugClientCountChanged();
+      this.onDebugClientCountChanged?.(this.getDebugClientCount());
     }
   }
 }

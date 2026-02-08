@@ -9,22 +9,6 @@
 // ============================================================================
 
 export const RPC_METHODS = {
-  // 已废弃的 LLM RPC（返回 stub 响应，保持向后兼容）
-  INIT: 'init',
-  TASK_CREATE: 'task:create',
-  TASK_CANCEL: 'task:cancel',
-  TASK_RETRY: 'task:retry',
-  TASK_DELETE: 'task:delete',
-  TASK_MARK_INSERTED: 'task:markInserted',
-  TASK_GET: 'task:get',
-  CHAT_START: 'chat:start',
-  CHAT_STOP: 'chat:stop',
-  CHAT_GET_CACHED: 'chat:getCached',
-  WORKFLOW_SUBMIT: 'workflow:submit',
-  WORKFLOW_CANCEL: 'workflow:cancel',
-  WORKFLOW_CLAIM: 'workflow:claim',
-  EXECUTOR_EXECUTE: 'executor:execute',
-
   // 活跃的 RPC
   THUMBNAIL_GENERATE: 'thumbnail:generate',
   CRASH_SNAPSHOT: 'crash:snapshot',
