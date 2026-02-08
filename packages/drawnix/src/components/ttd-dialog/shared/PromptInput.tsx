@@ -36,7 +36,7 @@ export const PromptInput: React.FC<PromptInputProps> = ({
   const [isPresetOpen, setIsPresetOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
-  const [tooltipPosition, setTooltipPosition] = useState<{ top: number; left: number } | null>(null);
+  const [tooltipPosition, setTooltipPosition] = useState<{ bottom: number; right: number; maxHeight: number } | null>(null);
   const [updateTrigger, setUpdateTrigger] = useState(0); // 用于触发重新渲染
 
   // 处理后的提示词列表（排序和过滤，转换为 PromptItem 格式）
@@ -66,15 +66,26 @@ export const PromptInput: React.FC<PromptInputProps> = ({
     prompt,
   });
 
-  // 计算 tooltip 位置
+  // 计算 tooltip 位置（使用 bottom + right 定位，避免窄屏溢出）
   const updateTooltipPosition = useCallback(() => {
     if (buttonRef.current && isPresetOpen) {
       const rect = buttonRef.current.getBoundingClientRect();
-      // 在按钮上方显示，右对齐
-      setTooltipPosition({
-        top: rect.top - 4, // 在按钮上方 4px
-        left: rect.right, // 右对齐
-      });
+      const MARGIN = 8;
+      const PANEL_MAX_WIDTH = 320;
+      const PANEL_DEFAULT_MAX_HEIGHT = 400;
+
+      // bottom: 弹窗底边到视口底部的距离（弹窗在按钮上方 4px）
+      const bottom = window.innerHeight - rect.top + 4;
+      // 面板实际宽度（窄屏时自适应）
+      const panelWidth = Math.min(PANEL_MAX_WIDTH, window.innerWidth - MARGIN * 2);
+      // right: 弹窗右边缘到视口右边缘的距离（与按钮右边对齐，但不能溢出左边缘）
+      const rightFromButton = window.innerWidth - rect.right;
+      const maxRight = window.innerWidth - panelWidth - MARGIN;
+      const right = Math.max(Math.min(rightFromButton, maxRight), MARGIN);
+      // maxHeight: 限制面板高度（取默认值、按钮上方可用空间、视口45%三者最小值）
+      const maxHeight = Math.min(PANEL_DEFAULT_MAX_HEIGHT, rect.top - MARGIN, window.innerHeight * 0.45);
+
+      setTooltipPosition({ bottom, right, maxHeight });
     }
   }, [isPresetOpen]);
 
@@ -170,11 +181,13 @@ export const PromptInput: React.FC<PromptInputProps> = ({
         className="preset-prompt-panel-portal"
         style={{
           position: 'fixed',
-          top: tooltipPosition.top,
-          left: tooltipPosition.left,
-          transform: 'translate(-100%, -100%)',
+          bottom: tooltipPosition.bottom,
+          right: tooltipPosition.right,
           zIndex: Z_INDEX.DIALOG_POPOVER,
-        }}
+          // 通过 CSS 变量传递约束值，因为子元素 max-height: 100% 无法继承父元素的 maxHeight
+          ['--panel-max-width' as string]: 'calc(100vw - 16px)',
+          ['--panel-max-height' as string]: `${tooltipPosition.maxHeight}px`,
+        } as React.CSSProperties}
       >
         <PromptListPanel
           title={title}
