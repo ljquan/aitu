@@ -757,12 +757,12 @@ BoardTransforms.updateViewport(board, origination, zoom);
 
 **原因**: `updateZoom` 会以视口中心为锚点重新计算 origination，改变视口位置。随后 `moveToCenter` 内部依赖 `getSelectedElements` 并基于已被 zoom 改变后的视口状态计算偏移，导致最终位置不正确。使用 `updateViewport` 可以原子性地同时设置缩放和位置。
 
-#### 全屏展示画布局部内容用 toImage 截图独立渲染
+#### 全屏展示画布局部内容用 viewport 对准 + 隐藏 UI + 蒙层挖洞
 **场景**: 需要全屏/沉浸式展示画布中某个区域的内容时（如 Frame 幻灯片播放、元素预览）
 
-❌ **错误示例**:
+❌ **错误示例 1**:
 ```typescript
-// 错误：通过操纵画布 viewport 实现全屏展示，用户仍能看到画布 UI，无法专注
+// 错误：仅操纵画布 viewport，用户仍能看到画布 UI（抽屉、工具栏等）
 const focusFrame = (frame: PlaitFrame) => {
   const rect = RectangleClient.getRectangleByPoints(frame.points);
   const zoom = Math.min(window.innerWidth / rect.width, window.innerHeight / rect.height);
@@ -775,35 +775,63 @@ const focusFrame = (frame: PlaitFrame) => {
 // 问题：画布工具栏、侧边栏、底部栏仍然可见，用户无法专注于内容
 ```
 
-✅ **正确示例**:
+❌ **错误示例 2**:
 ```typescript
-// 正确：使用 toImage 将目标元素渲染为图片，在独立全屏蒙层中呈现
-import { toImage } from '@plait/core';
-import { FrameTransforms } from '../../plugins/with-frame';
-
+// 错误：使用 toImage 截图，可能丢失内容（<defs> 引用、子元素绑定不完全）
 const captureFrameAsImage = async (board: PlaitBoard, frame: PlaitFrame) => {
   const children = FrameTransforms.getFrameChildren(board, frame);
-  const elements = [frame, ...children];
-  // 按 board.children 顺序排序保持层级
-  const sorted = elements.slice().sort((a, b) => {
-    const iA = board.children.findIndex(c => c.id === a.id);
-    const iB = board.children.findIndex(c => c.id === b.id);
-    return iA - iB;
-  });
-  return await toImage(board, {
-    elements: sorted,
-    fillStyle: 'white',
-    inlineStyleClassNames: '.extend,.emojis,.text',
-    padding: 0,
-    ratio: 2,
-  });
+  return await toImage(board, { elements: [frame, ...children] });
 };
-
-// 进入幻灯片时预生成所有截图，在黑色蒙层中逐张展示
-// 完全不操作画布 viewport，退出时无需恢复状态
+// 问题：toImage 对渐变填充、图片引用、SVG <defs> 处理不完善，导致截图内容缺失
 ```
 
-**原因**: 操纵画布 viewport 只是改变了视图的缩放和位置，画布上的所有 UI（工具栏、侧边栏、抽屉、底部输入栏等）仍然可见，用户无法沉浸式专注于内容。使用 `toImage` 渲染为独立图片，配合全屏黑色蒙层呈现，可以实现干净的展示效果。注意：截图 Frame 时需要包含 Frame 本身及其通过 `frameId` 绑定的所有子元素。
+✅ **正确示例**:
+```typescript
+// 正确：三步走——① viewport 对准 ② CSS 隐藏 UI ③ 蒙层挖洞
+
+// 步骤 1：进入时隐藏所有 UI 覆盖层
+const SLIDESHOW_CLASS = 'slideshow-active';
+document.documentElement.classList.add(SLIDESHOW_CLASS);
+
+// 步骤 2：viewport 对准 Frame 并计算屏幕位置
+const rect = RectangleClient.getRectangleByPoints(frame.points);
+const container = PlaitBoard.getBoardContainer(board);
+const vw = container.clientWidth;
+const vh = container.clientHeight;
+const zoom = Math.min((vw - PADDING * 2) / rect.width, (vh - PADDING * 2) / rect.height, 3);
+const origination: [number, number] = [
+  rect.x + rect.width / 2 - vw / 2 / zoom,
+  rect.y + rect.height / 2 - vh / 2 / zoom,
+];
+BoardTransforms.updateViewport(board, origination, zoom);
+
+// 步骤 3：直接计算 Frame 在屏幕上的位置（不依赖异步 DOM 查询）
+const containerBounds = container.getBoundingClientRect();
+const screenRect = {
+  left: containerBounds.left + (rect.x - origination[0]) * zoom,
+  top: containerBounds.top + (rect.y - origination[1]) * zoom,
+  width: rect.width * zoom,
+  height: rect.height * zoom,
+};
+// 用四块黑色 div 围住 Frame 区域，中间空出窗口
+
+// 退出时恢复
+document.documentElement.classList.remove(SLIDESHOW_CLASS);
+BoardTransforms.updateViewport(board, savedOrigination, savedZoom);
+```
+
+```scss
+// CSS：slideshow 模式隐藏所有 UI 覆盖层
+.slideshow-active {
+  .unified-toolbar, .popup-toolbar, .project-drawer,
+  .chat-drawer, .toolbox-drawer, .ai-input-bar,
+  .view-navigation, .performance-panel /* ... */ {
+    display: none !important;
+  }
+}
+```
+
+**原因**: `toImage` 截图方案看似干净，但实际有严重缺陷——SVG 中的 `<defs>`（渐变、图案填充）引用会丢失，子元素如果不是通过 `frameId` 绑定而是空间重叠则无法获取，导致截图内容缺失。而仅操纵 viewport 不隐藏 UI 会导致抽屉、工具栏等透过蒙层露出。正确方案是三者结合：viewport 对准确保画布原生渲染（所见即所得）、CSS 隐藏 UI 确保干净背景、蒙层挖洞聚焦目标区域。
 
 #### Security Guidelines
 - Validate and sanitize all user input

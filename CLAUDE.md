@@ -124,7 +124,7 @@ Service Worker (后台执行)
 - **新画布功能必须作为 Plait 插件**：涉及画布交互的功能（如激光笔、画笔变体）必须实现为 `withXxx` 插件复用 Generator/Smoother 等已有基础设施，禁止使用独立 React 组件 + SVG overlay（坐标系不一致、事件冲突）
 - **工具互斥通过 `board.pointer` 管理**：新增工具类型应加入对应枚举（如 `FreehandShape`），通过 Plait 的 `board.pointer` 单值机制自动互斥，禁止使用独立布尔状态（如 `xxxActive`）手动管理
 - **Viewport 缩放+平移用 `updateViewport` 一步完成**：需要同时改变 zoom 和 origination 时，使用 `BoardTransforms.updateViewport(board, origination, zoom)` 一次性设置；禁止 `updateZoom()` + `moveToCenter()` 分两步调用，`updateZoom` 会先改变视口位置，导致 `moveToCenter` 基于错误的视口状态计算偏移。`origination` 是视口左上角在世界坐标中的位置，居中公式：`origination = [centerX - viewportWidth/2/zoom, centerY - viewportHeight/2/zoom]`
-- **全屏展示画布局部内容用 `toImage` 截图独立渲染**：需要全屏/沉浸式展示某个区域（如 Frame 幻灯片播放、元素预览）时，禁止通过操纵画布 viewport 实现（用户仍能看到整个画布 UI，无法专注）；应使用 `toImage(board, { elements, fillStyle, ratio })` 将目标元素渲染为图片，在独立的全屏蒙层中呈现。Frame 截图需包含 Frame 本身及其子元素：`const children = FrameTransforms.getFrameChildren(board, frame); toImage(board, { elements: [frame, ...children] })`
+- **全屏展示画布局部内容用「viewport 对准 + 隐藏 UI + 蒙层挖洞」**：需要全屏/沉浸式展示某个区域（如 Frame 幻灯片播放）时，三步走：① viewport 对准目标区域（`updateViewport`）；② 给 `document.documentElement` 添加 CSS class（如 `slideshow-active`），用 `display: none !important` 隐藏所有 UI 覆盖层（工具栏、抽屉、面板、输入栏等）；③ 在画布上方渲染全屏蒙层，用四块黑色 div 围住目标区域，中间留出"窗口"。注意：不要用 `toImage` 截图方案（`<defs>` 引用丢失、子元素绑定不完全导致内容缺失），也不要仅操纵 viewport 而不隐藏 UI（抽屉/工具栏会露出来）
 
 ---
 
