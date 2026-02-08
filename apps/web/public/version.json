@@ -1,9 +1,6 @@
 {
-  "version": "0.5.91",
-  "buildTime": "2026-02-08T13:35:34.136Z",
+  "version": "0.5.92",
+  "buildTime": "2026-02-08T13:59:57.607Z",
   "gitCommit": "unknown",
-  "changelog": [
-    "fixed:本次修改解决了ai生成图片中点击提示的下拉框手机端溢出问题&agent生成长方形图片容器溢出问题",
-    "视频任务状态"
-  ]
+  "changelog": []
 }
