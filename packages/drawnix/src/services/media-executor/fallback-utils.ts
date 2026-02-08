@@ -68,7 +68,16 @@ export async function pollVideoStatus(
     }
 
     if (status === 'failed' || status === 'error') {
-      throw new Error(data.error || data.message || 'Video generation failed');
+      // data.error 可能是字符串或对象 { code, message }
+      const errMsg = typeof data.error === 'string'
+        ? data.error
+        : (data.error?.message || data.message || 'Video generation failed');
+      const errCode = typeof data.error === 'object' ? data.error?.code : undefined;
+      const error = new Error(errMsg);
+      if (errCode) {
+        (error as any).code = errCode;
+      }
+      throw error;
     }
 
     // 等待下一次轮询

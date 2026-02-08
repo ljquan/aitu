@@ -160,17 +160,27 @@ class TaskQueueService {
         timeout: 10 * 60 * 1000, // 10 minutes
         onProgress: (updatedTask) => {
           // Update local state with progress
+          // 注意：同时同步 result/error/completedAt，避免 status=completed 但 result 为空的中间状态
           const localTask = this.tasks.get(task.id);
           if (localTask) {
             localTask.status = updatedTask.status as TaskStatus;
             localTask.progress = updatedTask.progress;
+            if (updatedTask.result) {
+              localTask.result = updatedTask.result;
+            }
+            if (updatedTask.error) {
+              localTask.error = updatedTask.error;
+            }
+            if (updatedTask.completedAt) {
+              localTask.completedAt = updatedTask.completedAt;
+            }
             localTask.updatedAt = Date.now();
             this.emitEvent('taskUpdated', localTask);
           }
         },
       });
 
-      // Update final state
+      // Update final state & persist
       const localTask = this.tasks.get(task.id);
       if (localTask && result.task) {
         localTask.status = result.task.status as TaskStatus;
@@ -568,9 +578,13 @@ class TaskQueueService {
    * @private
    */
   private emitEvent(type: TaskEvent['type'], task: Task): void {
+    // 浅拷贝 task 对象，确保 React 组件的 memo/shouldComponentUpdate 能检测到变化
+    // 否则 useFilteredTaskQueue 收到的 event.task 与数组中已有的对象是同一引用，
+    // React.memo 比较 prev.task.progress === next.task.progress 时看到的是同一个已变异对象，
+    // 永远相等，导致不重新渲染
     this.taskUpdates$.next({
       type,
-      task,
+      task: { ...task },
       timestamp: Date.now(),
     });
   }

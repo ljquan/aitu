@@ -370,12 +370,22 @@ export class FallbackMediaExecutor implements IMediaExecutor {
     await taskStorageWriter.updateStatus(taskId, 'processing');
     options?.onProgress?.({ progress: 0, phase: 'submitting' });
 
+    // 收集参考图原始 URL（用于日志记录）
+    const logRefUrls =
+      (params.referenceImages && params.referenceImages.length > 0
+        ? params.referenceImages
+        : undefined) ||
+      (params.inputReference ? [params.inputReference] : undefined);
+
     const logId = startLLMApiLog({
       endpoint: '/v1/videos',
       model,
       taskType: 'video',
       prompt,
       taskId,
+      hasReferenceImages: !!logRefUrls && logRefUrls.length > 0,
+      referenceImageCount: logRefUrls?.length,
+      referenceImages: logRefUrls?.map(url => ({ url, size: 0, width: 0, height: 0 } as LLMReferenceImage)),
     });
 
     try {
@@ -440,7 +450,9 @@ export class FallbackMediaExecutor implements IMediaExecutor {
         videoId,
         config.videoConfig,
         (progress) => {
-          options?.onProgress?.({ progress: 10 + progress * 0.8, phase: 'polling' });
+          // progress 是 0-1 范围（来自 pollVideoStatus 的 progress/100）
+          // 映射到 10-90 范围：10 + (0~1) * 80 = 10~90
+          options?.onProgress?.({ progress: 10 + progress * 80, phase: 'polling' });
         },
         options?.signal
       );
@@ -480,7 +492,7 @@ export class FallbackMediaExecutor implements IMediaExecutor {
         errorMessage,
       });
       await taskStorageWriter.failTask(taskId, {
-        code: 'VIDEO_GENERATION_ERROR',
+        code: error.code || 'VIDEO_GENERATION_ERROR',
         message: errorMessage,
       });
       throw error;
