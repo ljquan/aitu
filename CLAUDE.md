@@ -218,6 +218,34 @@ Service Worker (后台执行)
 12. **关键操作直接调用**：不依赖 RxJS 事件订阅触发关键业务逻辑，订阅时序不可靠
 13. **CPU 密集型循环需 yield**：大量 JSON.stringify/加密等操作的循环，每 3-5 次迭代调用 `await yieldToMain()` 让出主线程
 14. **跨 React Root 状态共享**：Plait 文本组件通过 `createRoot` 渲染在独立 React 树中，Context 无法穿透；需用 `useSyncExternalStore` + 模块级 store 共享状态
+15. **列表索引引用须用 ID 追踪**：当 Viewer/弹窗通过 `currentIndex` 引用列表项时，若列表可能动态变化（新项插入/删除），必须通过 item ID 在列表变化后修正索引，否则会显示错误的内容
+
+### 数值范围转换规则
+
+回调链中传递进度/百分比等数值时，必须明确每一层的值域范围并保持一致：
+
+❌ **错误示例**:
+```typescript
+// pollVideoStatus 回调返回 0-1 范围
+onProgress(apiProgress / 100); // 100 → 1.0
+
+// 调用方误以为是 0-100 范围，乘以 0.8
+options?.onProgress?.({ progress: 10 + progress * 0.8 });
+// 结果：10 + 1.0 * 0.8 = 10.8，而非预期的 90
+```
+
+✅ **正确示例**:
+```typescript
+// 明确注释值域范围
+onProgress(apiProgress / 100); // 输出 0-1
+
+// 正确映射：0-1 → 10-90 需乘以 80
+// progress 是 0-1 范围，映射到 10-90：10 + (0~1) * 80
+options?.onProgress?.({ progress: 10 + progress * 80 });
+// 结果：10 + 1.0 * 80 = 90 ✓
+```
+
+**原因**: 回调链跨多层传递数值时，0-1 和 0-100 两种范围容易混淆。每个回调的输入/输出值域必须用注释明确标注，映射公式应能通过边界值（0 和 max）验证正确性。
 
 ### 缓存规则
 
