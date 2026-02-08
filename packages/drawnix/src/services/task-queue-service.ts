@@ -97,16 +97,21 @@ class TaskQueueService {
       const executor = await executorFactory.getExecutor();
 
       // 实时进度回调：executor 执行期间同步更新内存中的 task 状态
+      // 注意：必须创建新对象存入 Map，不能原地修改旧对象
+      // 否则 useTaskQueue 通过 getAllTasks() 获取的对象引用不变，
+      // React.memo 比较 prev.task.progress === next.task.progress 时永远相等
       const executionOptions = {
         onProgress: (progress: { progress: number; phase?: string }) => {
           const localTask = this.tasks.get(task.id);
           if (localTask) {
-            localTask.progress = progress.progress;
-            if (progress.phase) {
-              localTask.executionPhase = progress.phase as Task['executionPhase'];
-            }
-            localTask.updatedAt = Date.now();
-            this.emitEvent('taskUpdated', localTask);
+            const updatedTask: Task = {
+              ...localTask,
+              progress: progress.progress,
+              updatedAt: Date.now(),
+              ...(progress.phase && { executionPhase: progress.phase as Task['executionPhase'] }),
+            };
+            this.tasks.set(task.id, updatedTask);
+            this.emitEvent('taskUpdated', updatedTask);
           }
         },
       };
@@ -161,21 +166,20 @@ class TaskQueueService {
         onProgress: (updatedTask) => {
           // Update local state with progress
           // 注意：同时同步 result/error/completedAt，避免 status=completed 但 result 为空的中间状态
+          // 创建新对象存入 Map，确保 React 能检测到引用变化
           const localTask = this.tasks.get(task.id);
           if (localTask) {
-            localTask.status = updatedTask.status as TaskStatus;
-            localTask.progress = updatedTask.progress;
-            if (updatedTask.result) {
-              localTask.result = updatedTask.result;
-            }
-            if (updatedTask.error) {
-              localTask.error = updatedTask.error;
-            }
-            if (updatedTask.completedAt) {
-              localTask.completedAt = updatedTask.completedAt;
-            }
-            localTask.updatedAt = Date.now();
-            this.emitEvent('taskUpdated', localTask);
+            const newTask: Task = {
+              ...localTask,
+              status: updatedTask.status as TaskStatus,
+              progress: updatedTask.progress,
+              updatedAt: Date.now(),
+              ...(updatedTask.result && { result: updatedTask.result }),
+              ...(updatedTask.error && { error: updatedTask.error }),
+              ...(updatedTask.completedAt && { completedAt: updatedTask.completedAt }),
+            };
+            this.tasks.set(task.id, newTask);
+            this.emitEvent('taskUpdated', newTask);
           }
         },
       });
@@ -183,15 +187,19 @@ class TaskQueueService {
       // Update final state & persist
       const localTask = this.tasks.get(task.id);
       if (localTask && result.task) {
-        localTask.status = result.task.status as TaskStatus;
-        localTask.result = result.task.result;
-        localTask.error = result.task.error;
-        localTask.completedAt = result.task.completedAt;
-        localTask.updatedAt = Date.now();
+        const finalTask: Task = {
+          ...localTask,
+          status: result.task.status as TaskStatus,
+          result: result.task.result,
+          error: result.task.error,
+          completedAt: result.task.completedAt,
+          updatedAt: Date.now(),
+        };
+        this.tasks.set(task.id, finalTask);
 
         // Persist final state
-        this.persistTask(localTask);
-        this.emitEvent('taskUpdated', localTask);
+        this.persistTask(finalTask);
+        this.emitEvent('taskUpdated', finalTask);
       }
     } catch (error: any) {
       console.error('[TaskQueueService] Task execution failed:', error);
