@@ -96,6 +96,21 @@ class TaskQueueService {
       // Get executor
       const executor = await executorFactory.getExecutor();
 
+      // 实时进度回调：executor 执行期间同步更新内存中的 task 状态
+      const executionOptions = {
+        onProgress: (progress: { progress: number; phase?: string }) => {
+          const localTask = this.tasks.get(task.id);
+          if (localTask) {
+            localTask.progress = progress.progress;
+            if (progress.phase) {
+              localTask.executionPhase = progress.phase as Task['executionPhase'];
+            }
+            localTask.updatedAt = Date.now();
+            this.emitEvent('taskUpdated', localTask);
+          }
+        },
+      };
+
       // Execute based on task type
       switch (task.type) {
         case TaskType.IMAGE:
@@ -107,31 +122,40 @@ class TaskQueueService {
             referenceImages: task.params.referenceImages as string[] | undefined,
             count: task.params.count as number | undefined,
             uploadedImages: task.params.uploadedImages as Array<{ url?: string }> | undefined,
-          });
+          }, executionOptions);
           break;
         case TaskType.VIDEO: {
+          // 从 uploadedImages（UI 层传入的 UploadedVideoImage[]）中提取 URL
+          const uploaded = task.params.uploadedImages as Array<{ url?: string }> | undefined;
+          const uploadedUrls = uploaded
+            ?.map((img) => img.url)
+            .filter((url): url is string => !!url);
+          // 兼容旧字段 referenceImages / inputReference
           const refImages = task.params.referenceImages as string[] | undefined;
           const inputRef = (task.params as { inputReference?: string }).inputReference;
+          const finalRefs =
+            uploadedUrls && uploadedUrls.length > 0
+              ? uploadedUrls
+              : refImages && refImages.length > 0
+                ? refImages
+                : inputRef
+                  ? [inputRef]
+                  : undefined;
           await executor.generateVideo({
             taskId: task.id,
             prompt: task.params.prompt,
             model: task.params.model,
-            duration: task.params.duration?.toString(),
+            duration: (task.params.duration ?? task.params.seconds)?.toString(),
             size: task.params.size,
-            referenceImages:
-              refImages && refImages.length > 0
-                ? refImages
-                : inputRef
-                  ? [inputRef]
-                  : undefined,
-          });
+            referenceImages: finalRefs,
+          }, executionOptions);
           break;
         }
         default:
           throw new Error(`Unsupported task type: ${task.type}`);
       }
 
-      // Poll for task completion
+      // Poll for task completion (executor 已完成，此处主要是从 IndexedDB 读取最终结果)
       const result = await waitForTaskCompletion(task.id, {
         timeout: 10 * 60 * 1000, // 10 minutes
         onProgress: (updatedTask) => {
