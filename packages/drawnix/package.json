@@ -12,6 +12,12 @@
   "dependencies": {
     "@aitu/utils": "workspace:*",
     "@floating-ui/react": "^0.26.24",
+    "@milkdown/kit": "^7.18.0",
+    "@milkdown/plugin-clipboard": "^7.18.0",
+    "@milkdown/plugin-cursor": "^7.18.0",
+    "@milkdown/plugin-indent": "^7.18.0",
+    "@milkdown/plugin-prism": "^7.18.0",
+    "@milkdown/react": "^7.18.0",
     "@plait-board/markdown-to-drawnix": "^0.0.6",
     "@plait-board/mermaid-to-drawnix": "^0.0.7",
     "@tanstack/react-virtual": "^3.13.13",
@@ -19,6 +25,7 @@
     "mobile-detect": "^1.4.5",
     "open-color": "^1.9.1",
     "postmessage-duplex": "^1.2.0",
+    "prismjs": "^1.30.0",
     "web-vitals": "^5.1.0"
   },
   "exports": {

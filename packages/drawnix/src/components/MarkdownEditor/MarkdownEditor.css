@@ -1,0 +1,827 @@
+/* Milkdown 编辑器样式覆盖 - 适配 ColliMind UI 风格 */
+
+/* 引入 Prism 代码高亮主题 */
+@import 'prismjs/themes/prism-tomorrow.css';
+
+.collimind-markdown-editor {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background-color: #ffffff;
+  /* 确保这是滚动容器 */
+  position: relative;
+  >div {
+    overflow: auto;
+  }
+}
+
+/* ========================================
+   模式切换按钮样式
+   ======================================== */
+
+.collimind-markdown-editor-mode-switch {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 10;
+  display: flex;
+  gap: 2px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 2px;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+/* hover 编辑器时显示模式切换按钮 */
+.collimind-markdown-editor:hover .collimind-markdown-editor-mode-switch,
+.collimind-markdown-editor-mode-switch:hover {
+  opacity: 1;
+}
+
+.collimind-markdown-editor-mode-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  color: #64748b;
+  transition: all 0.15s ease;
+}
+
+.collimind-markdown-editor-mode-btn:hover {
+  background: #e2e8f0;
+  color: #334155;
+}
+
+.collimind-markdown-editor-mode-btn.active {
+  background: #4f46e5;
+  color: white;
+}
+
+.collimind-markdown-editor-mode-btn.active:hover {
+  background: #4338ca;
+}
+
+/* ========================================
+   源码编辑器样式
+   ======================================== */
+
+.collimind-markdown-editor-source {
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  padding: 12px 16px;
+  border: none;
+  outline: none;
+  resize: none;
+  font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.7;
+  color: #334155;
+  background-color: #ffffff;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.collimind-markdown-editor-source::placeholder {
+  color: #94a3b8;
+  font-style: italic;
+}
+
+.collimind-markdown-editor-source:focus {
+  background-color: #ffffff;
+}
+
+/* 源码模式下隐藏 WYSIWYG 编辑器 */
+.collimind-markdown-editor[data-mode="source"] .milkdown {
+  display: none;
+}
+
+/* 编辑器内容区域统一白色背景 */
+.collimind-markdown-editor[data-mode="wysiwyg"] .editor,
+.collimind-markdown-editor[data-mode="wysiwyg"] .milkdown > div {
+  background-color: #ffffff;
+}
+
+/* Milkdown 编辑器根容器 */
+.collimind-markdown-editor .milkdown {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* 编辑器内容区域 - 这是实际的滚动容器 */
+.collimind-markdown-editor .editor,
+.collimind-markdown-editor .milkdown > div {
+  flex: 1;
+  padding: 12px 16px;
+  font-size: 14px;
+  line-height: 1.7;
+  color: #334155;
+  overflow-y: auto !important;
+  overflow-x: hidden;
+  min-height: 0;
+  outline: none;
+  /* 确保滚动在这里发生 */
+  overscroll-behavior: contain;
+}
+
+.collimind-markdown-editor .ProseMirror {
+  outline: none;
+  min-height: 100%;
+}
+
+.collimind-markdown-editor .ProseMirror:focus {
+  outline: none;
+}
+
+/* 占位符样式 */
+.collimind-markdown-editor .ProseMirror p.is-editor-empty:first-child::before {
+  color: #94a3b8;
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+  font-style: italic;
+}
+
+/* 标题样式 */
+.collimind-markdown-editor h1 {
+  font-size: 22px;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 20px 0 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.collimind-markdown-editor h2 {
+  font-size: 18px;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 18px 0 10px;
+}
+
+.collimind-markdown-editor h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 16px 0 8px;
+}
+
+.collimind-markdown-editor h4,
+.collimind-markdown-editor h5,
+.collimind-markdown-editor h6 {
+  font-size: 14px;
+  font-weight: 600;
+  color: #334155;
+  margin: 14px 0 6px;
+}
+
+/* 段落样式 */
+.collimind-markdown-editor p {
+  color: #475569;
+  margin: 6px 0;
+}
+
+/* 包含图片的段落不需要额外 margin，避免图片上下空白过大 */
+.collimind-markdown-editor p:has(img) {
+  margin: 0;
+}
+
+/* 链接样式 */
+.collimind-markdown-editor a {
+  color: #4f46e5;
+  text-decoration: none;
+}
+
+.collimind-markdown-editor a:hover {
+  text-decoration: underline;
+}
+
+/* 粗体和斜体 */
+.collimind-markdown-editor strong {
+  color: #1e293b;
+  font-weight: 600;
+}
+
+.collimind-markdown-editor em {
+  font-style: italic;
+}
+
+/* 列表样式 */
+.collimind-markdown-editor ul,
+.collimind-markdown-editor ol {
+  margin: 10px 0;
+  padding-left: 24px;
+}
+
+.collimind-markdown-editor li {
+  margin: 6px 0;
+}
+
+.collimind-markdown-editor li > p {
+  margin: 0;
+}
+
+/* 任务列表样式 */
+.collimind-markdown-editor li[data-checked="true"] {
+  text-decoration: line-through;
+  color: #94a3b8;
+}
+
+.collimind-markdown-editor input[type="checkbox"] {
+  margin-right: 8px;
+  accent-color: #4f46e5;
+}
+
+/* 引用块样式 */
+.collimind-markdown-editor blockquote {
+  border-left: 3px solid #818cf8;
+  padding-left: 16px;
+  margin: 14px 0;
+  color: #64748b;
+  font-style: italic;
+}
+
+.collimind-markdown-editor blockquote p {
+  color: inherit;
+}
+
+/* 代码样式 */
+.collimind-markdown-editor code {
+  background-color: #f1f5f9;
+  color: #1e293b;
+  font-size: 13px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+}
+
+.collimind-markdown-editor pre {
+  background-color: #1e293b;
+  color: #e2e8f0;
+  font-size: 13px;
+  padding: 14px 18px;
+  border-radius: 8px;
+  overflow-x: auto;
+  margin: 14px 0;
+}
+
+.collimind-markdown-editor pre code {
+  background-color: transparent;
+  color: inherit;
+  padding: 0;
+  font-size: inherit;
+}
+
+/* 表格样式 */
+.collimind-markdown-editor table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 14px 0;
+  font-size: 13px;
+}
+
+.collimind-markdown-editor th {
+  background-color: #f1f5f9;
+  font-weight: 600;
+  text-align: left;
+  padding: 10px 14px;
+  border: 1px solid #e2e8f0;
+}
+
+.collimind-markdown-editor td {
+  padding: 10px 14px;
+  border: 1px solid #e2e8f0;
+}
+
+.collimind-markdown-editor tr:nth-child(even) td {
+  background-color: #f8fafc;
+}
+
+/* 图片样式 */
+.collimind-markdown-editor img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 6px;
+  margin: 4px 0;
+  display: block;
+}
+
+/* 图片容器也不需要额外的 margin */
+.collimind-markdown-editor .milkdown-image-container {
+  margin: 0;
+  padding: 0;
+}
+
+/* Inline 图片组样式 - 支持一行多图 */
+.collimind-markdown-editor .milkdown-image-inline {
+  display: inline-block !important;
+  vertical-align: middle;
+  margin: 4px !important;
+}
+
+.collimind-markdown-editor .milkdown-image-inline img {
+  margin: 0;
+  max-width: calc(50vw - 40px);
+}
+
+/* 当段落中包含多个 inline 图片时，使用 flex 布局 */
+.collimind-markdown-editor p:has(.milkdown-image-inline) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+/* 确保连续的 inline 图片容器正确排列 */
+.collimind-markdown-editor .milkdown-image-container.milkdown-image-inline + .milkdown-image-container.milkdown-image-inline {
+  margin-left: 0;
+}
+
+/* 分隔线样式 */
+.collimind-markdown-editor hr {
+  border: none;
+  border-top: 1px solid #e2e8f0;
+  margin: 20px 0;
+}
+
+/* 只读模式样式 */
+.collimind-markdown-editor[data-readonly="true"] .ProseMirror {
+  cursor: default;
+}
+
+.collimind-markdown-editor[data-readonly="true"] {
+  background-color: #ffffff;
+}
+
+/* 选中文本样式 */
+.collimind-markdown-editor .ProseMirror ::selection {
+  background-color: rgba(79, 70, 229, 0.2);
+}
+
+/* 删除线样式 */
+.collimind-markdown-editor del,
+.collimind-markdown-editor s {
+  text-decoration: line-through;
+  color: #94a3b8;
+}
+
+/* 修复滚动问题 - 确保滚动在编辑器内部 */
+.collimind-markdown-editor .milkdown-editor {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+  overscroll-behavior: contain;
+}
+
+/* 确保 ProseMirror 容器正确滚动 */
+.collimind-markdown-editor .ProseMirror-scrollable {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* ========================================
+   Prism 代码高亮自定义样式
+   ======================================== */
+
+/* 覆盖代码块背景和边框 */
+.collimind-markdown-editor pre[class*="language-"] {
+  background-color: #1e293b !important;
+  border-radius: 8px;
+  padding: 14px 18px;
+  margin: 14px 0;
+  border: 1px solid #334155;
+}
+
+/* 代码块内的 code 标签 */
+.collimind-markdown-editor pre[class*="language-"] code {
+  background-color: transparent !important;
+  color: #e2e8f0;
+  font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+/* 行内代码保持原有样式 */
+.collimind-markdown-editor :not(pre) > code[class*="language-"] {
+  background-color: #f1f5f9 !important;
+  color: #1e293b !important;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+/* 代码块语言标签（如果有） */
+.collimind-markdown-editor pre[class*="language-"]::before {
+  position: absolute;
+  top: 8px;
+  right: 12px;
+  font-size: 11px;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* ========================================
+   Emoji 插件样式
+   ======================================== */
+
+/* Emoji 选择器面板 */
+.collimind-markdown-editor .emoji-picker {
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  padding: 8px;
+  max-height: 300px;
+  overflow-y: auto;
+  z-index: 100;
+}
+
+.collimind-markdown-editor .emoji-picker-item {
+  padding: 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  display: inline-block;
+  transition: background 0.15s;
+}
+
+.collimind-markdown-editor .emoji-picker-item:hover {
+  background: #f1f5f9;
+}
+
+/* Emoji 在文本中的显示 */
+.collimind-markdown-editor .emoji {
+  font-family: 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol';
+  font-size: 1.2em;
+  vertical-align: middle;
+}
+
+/* ========================================
+   剪贴板增强样式
+   ======================================== */
+
+/* 复制成功提示 */
+.collimind-markdown-editor .clipboard-copied {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(30, 41, 59, 0.95);
+  color: white;
+  padding: 12px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  z-index: 9999;
+  animation: fadeInOut 1.5s ease-in-out;
+}
+
+@keyframes fadeInOut {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.9); }
+  20% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  80% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(0.9); }
+}
+
+/* ========================================
+   Slash 命令面板样式
+   ======================================== */
+
+/* Slash 命令触发器 */
+.collimind-markdown-editor .slash-trigger {
+  color: #4f46e5;
+  font-weight: 600;
+}
+
+/* Slash 命令下拉菜单容器 */
+.collimind-markdown-editor .slash-dropdown {
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1), 0 4px 12px rgba(0, 0, 0, 0.08);
+  padding: 6px;
+  max-height: 320px;
+  overflow-y: auto;
+  z-index: 1000;
+  min-width: 240px;
+}
+
+/* Slash 命令菜单项 */
+.collimind-markdown-editor .slash-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.collimind-markdown-editor .slash-dropdown-item:hover {
+  background: #f1f5f9;
+}
+
+.collimind-markdown-editor .slash-dropdown-item.selected,
+.collimind-markdown-editor .slash-dropdown-item[data-selected="true"] {
+  background: #eef2ff;
+  border: 1px solid #c7d2fe;
+}
+
+/* Slash 命令图标 */
+.collimind-markdown-editor .slash-dropdown-item-icon {
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  opacity: 0.8;
+  flex-shrink: 0;
+}
+
+/* Slash 命令文本容器 */
+.collimind-markdown-editor .slash-dropdown-item-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* Slash 命令标题 */
+.collimind-markdown-editor .slash-dropdown-item-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: #1e293b;
+  line-height: 1.3;
+}
+
+/* Slash 命令描述 */
+.collimind-markdown-editor .slash-dropdown-item-description {
+  font-size: 12px;
+  color: #64748b;
+  line-height: 1.3;
+}
+
+/* Slash 命令快捷键提示 */
+.collimind-markdown-editor .slash-dropdown-item-shortcut {
+  font-size: 11px;
+  color: #94a3b8;
+  background: #f8fafc;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-family: monospace;
+  flex-shrink: 0;
+}
+
+/* Slash 命令分组标题 */
+.collimind-markdown-editor .slash-dropdown-group {
+  padding: 8px 12px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* ========================================
+   Tooltip 文本选择工具栏样式
+   ======================================== */
+
+/* 工具栏容器 */
+.collimind-markdown-editor .tooltip,
+.collimind-markdown-editor .milkdown-tooltip {
+  background: #1e293b;
+  border-radius: 8px;
+  padding: 6px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.25), 0 4px 12px rgba(0, 0, 0, 0.2);
+  z-index: 1000;
+  animation: tooltipSlideIn 0.15s ease-out;
+}
+
+@keyframes tooltipSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 工具栏按钮 */
+.collimind-markdown-editor .tooltip-button,
+.collimind-markdown-editor .milkdown-tooltip button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 10px;
+  border: none;
+  background: transparent;
+  color: #e2e8f0;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-size: 14px;
+  font-weight: 500;
+  user-select: none;
+  min-width: 32px;
+  height: 32px;
+}
+
+.collimind-markdown-editor .tooltip-button:hover,
+.collimind-markdown-editor .milkdown-tooltip button:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: white;
+}
+
+.collimind-markdown-editor .tooltip-button:active,
+.collimind-markdown-editor .milkdown-tooltip button:active {
+  background: rgba(255, 255, 255, 0.08);
+  transform: scale(0.95);
+}
+
+/* 工具栏激活状态 */
+.collimind-markdown-editor .tooltip-button.active,
+.collimind-markdown-editor .tooltip-button[data-active="true"],
+.collimind-markdown-editor .milkdown-tooltip button.active {
+  background: #4f46e5;
+  color: white;
+}
+
+.collimind-markdown-editor .tooltip-button.active:hover,
+.collimind-markdown-editor .milkdown-tooltip button.active:hover {
+  background: #4338ca;
+}
+
+/* 工具栏分隔符 */
+.collimind-markdown-editor .tooltip-divider {
+  width: 1px;
+  height: 20px;
+  background: rgba(255, 255, 255, 0.15);
+  margin: 0 4px;
+}
+
+/* 工具栏图标 */
+.collimind-markdown-editor .tooltip-button svg,
+.collimind-markdown-editor .milkdown-tooltip button svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* ========================================
+   增强光标样式
+   ======================================== */
+
+/* Drop cursor (拖拽光标) */
+.collimind-markdown-editor .ProseMirror-dropcursor {
+  border-left: 2px solid #4f46e5;
+  animation: cursorBlink 1s step-end infinite;
+}
+
+@keyframes cursorBlink {
+  0%, 50% { border-color: #4f46e5; }
+  50.1%, 100% { border-color: transparent; }
+}
+
+/* Gap cursor (间隙光标) */
+.collimind-markdown-editor .ProseMirror-gapcursor {
+  display: block;
+  pointer-events: none;
+  position: relative;
+}
+
+.collimind-markdown-editor .ProseMirror-gapcursor::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -2px;
+  width: 2px;
+  height: 100%;
+  background: #4f46e5;
+  animation: cursorBlink 1s step-end infinite;
+}
+
+/* ========================================
+   智能缩进视觉反馈
+   ======================================== */
+
+/* 缩进提示（可选，如果插件支持） */
+.collimind-markdown-editor .indent-guide {
+  border-left: 1px solid #e2e8f0;
+  margin-left: 1.5em;
+  padding-left: 0.5em;
+}
+
+/* 列表项缩进动画 */
+.collimind-markdown-editor li {
+  transition: padding-left 0.15s ease;
+}
+
+/* ========================================
+   滚动条美化（可选）
+   ======================================== */
+
+.collimind-markdown-editor .slash-dropdown::-webkit-scrollbar {
+  width: 8px;
+}
+
+.collimind-markdown-editor .slash-dropdown::-webkit-scrollbar-track {
+  background: #f8fafc;
+  border-radius: 4px;
+}
+
+.collimind-markdown-editor .slash-dropdown::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+.collimind-markdown-editor .slash-dropdown::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* ========================================
+   视频播放器样式
+   ======================================== */
+
+/* 视频容器 */
+.collimind-markdown-editor .milkdown-video-container {
+  display: block;
+  margin: 14px 0;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #000;
+  position: relative;
+}
+
+/* 视频元素 */
+.collimind-markdown-editor .milkdown-video-container video {
+  width: 100%;
+  max-width: 100%;
+  display: block;
+  border-radius: 8px;
+}
+
+/* 视频加载错误状态 */
+.collimind-markdown-editor .milkdown-video-container.milkdown-video-error {
+  background: #1e293b;
+}
+
+/* 视频封面图回退显示 */
+.collimind-markdown-editor .milkdown-video-fallback {
+  width: 100%;
+  max-width: 100%;
+  display: block;
+  border-radius: 8px;
+  object-fit: cover;
+}
+
+/* 视频播放按钮覆盖层 */
+.collimind-markdown-editor .milkdown-video-play-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.3);
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.collimind-markdown-editor .milkdown-video-play-overlay:hover {
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.collimind-markdown-editor .milkdown-video-play-overlay svg {
+  width: 64px;
+  height: 64px;
+  color: white;
+  opacity: 0.9;
+  filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.3));
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+.collimind-markdown-editor .milkdown-video-play-overlay:hover svg {
+  transform: scale(1.1);
+  opacity: 1;
+}
