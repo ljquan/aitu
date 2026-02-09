@@ -17,6 +17,9 @@ export type { MermaidToolParams } from './mermaid-tool';
 export { mindmapTool, insertMindmap } from './mindmap-tool';
 export type { MindmapToolParams } from './mindmap-tool';
 
+export { pptGenerationTool, generatePPT } from './ppt-generation';
+export type { PPTGenerationParams } from '../../services/ppt';
+
 // 共享模块导出
 export { setBoard, getBoard, isBoardAvailable, requireBoard } from './shared';
 export { extractCodeBlock, getInsertionPoint, insertElementsToCanvas } from './shared';

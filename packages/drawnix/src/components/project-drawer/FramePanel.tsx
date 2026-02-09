@@ -8,8 +8,8 @@
 import React, { useMemo, useCallback, useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import classNames from 'classnames';
-import { Input, Button, MessagePlugin, Tooltip } from 'tdesign-react';
-import { SearchIcon, EditIcon, DeleteIcon, ViewListIcon, AddIcon, PlayCircleIcon } from 'tdesign-icons-react';
+import { Input, Button, MessagePlugin, Tooltip, Loading } from 'tdesign-react';
+import { SearchIcon, EditIcon, DeleteIcon, ViewListIcon, AddIcon, PlayCircleIcon, ImageIcon } from 'tdesign-icons-react';
 import {
   PlaitBoard,
   BoardTransforms,
@@ -17,7 +17,6 @@ import {
   Transforms,
   clearSelectedElement,
   addSelectedElement,
-  getSelectedElements,
 } from '@plait/core';
 import { PlaitFrame, isFrameElement } from '../../types/frame.types';
 import { FrameTransforms } from '../../plugins/with-frame';
@@ -25,12 +24,17 @@ import { useDrawnix } from '../../hooks/use-drawnix';
 import { useDragSort } from '../../hooks/use-drag-sort';
 import { AddFrameDialog } from './AddFrameDialog';
 import { FrameSlideshow } from './FrameSlideshow';
+import { generateImage } from '../../mcp/tools/image-generation';
+import { insertMediaIntoFrame } from '../../utils/frame-insertion-utils';
+import type { PPTFrameMeta } from '../../services/ppt';
 
 interface FrameInfo {
   frame: PlaitFrame;
   childCount: number;
   width: number;
   height: number;
+  /** PPT 元数据（如果有） */
+  pptMeta?: PPTFrameMeta;
 }
 
 export const FramePanel: React.FC = () => {
@@ -41,7 +45,8 @@ export const FramePanel: React.FC = () => {
   const [selectedFrameId, setSelectedFrameId] = useState<string | null>(null);
   const [addDialogVisible, setAddDialogVisible] = useState(false);
   const [slideshowVisible, setSlideshowVisible] = useState(false);
-  const [slideshowInitialFrameId, setSlideshowInitialFrameId] = useState<string | undefined>();
+  const [generatingImageIds, setGeneratingImageIds] = useState<Set<string>>(new Set());
+  const [isGeneratingAll, setIsGeneratingAll] = useState(false);
   const [contextMenu, setContextMenu] = useState<{
     visible: boolean;
     x: number;
@@ -59,11 +64,13 @@ export const FramePanel: React.FC = () => {
         const frame = element as PlaitFrame;
         const rect = RectangleClient.getRectangleByPoints(frame.points);
         const children = FrameTransforms.getFrameChildren(board, frame);
+        const pptMeta = (frame as any).pptMeta as PPTFrameMeta | undefined;
         result.push({
           frame,
           childCount: children.length,
           width: Math.round(rect.width),
           height: Math.round(rect.height),
+          pptMeta,
         });
       }
     }
@@ -259,6 +266,119 @@ export const FramePanel: React.FC = () => {
     [contextMenu, handleDelete, closeContextMenu]
   );
 
+  // 统计有配图提示词的 Frame 数量
+  const framesWithImagePrompt = useMemo(() => {
+    return frames.filter((f) => f.pptMeta?.imagePrompt).length;
+  }, [frames]);
+
+  // 为单个 Frame 生成配图
+  const handleGenerateImage = useCallback(
+    async (frameInfo: FrameInfo, e?: React.MouseEvent) => {
+      e?.stopPropagation();
+      if (!board || !frameInfo.pptMeta?.imagePrompt) return;
+
+      const frameId = frameInfo.frame.id;
+      setGeneratingImageIds((prev) => new Set(prev).add(frameId));
+
+      try {
+        // 调用图片生成
+        const result = await generateImage({
+          prompt: frameInfo.pptMeta.imagePrompt,
+          size: '16x9', // PPT 页面使用 16:9 比例
+        });
+
+        if (result.success && result.data?.imageUrl) {
+          // 插入图片到 Frame
+          await insertMediaIntoFrame(
+            board,
+            result.data.imageUrl,
+            'image',
+            frameId,
+            { width: frameInfo.width, height: frameInfo.height },
+            { width: 800, height: 450 } // 16:9 默认尺寸
+          );
+          MessagePlugin.success(`已为「${frameInfo.frame.name}」生成配图`);
+        } else {
+          MessagePlugin.error(result.error || '图片生成失败');
+        }
+      } catch (error: any) {
+        console.error('[FramePanel] Generate image failed:', error);
+        MessagePlugin.error(error.message || '图片生成失败');
+      } finally {
+        setGeneratingImageIds((prev) => {
+          const next = new Set(prev);
+          next.delete(frameId);
+          return next;
+        });
+      }
+    },
+    [board]
+  );
+
+  // 为所有有配图提示词的 Frame 生成配图
+  const handleGenerateAllImages = useCallback(async () => {
+    if (!board || isGeneratingAll) return;
+
+    const framesToGenerate = frames.filter((f) => f.pptMeta?.imagePrompt);
+    if (framesToGenerate.length === 0) {
+      MessagePlugin.info('没有需要配图的页面');
+      return;
+    }
+
+    setIsGeneratingAll(true);
+    let successCount = 0;
+    let failCount = 0;
+
+    try {
+      // 并行生成所有图片
+      const promises = framesToGenerate.map(async (frameInfo) => {
+        const frameId = frameInfo.frame.id;
+        setGeneratingImageIds((prev) => new Set(prev).add(frameId));
+
+        try {
+          const result = await generateImage({
+            prompt: frameInfo.pptMeta!.imagePrompt!,
+            size: '16x9',
+          });
+
+          if (result.success && result.data?.imageUrl) {
+            await insertMediaIntoFrame(
+              board,
+              result.data.imageUrl,
+              'image',
+              frameId,
+              { width: frameInfo.width, height: frameInfo.height },
+              { width: 800, height: 450 }
+            );
+            successCount++;
+          } else {
+            failCount++;
+          }
+        } catch {
+          failCount++;
+        } finally {
+          setGeneratingImageIds((prev) => {
+            const next = new Set(prev);
+            next.delete(frameId);
+            return next;
+          });
+        }
+      });
+
+      await Promise.all(promises);
+
+      if (successCount > 0 && failCount === 0) {
+        MessagePlugin.success(`已为 ${successCount} 个页面生成配图`);
+      } else if (successCount > 0 && failCount > 0) {
+        MessagePlugin.warning(`成功 ${successCount} 个，失败 ${failCount} 个`);
+      } else {
+        MessagePlugin.error('所有配图生成失败');
+      }
+    } finally {
+      setIsGeneratingAll(false);
+    }
+  }, [board, frames, isGeneratingAll]);
+
   if (!board) {
     return (
       <div className="frame-panel__empty">
@@ -296,17 +416,27 @@ export const FramePanel: React.FC = () => {
             size="small"
             icon={<PlayCircleIcon />}
             disabled={frames.length === 0}
-            onClick={() => {
-              // 检测画布当前选中的 Frame，作为幻灯片起始页
-              const selected = getSelectedElements(board);
-              const selectedFrame = selected.find((el) => isFrameElement(el));
-              setSlideshowInitialFrameId(selectedFrame?.id);
-              setSlideshowVisible(true);
-            }}
+            onClick={() => setSlideshowVisible(true)}
           >
             幻灯片播放
           </Button>
         </Tooltip>
+        {framesWithImagePrompt > 0 && (
+          <Tooltip
+            content={isGeneratingAll ? '正在生成...' : `为 ${framesWithImagePrompt} 个页面生成配图`}
+            theme="light"
+          >
+            <Button
+              variant="outline"
+              size="small"
+              icon={isGeneratingAll ? <Loading size="small" /> : <ImageIcon />}
+              disabled={isGeneratingAll}
+              onClick={handleGenerateAllImages}
+            >
+              全部配图
+            </Button>
+          </Tooltip>
+        )}
       </div>
 
       {/* Frame 列表 */}
@@ -381,6 +511,18 @@ export const FramePanel: React.FC = () => {
               </div>
 
               <div className="frame-panel__item-actions">
+                {info.pptMeta?.imagePrompt && (
+                  <Tooltip content={generatingImageIds.has(info.frame.id) ? '生成中...' : '生成配图'} theme="light">
+                    <Button
+                      variant="text"
+                      size="small"
+                      shape="square"
+                      icon={generatingImageIds.has(info.frame.id) ? <Loading size="small" /> : <ImageIcon />}
+                      onClick={(e) => handleGenerateImage(info, e as unknown as React.MouseEvent)}
+                      disabled={generatingImageIds.has(info.frame.id)}
+                    />
+                  </Tooltip>
+                )}
                 <Button
                   variant="text"
                   size="small"
@@ -440,11 +582,7 @@ export const FramePanel: React.FC = () => {
       <FrameSlideshow
         visible={slideshowVisible}
         board={board}
-        initialFrameId={slideshowInitialFrameId}
-        onClose={() => {
-          setSlideshowVisible(false);
-          setSlideshowInitialFrameId(undefined);
-        }}
+        onClose={() => setSlideshowVisible(false)}
       />
     </div>
   );
