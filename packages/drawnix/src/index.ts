@@ -9,6 +9,7 @@ export * from './utils/gemini-api';
 // Export project management (folder/board structure)
 export * from './hooks/useWorkspace';
 export * from './hooks/useDocumentTitle';
+export { markTabSyncVersion } from './hooks/useTabSync';
 export * from './services/workspace-service';
 export * from './services/workspace-migration';
 export * from './types/workspace.types';

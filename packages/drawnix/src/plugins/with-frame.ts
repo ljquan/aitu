@@ -185,6 +185,7 @@ export const withFrame: PlaitPlugin = (board: PlaitBoard) => {
     pointerMove,
     pointerUp,
     dblClick,
+    getDeletedFragment,
   } = board;
 
   // 跟踪 Frame 移动
@@ -196,6 +197,22 @@ export const withFrame: PlaitPlugin = (board: PlaitBoard) => {
   let isCreatingFrame = false;
   let createStartPoint: Point | null = null;
   let previewG: SVGGElement | null = null;
+
+  // 注册 getDeletedFragment：将选中的 Frame 加入删除列表，并先解绑子元素
+  board.getDeletedFragment = (data: PlaitElement[]) => {
+    const selectedElements = getSelectedElements(board);
+    const selectedFrames = selectedElements.filter(isFrameElement) as PlaitFrame[];
+    if (selectedFrames.length) {
+      for (const frame of selectedFrames) {
+        const children = FrameTransforms.getFrameChildren(board, frame);
+        for (const child of children) {
+          FrameTransforms.unbindFromFrame(board, child);
+        }
+      }
+      data.push(...selectedFrames);
+    }
+    return getDeletedFragment(data);
+  };
 
   // 注册 Frame 元素渲染组件
   board.drawElement = (context: PlaitPluginElementContext) => {

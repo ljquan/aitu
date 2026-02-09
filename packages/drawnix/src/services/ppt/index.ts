@@ -41,8 +41,12 @@ export type { FontStyleLevel } from './ppt-layout-engine';
 
 // 思维导图转 PPT
 export {
+  extractTextFromMindData,
   extractMindmapStructure,
+  flattenChildrenToBullets,
   convertMindmapToOutline,
+  mindmapToOutline,
   generatePPTFromMindmap,
   isPlaitMind,
+  findMindRootFromSelection,
 } from './mindmap-to-ppt';

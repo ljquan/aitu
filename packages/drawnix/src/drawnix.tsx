@@ -122,6 +122,8 @@ export type DrawnixProps = {
   onTabSyncNeeded?: () => void;
   /** 数据是否已准备好（用于判断画布是否为空） */
   isDataReady?: boolean;
+  /** 当前画板 ID（用于 tab 同步过滤） */
+  currentBoardId?: string | null;
 } & Omit<React.HTMLAttributes<HTMLDivElement>, 'onChange'>;
 
 export const Drawnix: React.FC<DrawnixProps> = ({
@@ -137,6 +139,7 @@ export const Drawnix: React.FC<DrawnixProps> = ({
   onBoardSwitch,
   onTabSyncNeeded,
   isDataReady = false,
+  currentBoardId,
 }) => {
   const options: PlaitBoardOptions = {
     readonly: false,
@@ -700,6 +703,7 @@ export const Drawnix: React.FC<DrawnixProps> = ({
                       handleBeforeSwitch={handleBeforeSwitch}
                       isDataReady={isDataReady}
                       onCreateProjectForMemory={handleCreateProjectForMemory}
+                      currentBoardId={currentBoardId}
                     />
                     <Suspense fallback={null}>
                       <MediaLibraryModal
@@ -756,6 +760,7 @@ interface DrawnixContentProps {
   handleBeforeSwitch: () => Promise<void>;
   isDataReady: boolean;
   onCreateProjectForMemory: () => Promise<void>;
+  currentBoardId?: string | null;
 }
 
 const DrawnixContent: React.FC<DrawnixContentProps> = ({
@@ -791,6 +796,7 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
   handleBeforeSwitch,
   isDataReady,
   onCreateProjectForMemory,
+  currentBoardId,
 }) => {
   const { chatDrawerRef } = useChatDrawer();
   const { setAppState: updateState } = useDrawnix();
@@ -814,6 +820,7 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
       }
     }, [onTabSyncNeeded]),
     enabled: true,
+    currentBoardId,
   });
 
   // 快捷工具栏状态

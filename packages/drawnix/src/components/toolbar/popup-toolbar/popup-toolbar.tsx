@@ -82,7 +82,7 @@ import { insertImageFromUrl } from '../../../data/image';
 import { calculateEditedImagePoints } from '../../../utils/image';
 import { isFrameElement } from '../../../types/frame.types';
 import { duplicateFrame, focusFrame } from '../../../utils/frame-duplicate';
-import { isPlaitMind } from '../../../services/ppt';
+import { isPlaitMind, findMindRootFromSelection } from '../../../services/ppt';
 
 export const PopupToolbar = () => {
   const board = useBoard();
@@ -333,11 +333,11 @@ export const PopupToolbar = () => {
         supportsBooleanOperation(board, element)
       );
 
-    // 思维导图转PPT按钮：选中单个完整思维导图（PlaitMind 根元素）时显示
+    // 思维导图转PPT按钮：选中思维导图根元素或任意思维导图节点时显示
     const hasMindmapToPPT =
-      selectedElements.length === 1 &&
+      selectedElements.length > 0 &&
       !PlaitBoard.hasBeenTextEditing(board) &&
-      isPlaitMind(selectedElements[0]);
+      !!findMindRootFromSelection(board, selectedElements);
 
     state = {
       ...getElementState(board),
@@ -650,7 +650,7 @@ export const PopupToolbar = () => {
                 title={t('toolbar.boolean')}
               />
             )}
-            {/* 思维导图转PPT按钮 - 选中单个思维导图时显示 */}
+            {/* 思维导图转PPT按钮 - 选中思维导图时显示 */}
             {state.hasMindmapToPPT && (
               <ToolButton
                 className="mindmap-to-ppt"
@@ -662,8 +662,8 @@ export const PopupToolbar = () => {
                 aria-label={language === 'zh' ? '转换为PPT' : 'Convert to PPT'}
                 data-track="toolbar_click_mindmap_to_ppt"
                 onPointerUp={async () => {
-                  const mindElement = selectedElements[0];
-                  if (!mindElement) return;
+                  const mindRoot = findMindRootFromSelection(board, selectedElements);
+                  if (!mindRoot) return;
 
                   const loadingInstance = MessagePlugin.loading(
                     language === 'zh' ? '正在转换为PPT...' : 'Converting to PPT...',
@@ -672,7 +672,7 @@ export const PopupToolbar = () => {
 
                   try {
                     const { generatePPTFromMindmap } = await import('../../../services/ppt');
-                    const result = await generatePPTFromMindmap(board, mindElement as any);
+                    const result = await generatePPTFromMindmap(board, mindRoot as any);
 
                     MessagePlugin.close(loadingInstance);
 

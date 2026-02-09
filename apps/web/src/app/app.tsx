@@ -10,6 +10,7 @@ import {
   crashRecoveryService,
   safeReload,
   useDocumentTitle,
+  markTabSyncVersion,
 } from '@drawnix/drawnix';
 import { PlaitBoard, PlaitElement, PlaitTheme, Viewport, updateViewBox, initializeViewBox, updateViewportOffset } from '@plait/core';
 import { MessagePlugin } from 'tdesign-react';
@@ -57,6 +58,10 @@ function updateBoardIdInUrl(boardId: string | null, replace: boolean = false): v
 export function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [isDataReady, setIsDataReady] = useState(false);
+  // 使用 ref 跟踪 isDataReady，避免 handleBoardChange 因闭包捕获旧值导致保存被跳过
+  // Wrapper 中 BOARD_TO_AFTER_CHANGE 的 effect 只依赖 [board]，不会因为 onChange 变化而更新
+  // 如果 handleBoardChange 依赖 isDataReady state，onChange 变化后旧回调中 isDataReady 永远为 false
+  const isDataReadyRef = useRef(false);
   const [showCrashDialog, setShowCrashDialog] = useState(false);
   const [value, setValue] = useState<{
     children: PlaitElement[];
@@ -74,6 +79,10 @@ export function App() {
   const isHandlingPopStateRef = useRef<boolean>(false);
   // 保存 board 引用，用于手动触发边界更新
   const boardRef = useRef<PlaitBoard | null>(null);
+  // 标记是否正在同步其他标签页的数据（同步期间不保存，防止旧数据覆盖新数据）
+  const isSyncingRef = useRef<boolean>(false);
+  // 标记本标签页是否有用户主动修改（只有用户修改过才在 visibilitychange 时保存）
+  const localDirtyRef = useRef<boolean>(false);
 
   // 使用 useDocumentTitle hook 管理页面标题
   useDocumentTitle(currentBoardId);
@@ -155,6 +164,7 @@ export function App() {
           }
           
           setValue({ children: [] });
+          isDataReadyRef.current = true;
           setIsDataReady(true);
           setIsLoading(false);
           crashRecoveryService.markLoadingComplete();
@@ -213,6 +223,8 @@ export function App() {
         if (currentBoard) {
           updateBoardIdInUrl(currentBoard.id, true); // 初始加载使用 replace
           setCurrentBoardId(currentBoard.id);
+          // 持久化到 sessionStorage，确保标签页隔离
+          workspaceService.persistCurrentBoardId(currentBoard.id);
         }
 
         if (currentBoard) {
@@ -243,6 +255,7 @@ export function App() {
       } catch (error) {
         console.error('[App] Initialization failed:', error);
       } finally {
+        isDataReadyRef.current = true;
         setIsDataReady(true);
         setIsLoading(false);
         // 标记加载完成
@@ -255,6 +268,9 @@ export function App() {
 
   // Handle board switching
   const handleBoardSwitch = useCallback(async (board: Board, skipUrlUpdate: boolean = false) => {
+    // 切换画布时重置脏标志，新画布的初始数据不需要保存
+    localDirtyRef.current = false;
+
     // 在设置 state 之前，预先恢复失效的视频 URL
     const elements = await recoverVideoUrlsInElements(board.elements || []);
 
@@ -271,6 +287,14 @@ export function App() {
 
     // 更新当前画板 ID（用于页面标题更新）
     setCurrentBoardId(board.id);
+
+    // 只在用户主动切换画板时保存 state（不是浏览器前进后退）
+    // 这样可以避免影响其他标签页
+    if (!skipUrlUpdate) {
+      const workspaceService = WorkspaceService.getInstance();
+      // 持久化 currentBoardId 到 sessionStorage（标签页隔离）
+      workspaceService.persistCurrentBoardId(board.id);
+    }
 
     // 等待 React 更新完成后，手动触发画布边界更新
     // 使用 setTimeout 而不是 queueMicrotask，给 React 更多时间完成 DOM 更新
@@ -304,6 +328,8 @@ export function App() {
           if (board) {
             // skipUrlUpdate: true 因为 URL 已被浏览器更新
             await handleBoardSwitch(board, true);
+            // 但仍需持久化 currentBoardId 到 sessionStorage
+            workspaceService.persistCurrentBoardId(board.id);
           }
         }
       } catch (error) {
@@ -322,14 +348,36 @@ export function App() {
 
   // Handle tab sync (when other tab modified data)
   const handleTabSyncNeeded = useCallback(async () => {
-    const workspaceService = WorkspaceService.getInstance();
-    const currentBoard = workspaceService.getCurrentBoard();
-
-    if (!currentBoard) {
-      return;
-    }
+    // 设置同步标志，防止同步期间的 onChange 触发保存（保存旧数据覆盖新数据）
+    isSyncingRef.current = true;
 
     try {
+      const workspaceService = WorkspaceService.getInstance();
+      let currentBoard = workspaceService.getCurrentBoard();
+
+      // 如果画板未加载（getCurrentBoard 返回 null），先通过 switchBoard 加载
+      if (!currentBoard) {
+        const currentBoardId = workspaceService.getState().currentBoardId;
+        if (!currentBoardId) {
+          console.warn('[App] handleTabSyncNeeded: no current board ID');
+          return;
+        }
+
+        // 验证画板是否存在
+        if (!workspaceService.getBoardMetadata(currentBoardId)) {
+          console.warn('[App] handleTabSyncNeeded: board not found', currentBoardId);
+          return;
+        }
+
+        try {
+          // 加载画板完整数据
+          currentBoard = await workspaceService.switchBoard(currentBoardId);
+        } catch (error) {
+          console.error('[App] handleTabSyncNeeded: failed to load board', error);
+          return;
+        }
+      }
+
       // 使用 reloadBoard 强制从 IndexedDB 重新加载数据（而不是使用缓存）
       const updatedBoard = await workspaceService.reloadBoard(currentBoard.id);
 
@@ -348,6 +396,12 @@ export function App() {
       console.error('[App] Failed to sync board data:', error);
       // 如果同步失败，降级到刷新页面
       safeReload();
+    } finally {
+      // 延迟清除同步标志，等待 React 重渲染完成后 onChange 触发的保存被跳过
+      // React 18 的批量更新可能在下一帧才执行，所以使用 setTimeout 确保足够延迟
+      setTimeout(() => {
+        isSyncingRef.current = false;
+      }, 100);
     }
   }, []);
 
@@ -358,9 +412,34 @@ export function App() {
       // 同步更新最新 viewport
       latestViewportRef.current = data.viewport;
 
+      // 只在数据准备好之后才保存，避免在初始化时保存空数据
+      // 使用 ref 而非 state，避免闭包捕获旧值（Wrapper 中 BOARD_TO_AFTER_CHANGE 不会因 onChange 变化而更新）
+      if (!isDataReadyRef.current) {
+        return;
+      }
+
+      // 同步期间不保存，防止用旧数据覆盖其他标签页保存的新数据
+      if (isSyncingRef.current) {
+        return;
+      }
+
+      // 标记本标签页有用户主动修改
+      localDirtyRef.current = true;
+
       // Save to current board
       const workspaceService = WorkspaceService.getInstance();
-      workspaceService.saveCurrentBoard(data).catch((err: Error) => {
+
+      // 额外安全检查：确保当前画板已经完全加载
+      const currentBoard = workspaceService.getCurrentBoard();
+      if (!currentBoard) {
+        console.warn('[App] handleBoardChange: board not fully loaded, skipping save');
+        return;
+      }
+
+      workspaceService.saveCurrentBoard(data).then(() => {
+        // 通知其他标签页数据已更新
+        markTabSyncVersion(currentBoard.id);
+      }).catch((err: Error) => {
         console.error('[App] Failed to save board:', err);
       });
     },
@@ -373,11 +452,21 @@ export function App() {
       // 更新最新 viewport
       latestViewportRef.current = viewport;
 
+      // 同步期间不保存 viewport，防止用旧数据覆盖
+      if (isSyncingRef.current) {
+        return;
+      }
+
       // 防抖保存
       if (viewportSaveTimerRef.current) {
         clearTimeout(viewportSaveTimerRef.current);
       }
       viewportSaveTimerRef.current = setTimeout(() => {
+        // 再次检查同步状态
+        if (isSyncingRef.current) {
+          return;
+        }
+
         const workspaceService = WorkspaceService.getInstance();
         const currentBoard = workspaceService.getCurrentBoard();
         if (currentBoard) {
@@ -405,15 +494,20 @@ export function App() {
         viewportSaveTimerRef.current = null;
       }
 
-      // 同步保存最新的 viewport
+      // 同步期间不保存，防止旧数据覆盖
+      if (isSyncingRef.current) {
+        return;
+      }
+
+      // 如果本标签页没有任何用户修改，不保存（避免用缓存中的旧数据覆盖其他标签页的修改）
+      // 丢失 viewport 变化是可接受的，因为 viewport 保存也会携带 elements
       const viewport = latestViewportRef.current;
-      if (viewport) {
+      if (viewport && localDirtyRef.current) {
         const workspaceService = WorkspaceService.getInstance();
         const currentBoard = workspaceService.getCurrentBoard();
         if (currentBoard) {
-          // 直接更新内存中的 board 数据
+          // 直接更新内存中的 viewport
           currentBoard.viewport = viewport;
-          // 尝试保存
           workspaceService.saveCurrentBoard({
             children: currentBoard.elements,
             viewport: viewport,
@@ -504,6 +598,7 @@ export function App() {
         onBoardSwitch={handleBoardSwitch}
         onTabSyncNeeded={handleTabSyncNeeded}
         isDataReady={isDataReady}
+        currentBoardId={currentBoardId}
         afterInit={(board) => {
           // 保存 board 引用，用于手动触发边界更新
           boardRef.current = board;

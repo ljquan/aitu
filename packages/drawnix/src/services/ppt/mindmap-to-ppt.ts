@@ -9,10 +9,10 @@
  * - 二级及更深子节点 → 内容页的正文要点
  */
 
-import type { PlaitBoard, Point } from '@plait/core';
+import type { PlaitBoard, PlaitElement, Point } from '@plait/core';
 import { Transforms, BoardTransforms, PlaitBoard as PlaitBoardUtils, RectangleClient } from '@plait/core';
 import { DrawTransforms } from '@plait/draw';
-import { MindElement } from '@plait/mind';
+import { MindElement, PlaitMind } from '@plait/mind';
 import { Node } from 'slate';
 import { FrameTransforms } from '../../plugins/with-frame';
 import { insertPPTImagePlaceholder } from '../../utils/frame-insertion-utils';
@@ -33,18 +33,28 @@ const FRAME_GAP = 60;
 
 /**
  * 从 MindElement 的 data 中提取纯文本
- * MindElement.data 存储的是 Slate 节点数组
+ *
+ * MindElement.data 结构为 BaseData = { topic: ParagraphElement }
+ * 其中 ParagraphElement 是 Slate BaseElement，结构为 { children: [{ text: "..." }] }
  */
-function extractTextFromMindData(data: MindElement['data']): string {
+export function extractTextFromMindData(data: MindElement['data']): string {
   if (!data) return '';
 
-  // data 是一个包含 Slate 节点的对象，通常有 children 属性
+  // data 是 BaseData = { topic: ParagraphElement }
+  // ParagraphElement 是 Slate Element，可用 Node.string 提取纯文本
+  if (typeof data === 'object' && 'topic' in data && data.topic) {
+    try {
+      return Node.string(data.topic as any).trim();
+    } catch {
+      // fallback: 尝试递归提取 text
+    }
+  }
+
+  // 兼容：如果 data 本身就是 Slate 节点（有 children 属性）
   if (typeof data === 'object' && 'children' in data) {
     try {
-      // 使用 Slate 的 Node.string 提取纯文本
       return Node.string(data as any).trim();
     } catch {
-      // 如果提取失败，尝试直接获取文本
       return '';
     }
   }
@@ -89,7 +99,7 @@ export function extractMindmapStructure(element: MindElement, depth: number = 0)
  * @param maxDepth - 最大展开深度（相对于当前节点）
  * @returns 要点文本数组
  */
-function flattenChildrenToBullets(children: MindmapNodeInfo[], maxDepth: number = 2): string[] {
+export function flattenChildrenToBullets(children: MindmapNodeInfo[], maxDepth: number = 2): string[] {
   const bullets: string[] = [];
 
   function traverse(nodes: MindmapNodeInfo[], currentDepth: number) {
@@ -177,6 +187,23 @@ export function convertMindmapToOutline(
     title,
     pages,
   };
+}
+
+/**
+ * 将思维导图元素转换为 PPT 大纲（纯函数，便于测试）
+ *
+ * 从 MindElement 提取结构 → 转换为 PPT 大纲，不依赖 board
+ *
+ * @param mindElement - 思维导图根元素
+ * @param options - 转换选项
+ * @returns PPT 大纲
+ */
+export function mindmapToOutline(
+  mindElement: MindElement,
+  options: MindmapToPPTOptions = {}
+): PPTOutline {
+  const rootInfo = extractMindmapStructure(mindElement);
+  return convertMindmapToOutline(rootInfo, options);
 }
 
 /**
@@ -322,13 +349,48 @@ function createPPTPage(board: PlaitBoard, pageSpec: PPTPageSpec, pageIndex: numb
  * 检查元素是否为 PlaitMind（思维导图根元素）
  */
 export function isPlaitMind(element: unknown): element is MindElement {
-  return (
-    element !== null &&
-    typeof element === 'object' &&
-    'type' in element &&
-    (element as any).type === 'mindmap' &&
-    'data' in element
-  );
+  return PlaitMind.isMind(element);
+}
+
+/**
+ * 从选中的元素中找到思维导图根元素
+ *
+ * 支持以下场景：
+ * 1. 选中单个根元素（PlaitMind）→ 直接返回
+ * 2. 选中一个或多个子节点（MindElement）→ 向上查找根元素
+ *
+ * @returns 根元素，如果选中元素不属于同一个思维导图则返回 null
+ */
+export function findMindRootFromSelection(
+  board: PlaitBoard,
+  selectedElements: PlaitElement[]
+): MindElement | null {
+  if (selectedElements.length === 0) return null;
+
+  // 场景 1：选中单个根元素
+  if (selectedElements.length === 1 && PlaitMind.isMind(selectedElements[0])) {
+    return selectedElements[0] as unknown as MindElement;
+  }
+
+  // 场景 2：选中的元素中包含思维导图节点，查找根元素
+  for (const element of selectedElements) {
+    // 先检查是否是根元素
+    if (PlaitMind.isMind(element)) {
+      return element as unknown as MindElement;
+    }
+
+    // 检查是否是 MindElement（子节点），向上查找根元素
+    if (MindElement.isMindElement(board, element)) {
+      try {
+        const root = MindElement.getRoot(board, element as MindElement);
+        if (root) return root as unknown as MindElement;
+      } catch {
+        // getRoot 可能抛出异常
+      }
+    }
+  }
+
+  return null;
 }
 
 /**
@@ -353,21 +415,22 @@ export async function generatePPTFromMindmap(
       };
     }
 
-    // 2. 提取思维导图结构
-    const rootInfo = extractMindmapStructure(mindElement);
+    // 2. 提取思维导图结构并转换为大纲
+    const outline = mindmapToOutline(mindElement, options);
 
-    // 3. 验证结构
-    if (!rootInfo.text && rootInfo.children.length === 0) {
-      return {
-        success: false,
-        error: '思维导图内容为空，请先添加内容',
-      };
+    // 3. 验证大纲
+    if (outline.pages.length <= 2) {
+      // 只有封面页和结尾页，说明思维导图内容为空
+      const rootInfo = extractMindmapStructure(mindElement);
+      if (!rootInfo.text && rootInfo.children.length === 0) {
+        return {
+          success: false,
+          error: '思维导图内容为空，请先添加内容',
+        };
+      }
     }
 
-    // 4. 转换为 PPT 大纲
-    const outline = convertMindmapToOutline(rootInfo, options);
-
-    // 5. 逐页创建 Frame
+    // 4. 逐页创建 Frame
     let firstFrame: PlaitFrame | null = null;
     let createdCount = 0;
 
@@ -388,7 +451,7 @@ export async function generatePPTFromMindmap(
       createdCount++;
     }
 
-    // 6. 聚焦到第一个 Frame
+    // 5. 聚焦到第一个 Frame
     if (firstFrame) {
       focusOnFrame(board, firstFrame);
     }

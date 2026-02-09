@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef } from 'react';
 
 const TAB_SYNC_KEY = 'aitu-tab-sync-version';
 const POLL_INTERVAL = 500; // 500ms 轮询间隔（比 Excalidraw 的 50ms 更保守）
@@ -11,11 +11,14 @@ interface UseTabSyncOptions {
   onSyncNeeded: () => void;
   /** 是否启用 */
   enabled?: boolean;
+  /** 当前画板 ID（用于过滤同步事件） */
+  currentBoardId?: string | null;
 }
 
 interface TabSyncData {
   version: number;
   tabId: string;
+  boardId?: string; // 变更的画板 ID
 }
 
 /**
@@ -28,11 +31,11 @@ interface TabSyncData {
  * 1. 在数据保存后调用 markDataSaved() 更新版本号
  * 2. 其他标签页会在 POLL_INTERVAL 内检测到变更并触发 onSyncNeeded
  */
-export function useTabSync({ onSyncNeeded, enabled = true }: UseTabSyncOptions) {
+export function useTabSync({ onSyncNeeded, enabled = true, currentBoardId }: UseTabSyncOptions) {
   const localVersionRef = useRef<number>(-1);
   const intervalRef = useRef<ReturnType<typeof setInterval>>();
 
-  // 初始化版本号
+  // 初始化版本号 & 标签页重新可见时同步
   useEffect(() => {
     if (!enabled) return;
 
@@ -54,10 +57,7 @@ export function useTabSync({ onSyncNeeded, enabled = true }: UseTabSyncOptions) 
   useEffect(() => {
     if (!enabled) return;
 
-    intervalRef.current = setInterval(() => {
-      // 标签页不可见时不检测
-      if (document.hidden) return;
-
+    const checkSync = () => {
       const stored = localStorage.getItem(TAB_SYNC_KEY);
       if (!stored) return;
 
@@ -65,62 +65,60 @@ export function useTabSync({ onSyncNeeded, enabled = true }: UseTabSyncOptions) 
         const data: TabSyncData = JSON.parse(stored);
         // 只有当版本号更新且不是当前标签页触发的更新时，才触发同步
         if (data.version > localVersionRef.current && data.tabId !== TAB_ID) {
+          // 必须有 boardId 才能过滤；无 boardId 的标记跳过（不触发同步）
+          // 只有当变更画板 ID 与当前画板 ID 相同时才触发同步
+          const shouldSync = currentBoardId && data.boardId && data.boardId === currentBoardId;
+
           localVersionRef.current = data.version;
-          onSyncNeeded();
+
+          if (shouldSync) {
+            onSyncNeeded();
+          }
         } else if (data.version > localVersionRef.current && data.tabId === TAB_ID) {
           // 是自己触发的更新，只更新版本号，不触发同步
           localVersionRef.current = data.version;
         }
       } catch {
-        // 兼容旧格式（纯数字）
+        // 兼容旧格式（纯数字）- 不触发同步（无法确定画板）
         const remote = parseInt(stored, 10);
         if (remote > localVersionRef.current) {
           localVersionRef.current = remote;
-          onSyncNeeded();
         }
       }
+    };
+
+    intervalRef.current = setInterval(() => {
+      // 标签页不可见时不检测
+      if (document.hidden) return;
+      checkSync();
     }, POLL_INTERVAL);
+
+    // 标签页变为可见时立即检测，避免轮询间隔内用旧数据覆盖新数据
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        checkSync();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
       }
-    };
-  }, [enabled, onSyncNeeded]);
-
-  // 保存后 flush 版本号
-  useEffect(() => {
-    if (!enabled) return;
-
-    const handleVisibilityChange = () => {
-      if (document.hidden) {
-        // 离开标签页时，确保版本号已写入
-        const v = Date.now();
-        try {
-          const data: TabSyncData = { version: v, tabId: TAB_ID };
-          localStorage.setItem(TAB_SYNC_KEY, JSON.stringify(data));
-          localVersionRef.current = v;
-        } catch {
-          // 静默处理
-        }
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [enabled]);
+  }, [enabled, onSyncNeeded, currentBoardId]);
 }
 
 /**
  * 标记数据已保存，通知其他标签页同步
  * 在每次保存数据后调用此函数。
+ * @param boardId 可选的画板 ID，用于通知其他标签页哪个画板发生了变更
  */
-export function markTabSyncVersion() {
+export function markTabSyncVersion(boardId?: string) {
   try {
     const v = Date.now();
-    const data: TabSyncData = { version: v, tabId: TAB_ID };
+    const data: TabSyncData = { version: v, tabId: TAB_ID, boardId };
     localStorage.setItem(TAB_SYNC_KEY, JSON.stringify(data));
   } catch {
     // 静默处理
