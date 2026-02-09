@@ -17,12 +17,12 @@ import {
   CHAT_MODELS,
   DEFAULT_CHAT_MODEL_ID,
   getChatModelById,
-  getModelsByProvider,
   ModelProvider,
   PROVIDER_NAMES,
-  type ChatModel,
   type ModelBadge,
 } from '../../constants/CHAT_MODELS';
+import { ModelVendor } from '../../constants/model-config';
+import { VendorTabPanel, type VendorTab } from '../shared/VendorTabPanel';
 import { ProviderIcon } from './ProviderIcon';
 import { ModelHealthBadge } from '../shared/ModelHealthBadge';
 import { Z_INDEX } from '../../constants/z-index';
@@ -47,6 +47,16 @@ const BADGE_COLORS: Record<ModelBadge, string> = {
   Economic: 'badge-economic',
 };
 
+/** Map ModelProvider to ModelVendor */
+function providerToVendor(provider: ModelProvider): ModelVendor {
+  switch (provider) {
+    case ModelProvider.OPENAI: return ModelVendor.GPT;
+    case ModelProvider.ANTHROPIC: return ModelVendor.ANTHROPIC;
+    case ModelProvider.DEEPSEEK: return ModelVendor.DEEPSEEK;
+    case ModelProvider.GOOGLE: return ModelVendor.GOOGLE;
+  }
+}
+
 export const ModelSelector: React.FC<ModelSelectorProps> = React.memo(
   ({ className, value, onChange, variant = 'capsule' }) => {
     // Use controlled value if provided, otherwise use internal state
@@ -55,6 +65,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = React.memo(
     
     const [isOpen, setIsOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
+    const [activeVendor, setActiveVendor] = useState<ModelVendor | null>(null);
     const dropdownRef = useRef<HTMLDivElement>(null);
     const triggerRef = useRef<HTMLButtonElement>(null);
 
@@ -103,43 +114,54 @@ export const ModelSelector: React.FC<ModelSelectorProps> = React.memo(
 
     // Toggle dropdown
     const handleToggle = useCallback(() => {
-      setIsOpen((prev) => !prev);
-      if (isOpen) {
+      const next = !isOpen;
+      setIsOpen(next);
+      if (next) {
+        // Initialize activeVendor to current model's vendor
+        const current = getChatModelById(selectedModel);
+        setActiveVendor(current ? providerToVendor(current.provider) : null);
+      } else {
         setSearchQuery('');
       }
-    }, [isOpen]);
+    }, [isOpen, selectedModel]);
 
-    // Filter models based on search query
-    const filteredModels = useMemo(() => {
-      if (!searchQuery.trim()) {
-        return CHAT_MODELS;
-      }
-
-      const query = searchQuery.toLowerCase();
-      return CHAT_MODELS.filter(
-        (model) =>
-          model.name.toLowerCase().includes(query) ||
-          model.description.toLowerCase().includes(query) ||
-          PROVIDER_NAMES[model.provider].toLowerCase().includes(query)
-      );
-    }, [searchQuery]);
-
-    // Group filtered models by provider
-    const groupedModels = useMemo(() => {
-      const grouped: Record<ModelProvider, ChatModel[]> = {
-        [ModelProvider.OPENAI]: [],
-        [ModelProvider.ANTHROPIC]: [],
-        [ModelProvider.DEEPSEEK]: [],
-        [ModelProvider.GOOGLE]: [],
-      };
-
-      filteredModels.forEach((model) => {
-        grouped[model.provider].push(model);
+    // Compute vendor tabs from all chat models
+    const vendorTabs = useMemo((): VendorTab[] => {
+      const vendorMap = new Map<ModelVendor, number>();
+      const order: ModelVendor[] = [];
+      CHAT_MODELS.forEach((model) => {
+        const vendor = providerToVendor(model.provider);
+        if (!vendorMap.has(vendor)) {
+          order.push(vendor);
+          vendorMap.set(vendor, 0);
+        }
+        vendorMap.set(vendor, (vendorMap.get(vendor) ?? 0) + 1);
       });
+      return order.map(vendor => ({ vendor, count: vendorMap.get(vendor) ?? 0 }));
+    }, []);
 
-      // Filter out empty groups
-      return Object.entries(grouped).filter(([_, models]) => models.length > 0);
-    }, [filteredModels]);
+    const handleVendorChange = useCallback((vendor: ModelVendor) => {
+      setActiveVendor(vendor);
+    }, []);
+
+    // Filter models: search → cross-vendor, no search → by activeVendor
+    const filteredModels = useMemo(() => {
+      const query = searchQuery.toLowerCase().trim();
+      if (query) {
+        return CHAT_MODELS.filter(
+          (model) =>
+            model.name.toLowerCase().includes(query) ||
+            model.description.toLowerCase().includes(query) ||
+            PROVIDER_NAMES[model.provider].toLowerCase().includes(query)
+        );
+      }
+      if (activeVendor) {
+        return CHAT_MODELS.filter(
+          (model) => providerToVendor(model.provider) === activeVendor
+        );
+      }
+      return CHAT_MODELS;
+    }, [searchQuery, activeVendor]);
 
     const currentModel = getChatModelById(selectedModel);
 
@@ -199,77 +221,78 @@ export const ModelSelector: React.FC<ModelSelectorProps> = React.memo(
             />
           </div>
 
-          {/* Model list */}
-          <div className="model-selector__list">
-            {groupedModels.length === 0 ? (
-              <div className="model-selector__empty">未找到匹配的模型</div>
-            ) : (
-              groupedModels.map(([provider, models]) => (
-                <div key={provider} className="model-selector__group">
-                  <div className="model-selector__group-header">
-                    {PROVIDER_NAMES[provider as ModelProvider]}
-                  </div>
-                  {models.map((model) => (
-                    <button
-                      key={model.id}
-                      className={`model-selector__item ${
-                        model.id === selectedModel
-                          ? 'model-selector__item--active'
-                          : ''
-                      }`}
-                      data-track="chat_click_model_select"
-                      onClick={() => handleSelectModel(model.id)}
-                    >
-                      <ProviderIcon
-                        provider={model.provider}
-                        className="model-selector__item-icon"
-                      />
-                      <div className="model-selector__item-content">
-                        <div className="model-selector__item-header">
-                          <span className="model-selector__item-name">
-                            {model.name}
-                          </span>
-                          <ModelHealthBadge modelId={model.id} />
-                          {model.badges && model.badges.length > 0 && (
-                            <div className="model-selector__badges">
-                                {model.badges.map((badge) => (
-                                  <span
-                                    key={badge}
-                                    className={`model-selector__badge ${BADGE_COLORS[badge]}`}
-                                  >
-                                    {badge === 'NEW' ? 'VIP' : badge}
-                                  </span>
-                                ))}
-                            </div>
-                          )}
-                        </div>
-                        <div className="model-selector__item-desc">
-                          {model.description}
-                        </div>
+          {/* Model list with vendor tabs */}
+          <VendorTabPanel
+            tabs={vendorTabs}
+            activeVendor={activeVendor}
+            onVendorChange={handleVendorChange}
+            searchQuery={searchQuery}
+            compact
+          >
+            <div className="model-selector__list">
+              {filteredModels.length === 0 ? (
+                <div className="model-selector__empty">未找到匹配的模型</div>
+              ) : (
+                filteredModels.map((model) => (
+                  <button
+                    key={model.id}
+                    className={`model-selector__item ${
+                      model.id === selectedModel
+                        ? 'model-selector__item--active'
+                        : ''
+                    }`}
+                    data-track="chat_click_model_select"
+                    onClick={() => handleSelectModel(model.id)}
+                  >
+                    <ProviderIcon
+                      provider={model.provider}
+                      className="model-selector__item-icon"
+                    />
+                    <div className="model-selector__item-content">
+                      <div className="model-selector__item-header">
+                        <span className="model-selector__item-name">
+                          {model.name}
+                        </span>
+                        <ModelHealthBadge modelId={model.id} />
+                        {model.badges && model.badges.length > 0 && (
+                          <div className="model-selector__badges">
+                            {model.badges.map((badge) => (
+                              <span
+                                key={badge}
+                                className={`model-selector__badge ${BADGE_COLORS[badge]}`}
+                              >
+                                {badge === 'NEW' ? 'VIP' : badge}
+                              </span>
+                            ))}
+                          </div>
+                        )}
                       </div>
-                      {model.id === selectedModel && (
-                        <svg
-                          className="model-selector__check"
-                          width="16"
-                          height="16"
-                          viewBox="0 0 16 16"
-                          fill="none"
-                        >
-                          <path
-                            d="M13.3334 4L6.00002 11.3333L2.66669 8"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          />
-                        </svg>
-                      )}
-                    </button>
-                  ))}
-                </div>
-              ))
-            )}
-          </div>
+                      <div className="model-selector__item-desc">
+                        {model.description}
+                      </div>
+                    </div>
+                    {model.id === selectedModel && (
+                      <svg
+                        className="model-selector__check"
+                        width="16"
+                        height="16"
+                        viewBox="0 0 16 16"
+                        fill="none"
+                      >
+                        <path
+                          d="M13.3334 4L6.00002 11.3333L2.66669 8"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    )}
+                  </button>
+                ))
+              )}
+            </div>
+          </VendorTabPanel>
         </div>
       );
 

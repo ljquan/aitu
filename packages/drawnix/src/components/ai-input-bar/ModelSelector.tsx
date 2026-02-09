@@ -11,11 +11,15 @@ import { Bot, Check, Image, Video } from 'lucide-react';
 import {
   IMAGE_VIDEO_MODELS,
   getModelConfig,
+  getModelsByVendor,
+  getVendorOrder,
   type ModelType,
   type ModelConfig,
+  type ModelVendor,
 } from '../../constants/model-config';
 import './model-selector.scss';
 import { ModelHealthBadge } from '../shared/ModelHealthBadge';
+import { VendorTabPanel, type VendorTab } from '../shared/VendorTabPanel';
 
 export interface ModelSelectorProps {
   /** 是否可见 */
@@ -49,41 +53,62 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
   // console.log('[ModelSelector] render, visible:', visible, 'filterKeyword:', filterKeyword);
   const panelRef = useRef<HTMLDivElement>(null);
   const [highlightedIndex, setHighlightedIndex] = useState(0);
+  const [activeVendor, setActiveVendor] = useState<ModelVendor | null>(null);
 
   // 检查是否两种模型都已选择
   const allModelsSelected = !!selectedImageModel && !!selectedVideoModel;
 
+  // 按类型过滤后的模型（用于生成厂商标签）
+  const typeFilteredModels = useMemo(() => {
+    if (allModelsSelected) return [];
+    return IMAGE_VIDEO_MODELS.filter(model => {
+      if (model.type === 'image' && selectedImageModel) return false;
+      if (model.type === 'video' && selectedVideoModel) return false;
+      return true;
+    });
+  }, [selectedImageModel, selectedVideoModel, allModelsSelected]);
+
+  // 计算厂商标签列表
+  const vendorTabs = useMemo((): VendorTab[] => {
+    const vendorMap = getModelsByVendor(typeFilteredModels);
+    const order = getVendorOrder(typeFilteredModels);
+    return order.map(vendor => ({
+      vendor,
+      count: vendorMap.get(vendor)?.length ?? 0,
+    }));
+  }, [typeFilteredModels]);
+
+  // 初始化 activeVendor（visible 变化时）
+  useEffect(() => {
+    if (visible && vendorTabs.length > 0 && !activeVendor) {
+      setActiveVendor(vendorTabs[0].vendor);
+    }
+    if (!visible) {
+      setActiveVendor(null);
+    }
+  }, [visible, vendorTabs]);
+
   // 过滤模型列表
   const filteredModels = useMemo(() => {
     const keyword = filterKeyword.toLowerCase().trim();
+    const isSearching = !!keyword;
 
-    // 如果两种模型都已选择，返回空列表
-    if (allModelsSelected) {
-      return [];
-    }
-
-    let models: ModelConfig[] = IMAGE_VIDEO_MODELS.filter(model => {
-      // 过滤掉已选择类型的模型
-      if (model.type === 'image' && selectedImageModel) {
-        return false;
-      }
-      if (model.type === 'video' && selectedVideoModel) {
-        return false;
-      }
-      return true;
-    });
-
-    // 按关键词过滤
-    if (keyword) {
-      models = models.filter(model =>
+    // 搜索时跨厂商过滤
+    if (isSearching) {
+      return typeFilteredModels.filter(model =>
         model.id.toLowerCase().includes(keyword) ||
         model.label.toLowerCase().includes(keyword) ||
         (model.shortLabel && model.shortLabel.toLowerCase().includes(keyword))
       );
     }
 
-    return models;
-  }, [filterKeyword, selectedImageModel, selectedVideoModel, allModelsSelected]);
+    // 无搜索时按 activeVendor 过滤
+    if (activeVendor) {
+      return typeFilteredModels.filter(m => m.vendor === activeVendor);
+    }
+
+    return typeFilteredModels;
+  }, [typeFilteredModels, filterKeyword, activeVendor]);
 
   // 重置高亮索引当过滤结果变化时
   useEffect(() => {
@@ -94,6 +119,12 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
   const handleSelect = useCallback((modelId: string) => {
     onSelect(modelId);
   }, [onSelect]);
+
+  // 切换厂商
+  const handleVendorChange = useCallback((vendor: ModelVendor) => {
+    setActiveVendor(vendor);
+    setHighlightedIndex(0);
+  }, []);
 
   // 全局键盘事件监听
   useEffect(() => {
@@ -276,8 +307,15 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
         </span>
       </div>
 
-      <div className="ai-model-selector__list">
-        {filteredModels.map((model, index) => {
+      <VendorTabPanel
+        tabs={vendorTabs}
+        activeVendor={activeVendor}
+        onVendorChange={handleVendorChange}
+        searchQuery={filterKeyword}
+        compact
+      >
+        <div className="ai-model-selector__list">
+          {filteredModels.map((model, index) => {
           const isSelected =
             (model.type === 'image' && selectedImageModel === model.id) ||
             (model.type === 'video' && selectedVideoModel === model.id);
@@ -310,6 +348,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
           );
         })}
       </div>
+      </VendorTabPanel>
     </div>
   );
 };

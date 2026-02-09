@@ -13,6 +13,38 @@
 export type ModelType = 'image' | 'video' | 'text';
 
 /**
+ * 模型厂商
+ */
+export enum ModelVendor {
+  GEMINI = 'GEMINI',
+  FLUX = 'FLUX',
+  MIDJOURNEY = 'MIDJOURNEY',
+  GPT = 'GPT',
+  VEO = 'VEO',
+  SORA = 'SORA',
+  KLING = 'KLING',
+  DEEPSEEK = 'DEEPSEEK',
+  ANTHROPIC = 'ANTHROPIC',
+  GOOGLE = 'GOOGLE',
+}
+
+/**
+ * 厂商显示名称
+ */
+export const VENDOR_NAMES: Record<ModelVendor, string> = {
+  [ModelVendor.GEMINI]: 'Gemini',
+  [ModelVendor.FLUX]: 'Flux',
+  [ModelVendor.MIDJOURNEY]: 'Midjourney',
+  [ModelVendor.GPT]: 'GPT',
+  [ModelVendor.VEO]: 'Veo',
+  [ModelVendor.SORA]: 'Sora',
+  [ModelVendor.KLING]: 'Kling',
+  [ModelVendor.DEEPSEEK]: 'DeepSeek',
+  [ModelVendor.ANTHROPIC]: 'Anthropic',
+  [ModelVendor.GOOGLE]: 'Google',
+};
+
+/**
  * 参数值类型
  */
 export type ParamValueType = 'enum' | 'number' | 'string';
@@ -81,6 +113,8 @@ export interface ModelConfig {
   description?: string;
   /** 模型类型 */
   type: ModelType;
+  /** 模型厂商 */
+  vendor: ModelVendor;
   /** 是否为 VIP/推荐模型 */
   isVip?: boolean;
   /** 是否支持工具调用（用于 Agent 模式） */
@@ -140,6 +174,7 @@ export const IMAGE_MODEL_VIP_OPTIONS: ModelConfig[] = [
     shortCode: 'nb2v',
     description: '最新 Gemini 3 Pro 图片模型（VIP）',
     type: 'image',
+    vendor: ModelVendor.GEMINI,
     isVip: true,
     supportsTools: true,
     imageDefaults: IMAGE_DEFAULT_PARAMS,
@@ -151,6 +186,7 @@ export const IMAGE_MODEL_VIP_OPTIONS: ModelConfig[] = [
     shortCode: 'nb22kv',
     description: '2K 高清图片模型（VIP）',
     type: 'image',
+    vendor: ModelVendor.GEMINI,
     isVip: true,
     supportsTools: true,
     imageDefaults: IMAGE_2K_DEFAULT_PARAMS,
@@ -162,6 +198,7 @@ export const IMAGE_MODEL_VIP_OPTIONS: ModelConfig[] = [
     shortCode: 'nb24kv',
     description: '4K 超高清图片模型（VIP）',
     type: 'image',
+    vendor: ModelVendor.GEMINI,
     isVip: true,
     supportsTools: true,
     imageDefaults: IMAGE_4K_DEFAULT_PARAMS,
@@ -173,6 +210,7 @@ export const IMAGE_MODEL_VIP_OPTIONS: ModelConfig[] = [
     shortCode: 'nbv',
     description: '快速图片生成模型（VIP）',
     type: 'image',
+    vendor: ModelVendor.GEMINI,
     isVip: true,
     supportsTools: true,
     imageDefaults: IMAGE_DEFAULT_PARAMS,
@@ -190,6 +228,7 @@ export const IMAGE_MODEL_MORE_OPTIONS: ModelConfig[] = [
     shortCode: 'mj',
     description: 'Midjourney 异步图片生成模型（# 参数）',
     type: 'image',
+    vendor: ModelVendor.MIDJOURNEY,
     supportsTools: true,
     imageDefaults: IMAGE_DEFAULT_PARAMS,
   },
@@ -199,6 +238,7 @@ export const IMAGE_MODEL_MORE_OPTIONS: ModelConfig[] = [
     shortCode: 'gpt15',
     description: 'GPT 图片生成模型',
     type: 'image',
+    vendor: ModelVendor.GPT,
     supportsTools: true,
     imageDefaults: IMAGE_DEFAULT_PARAMS,
   },
@@ -209,6 +249,7 @@ export const IMAGE_MODEL_MORE_OPTIONS: ModelConfig[] = [
     shortCode: 'f2p',
     description: 'Flux 2 Pro 高质量图片生成',
     type: 'image',
+    vendor: ModelVendor.FLUX,
     supportsTools: false,
     imageDefaults: IMAGE_DEFAULT_PARAMS,
   },
@@ -219,6 +260,7 @@ export const IMAGE_MODEL_MORE_OPTIONS: ModelConfig[] = [
     shortCode: 'f2m',
     description: 'Flux 2 Max 最高质量图片生成',
     type: 'image',
+    vendor: ModelVendor.FLUX,
     supportsTools: false,
     imageDefaults: IMAGE_DEFAULT_PARAMS,
   },
@@ -229,6 +271,7 @@ export const IMAGE_MODEL_MORE_OPTIONS: ModelConfig[] = [
     shortCode: 'f2f',
     description: 'Flux 2 Flex 灵活图片生成',
     type: 'image',
+    vendor: ModelVendor.FLUX,
     supportsTools: false,
     imageDefaults: IMAGE_DEFAULT_PARAMS,
   },
@@ -239,6 +282,7 @@ export const IMAGE_MODEL_MORE_OPTIONS: ModelConfig[] = [
     shortCode: 'fkp',
     description: 'Flux Kontext Pro 多参考图编辑',
     type: 'image',
+    vendor: ModelVendor.FLUX,
     supportsTools: false,
     imageDefaults: IMAGE_DEFAULT_PARAMS,
   },
@@ -249,6 +293,7 @@ export const IMAGE_MODEL_MORE_OPTIONS: ModelConfig[] = [
     shortCode: 'fkm',
     description: 'Flux Kontext Max 多参考图编辑（最高质量）',
     type: 'image',
+    vendor: ModelVendor.FLUX,
     supportsTools: false,
     imageDefaults: IMAGE_DEFAULT_PARAMS,
   },
@@ -259,6 +304,7 @@ export const IMAGE_MODEL_MORE_OPTIONS: ModelConfig[] = [
     shortCode: 'nb2',
     description: 'Gemini 3 Pro 图片模型',
     type: 'image',
+    vendor: ModelVendor.GEMINI,
     supportsTools: true,
     imageDefaults: IMAGE_DEFAULT_PARAMS,
   },
@@ -269,6 +315,7 @@ export const IMAGE_MODEL_MORE_OPTIONS: ModelConfig[] = [
     shortCode: 'nb',
     description: '快速图片生成模型',
     type: 'image',
+    vendor: ModelVendor.GEMINI,
     supportsTools: true,
     imageDefaults: IMAGE_DEFAULT_PARAMS,
   },
@@ -279,6 +326,7 @@ export const IMAGE_MODEL_MORE_OPTIONS: ModelConfig[] = [
     shortCode: 'nb2hd',
     description: 'HD 高清图片模型',
     type: 'image',
+    vendor: ModelVendor.GEMINI,
     supportsTools: true,
     imageDefaults: IMAGE_DEFAULT_PARAMS,
   },
@@ -289,6 +337,7 @@ export const IMAGE_MODEL_MORE_OPTIONS: ModelConfig[] = [
     shortCode: 'nb22k',
     description: '2K 高清图片模型',
     type: 'image',
+    vendor: ModelVendor.GEMINI,
     supportsTools: true,
     imageDefaults: IMAGE_2K_DEFAULT_PARAMS,
   },
@@ -299,6 +348,7 @@ export const IMAGE_MODEL_MORE_OPTIONS: ModelConfig[] = [
     shortCode: 'nb24k',
     description: '4K 超高清图片模型',
     type: 'image',
+    vendor: ModelVendor.GEMINI,
     supportsTools: true,
     imageDefaults: IMAGE_4K_DEFAULT_PARAMS,
   },
@@ -309,6 +359,7 @@ export const IMAGE_MODEL_MORE_OPTIONS: ModelConfig[] = [
     shortCode: 'nb2a',
     description: '异步 1K 图片生成（轮询获取结果）',
     type: 'image',
+    vendor: ModelVendor.GEMINI,
     supportsTools: false,
     imageDefaults: IMAGE_DEFAULT_PARAMS,
   },
@@ -319,6 +370,7 @@ export const IMAGE_MODEL_MORE_OPTIONS: ModelConfig[] = [
     shortCode: 'nb22ka',
     description: '异步 2K 图片生成（轮询获取结果）',
     type: 'image',
+    vendor: ModelVendor.GEMINI,
     supportsTools: false,
     imageDefaults: IMAGE_2K_DEFAULT_PARAMS,
   },
@@ -329,6 +381,7 @@ export const IMAGE_MODEL_MORE_OPTIONS: ModelConfig[] = [
     shortCode: 'nb24ka',
     description: '异步 4K 图片生成（轮询获取结果）',
     type: 'image',
+    vendor: ModelVendor.GEMINI,
     supportsTools: false,
     imageDefaults: IMAGE_4K_DEFAULT_PARAMS,
   },
@@ -398,6 +451,7 @@ export const VIDEO_MODELS: ModelConfig[] = [
     shortCode: 'k16',
     description: '5s/10s 视频，支持文生视频和图生视频',
     type: 'video',
+    vendor: ModelVendor.KLING,
     supportsTools: true,
     videoDefaults: KLING_DEFAULT_PARAMS,
   },
@@ -407,6 +461,7 @@ export const VIDEO_MODELS: ModelConfig[] = [
     shortCode: 'v31',
     description: '8秒快速模式，支持首尾帧',
     type: 'video',
+    vendor: ModelVendor.VEO,
     isVip: true,
     supportsTools: true,
     videoDefaults: VEO_DEFAULT_PARAMS,
@@ -417,6 +472,7 @@ export const VIDEO_MODELS: ModelConfig[] = [
     shortCode: 's2',
     description: '10s/15s 默认标清，支持故事场景模式',
     type: 'video',
+    vendor: ModelVendor.SORA,
     isVip: true,
     supportsTools: true,
     videoDefaults: SORA_DEFAULT_PARAMS,
@@ -427,6 +483,7 @@ export const VIDEO_MODELS: ModelConfig[] = [
     shortCode: 's24',
     description: '4秒固定时长，模型名已包含时长',
     type: 'video',
+    vendor: ModelVendor.SORA,
     isVip: true,
     supportsTools: true,
     videoDefaults: {
@@ -441,6 +498,7 @@ export const VIDEO_MODELS: ModelConfig[] = [
     shortCode: 's28',
     description: '8秒固定时长，模型名已包含时长',
     type: 'video',
+    vendor: ModelVendor.SORA,
     isVip: true,
     supportsTools: true,
     videoDefaults: {
@@ -455,6 +513,7 @@ export const VIDEO_MODELS: ModelConfig[] = [
     shortCode: 's212',
     description: '12秒固定时长，模型名已包含时长',
     type: 'video',
+    vendor: ModelVendor.SORA,
     isVip: true,
     supportsTools: true,
     videoDefaults: {
@@ -469,6 +528,7 @@ export const VIDEO_MODELS: ModelConfig[] = [
     shortCode: 'v3',
     description: '8秒视频',
     type: 'video',
+    vendor: ModelVendor.VEO,
     supportsTools: true,
     videoDefaults: VEO_DEFAULT_PARAMS,
   },
@@ -478,6 +538,7 @@ export const VIDEO_MODELS: ModelConfig[] = [
     shortCode: 'v3p',
     description: '8秒高质量视频',
     type: 'video',
+    vendor: ModelVendor.VEO,
     supportsTools: true,
     videoDefaults: VEO_DEFAULT_PARAMS,
   },
@@ -487,6 +548,7 @@ export const VIDEO_MODELS: ModelConfig[] = [
     shortCode: 'v31p',
     description: '8秒高质量模式，支持首尾帧',
     type: 'video',
+    vendor: ModelVendor.VEO,
     supportsTools: true,
     videoDefaults: VEO_DEFAULT_PARAMS,
   },
@@ -496,6 +558,7 @@ export const VIDEO_MODELS: ModelConfig[] = [
     shortCode: 'v31c',
     description: '8秒模式，支持3张参考图',
     type: 'video',
+    vendor: ModelVendor.VEO,
     supportsTools: true,
     videoDefaults: VEO_DEFAULT_PARAMS,
   },
@@ -505,6 +568,7 @@ export const VIDEO_MODELS: ModelConfig[] = [
     shortCode: 'v314k',
     description: '8秒4K模式，支持首尾帧',
     type: 'video',
+    vendor: ModelVendor.VEO,
     supportsTools: true,
     videoDefaults: VEO_4K_DEFAULT_PARAMS,
   },
@@ -514,6 +578,7 @@ export const VIDEO_MODELS: ModelConfig[] = [
     shortCode: 'v31c4k',
     description: '8秒4K模式，支持3张参考图',
     type: 'video',
+    vendor: ModelVendor.VEO,
     supportsTools: true,
     videoDefaults: VEO_4K_DEFAULT_PARAMS,
   },
@@ -523,6 +588,7 @@ export const VIDEO_MODELS: ModelConfig[] = [
     shortCode: 'v31p4k',
     description: '8秒高质量4K模式，支持首尾帧',
     type: 'video',
+    vendor: ModelVendor.VEO,
     supportsTools: true,
     videoDefaults: VEO_4K_DEFAULT_PARAMS,
   },
@@ -532,6 +598,7 @@ export const VIDEO_MODELS: ModelConfig[] = [
     shortCode: 's2p',
     description: '10s/15s/25s 高清，支持故事场景模式',
     type: 'video',
+    vendor: ModelVendor.SORA,
     supportsTools: true,
     videoDefaults: SORA_DEFAULT_PARAMS,
   },
@@ -551,6 +618,7 @@ export const TEXT_MODELS: ModelConfig[] = [
     shortCode: 'ds32',
     description: 'DeepSeek 最新大语言模型，性价比高',
     type: 'text',
+    vendor: ModelVendor.DEEPSEEK,
     supportsTools: true,
   },
   {
@@ -559,6 +627,7 @@ export const TEXT_MODELS: ModelConfig[] = [
     shortCode: 'op45',
     description: 'Anthropic 旗舰模型，推理能力最强',
     type: 'text',
+    vendor: ModelVendor.ANTHROPIC,
     isVip: true,
     supportsTools: true,
   },
@@ -568,6 +637,7 @@ export const TEXT_MODELS: ModelConfig[] = [
     shortCode: 'sn45',
     description: 'Anthropic 均衡模型，性能与速度兼顾',
     type: 'text',
+    vendor: ModelVendor.ANTHROPIC,
     isVip: true,
     supportsTools: true,
   },
@@ -577,6 +647,7 @@ export const TEXT_MODELS: ModelConfig[] = [
     shortCode: 'g25f',
     description: 'Google 快速响应模型，适合日常任务',
     type: 'text',
+    vendor: ModelVendor.GOOGLE,
     supportsTools: true,
   },
   {
@@ -585,6 +656,7 @@ export const TEXT_MODELS: ModelConfig[] = [
     shortCode: 'g3pp',
     description: 'Google 最新预览模型，能力强大',
     type: 'text',
+    vendor: ModelVendor.GOOGLE,
     isVip: true,
     supportsTools: true,
   },
@@ -672,6 +744,39 @@ export function getVideoModelDefaults(modelId: string): VideoModelDefaults {
  */
 export function getModelTypeColor(type: ModelType): string {
   return MODEL_TYPE_COLORS[type];
+}
+
+/**
+ * 按厂商分组模型列表
+ */
+export function getModelsByVendor(
+  models: ModelConfig[]
+): Map<ModelVendor, ModelConfig[]> {
+  const map = new Map<ModelVendor, ModelConfig[]>();
+  for (const model of models) {
+    const list = map.get(model.vendor);
+    if (list) {
+      list.push(model);
+    } else {
+      map.set(model.vendor, [model]);
+    }
+  }
+  return map;
+}
+
+/**
+ * 按首次出现顺序返回厂商列表
+ */
+export function getVendorOrder(models: ModelConfig[]): ModelVendor[] {
+  const seen = new Set<ModelVendor>();
+  const order: ModelVendor[] = [];
+  for (const model of models) {
+    if (!seen.has(model.vendor)) {
+      seen.add(model.vendor);
+      order.push(model.vendor);
+    }
+  }
+  return order;
 }
 
 // ============================================

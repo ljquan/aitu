@@ -12,8 +12,12 @@ import { Check, ChevronDown, Search, X } from 'lucide-react';
 import {
   IMAGE_MODELS,
   getModelConfig,
+  getModelsByVendor,
+  getVendorOrder,
   type ModelConfig,
+  type ModelVendor,
 } from '../../constants/model-config';
+import { VendorTabPanel, type VendorTab } from '../shared/VendorTabPanel';
 import { ATTACHED_ELEMENT_CLASS_NAME } from '@plait/core';
 import { Z_INDEX } from '../../constants/z-index';
 import { useControllableState } from '../../hooks/useControllableState';
@@ -70,6 +74,7 @@ export const ModelDropdown: React.FC<ModelDropdownProps> = ({
 
   const [searchQuery, setSearchQuery] = useState('');
   const [highlightedIndex, setHighlightedIndex] = useState(0);
+  const [activeVendor, setActiveVendor] = useState<ModelVendor | null>(null);
   const triggerInputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -113,23 +118,44 @@ export const ModelDropdown: React.FC<ModelDropdownProps> = ({
 
   // 过滤模型列表
   const filteredModels = useMemo(() => {
-    if (!searchQuery.trim()) return models;
+    const query = searchQuery.toLowerCase().trim();
+    const isSearching = !!query;
 
-    // 如果输入内容与当前选中模型的标签完全一致，且菜单刚打开，则显示所有模型
-    const currentLabel = currentModel?.label || selectedModel;
-    if (searchQuery === currentLabel && isOpen && !triggerInputRef.current?.matches(':focus-visible')) {
-      // 这里的逻辑有点复杂，简化一下：如果输入框文字没有被手动修改过（或者说还是初始值），则不过滤
+    // 搜索时跨厂商过滤
+    if (isSearching) {
+      return models.filter(m =>
+        m.id.toLowerCase().includes(query) ||
+        m.label.toLowerCase().includes(query) ||
+        m.shortLabel?.toLowerCase().includes(query) ||
+        m.shortCode?.toLowerCase().includes(query) ||
+        m.description?.toLowerCase().includes(query)
+      );
     }
 
-    const query = searchQuery.toLowerCase().trim();
-    return models.filter(m =>
-      m.id.toLowerCase().includes(query) ||
-      m.label.toLowerCase().includes(query) ||
-      m.shortLabel?.toLowerCase().includes(query) ||
-      m.shortCode?.toLowerCase().includes(query) ||
-      m.description?.toLowerCase().includes(query)
-    );
-  }, [models, searchQuery]);
+    // 无搜索时按 activeVendor 过滤
+    if (activeVendor) {
+      return models.filter(m => m.vendor === activeVendor);
+    }
+
+    return models;
+  }, [models, searchQuery, activeVendor]);
+
+  // 计算厂商标签列表
+  const vendorTabs = useMemo((): VendorTab[] => {
+    const vendorMap = getModelsByVendor(models);
+    const order = getVendorOrder(models);
+    return order.map(vendor => ({
+      vendor,
+      count: vendorMap.get(vendor)?.length ?? 0,
+    }));
+  }, [models]);
+
+  // 切换厂商
+  const handleVendorChange = useCallback((vendor: ModelVendor) => {
+    setActiveVendor(vendor);
+    setSearchQuery('');
+    setHighlightedIndex(0);
+  }, []);
 
   // 当过滤结果变化时，重置高亮索引
   useEffect(() => {
@@ -141,6 +167,10 @@ export const ModelDropdown: React.FC<ModelDropdownProps> = ({
     e?.preventDefault(); // 阻止触发输入框失焦
     if (disabled) return;
     const next = !isOpen;
+    if (next) {
+      // 打开时初始化 activeVendor 为当前选中模型的厂商
+      setActiveVendor(currentModel?.vendor ?? null);
+    }
     if (variant === 'form') {
       if (next) {
         // 打开时清空搜索，展示全部模型
@@ -245,6 +275,7 @@ export const ModelDropdown: React.FC<ModelDropdownProps> = ({
           if (!isOpen) {
             setIsOpen(true);
             setSearchQuery('');
+            setActiveVendor(currentModel?.vendor ?? null);
           }
         }}
       >
@@ -301,7 +332,7 @@ export const ModelDropdown: React.FC<ModelDropdownProps> = ({
               position: 'fixed',
               zIndex: Z_INDEX.DROPDOWN_PORTAL,
               left: portalPosition.left,
-              width: variant === 'form' ? portalPosition.width : 'auto',
+              width: variant === 'form' ? Math.max(portalPosition.width, 420) : 'auto',
               top: placement === 'down' ? portalPosition.bottom + 4 : 'auto',
               bottom: placement === 'up' ? window.innerHeight - portalPosition.top + 4 : 'auto',
               visibility: portalPosition.width === 0 ? 'hidden' : 'visible',
@@ -313,9 +344,16 @@ export const ModelDropdown: React.FC<ModelDropdownProps> = ({
               <div className="model-dropdown__header">{header}</div>
             )}
 
-            <div className="model-dropdown__list" ref={listRef}>
-              {filteredModels.length > 0 ? (
-                filteredModels.map((model, index) => {
+            <VendorTabPanel
+              tabs={vendorTabs}
+              activeVendor={activeVendor}
+              onVendorChange={handleVendorChange}
+              searchQuery={searchQuery}
+              compact
+            >
+              <div className="model-dropdown__list" ref={listRef}>
+                {filteredModels.length > 0 ? (
+                  filteredModels.map((model, index) => {
                   const isSelected = model.id === selectedModel;
                   const isHighlighted = index === highlightedIndex;
                   return (
@@ -356,6 +394,7 @@ export const ModelDropdown: React.FC<ModelDropdownProps> = ({
                 </div>
               )}
             </div>
+            </VendorTabPanel>
           </div>
         );
 
