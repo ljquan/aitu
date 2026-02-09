@@ -45,7 +45,10 @@ import { LinkPopup } from './components/popup/link-popup/link-popup';
 import { I18nProvider } from './i18n';
 import { withVideo, isVideoElement } from './plugins/with-video';
 import { UnifiedMediaViewer, type MediaItem as UnifiedMediaItem } from './components/shared/media-preview';
-import { PlaitDrawElement } from '@plait/draw';
+import {
+  PlaitDrawElement,
+  DrawTransforms,
+} from '@plait/draw';
 import { withTracking } from './plugins/tracking';
 import { withTool } from './plugins/with-tool';
 import { withToolFocus } from './plugins/with-tool-focus';
@@ -74,7 +77,6 @@ import { ToolbarConfigProvider } from './hooks/use-toolbar-config';
 import { AIInputBar } from './components/ai-input-bar';
 import { VersionUpdatePrompt } from './components/version-update/version-update-prompt';
 import { PerformancePanel } from './components/performance-panel';
-import { QuickCreationToolbar } from './components/toolbar/quick-creation-toolbar/quick-creation-toolbar';
 import { CacheQuotaProvider } from './components/cache-quota-provider/CacheQuotaProvider';
 import { RecentColorsProvider } from './components/unified-color-picker';
 import { GitHubSyncProvider } from './contexts/GitHubSyncContext';
@@ -85,12 +87,14 @@ import { withArrowLineAutoCompleteExtend } from './plugins/with-arrow-line-auto-
 import { withFlowchartShortcut } from './plugins/with-flowchart-shortcut';
 import { withFrame } from './plugins/with-frame';
 import { AutoCompleteShapePicker } from './components/auto-complete-shape-picker';
+import { InlineTextEditor } from './components/inline-text-editor';
 import { useAutoCompleteShapePicker } from './hooks/useAutoCompleteShapePicker';
 import { ToolWinBoxManager } from './components/toolbox-drawer/ToolWinBoxManager';
 import { withDefaultFill } from './plugins/with-default-fill';
 import { withGradientFill } from './plugins/with-gradient-fill';
 import { withFrameResize } from './plugins/with-frame-resize';
 import { withLassoSelection } from './plugins/with-lasso-selection';
+import { withGeometryMinSize } from './plugins/with-geometry-min-size';
 import { API_AUTH_ERROR_EVENT, ApiAuthErrorDetail } from './utils/api-auth-error-event';
 import { MessagePlugin } from 'tdesign-react';
 import { calculateEditedImagePoints } from './utils/image';
@@ -572,6 +576,7 @@ export const Drawnix: React.FC<DrawnixProps> = ({
     withDefaultFill, // 默认填充 - 让新创建的图形有白色填充，方便双击编辑
     withGradientFill, // 渐变填充 - 支持渐变和图片填充渲染
     withLassoSelection, // 套索选择 - 自由路径框选元素
+    withGeometryMinSize, // 几何元素最小尺寸 - 防止文本溢出
     withTracking,
   ];
 
@@ -805,9 +810,19 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
     enabled: true,
   });
 
-  // 快捷工具栏状态
-  const [quickToolbarVisible, setQuickToolbarVisible] = useState(false);
-  const [quickToolbarPosition, setQuickToolbarPosition] = useState<[number, number] | null>(null);
+  // 内联文本创建状态：双击空白区域时显示临时输入光标
+  const [inlineTextState, setInlineTextState] = useState<{
+    screenPosition: [number, number];
+    viewBoxPoint: [number, number];
+  } | null>(null);
+
+  // 内联文本提交：输入完成后创建 Plait 文本元素
+  const commitInlineText = useCallback((text: string) => {
+    if (text.trim() && board && inlineTextState) {
+      DrawTransforms.insertText(board, inlineTextState.viewBoxPoint, text);
+    }
+    setInlineTextState(null);
+  }, [board, inlineTextState]);
 
   // 媒体预览状态
   const [mediaPreviewVisible, setMediaPreviewVisible] = useState(false);
@@ -974,7 +989,7 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
     closePicker: closeAutoCompletePicker,
   } = useAutoCompleteShapePicker(board);
 
-  // 监听双击事件 - 处理图片/视频预览和空白区域快捷工具栏
+  // 监听双击事件 - 处理图片/视频预览和空白区域直接创建文本
   useEffect(() => {
     if (!board) return;
 
@@ -1015,11 +1030,12 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
                                    target.closest('.plait-workzone-container') ||
                                    target.closest('foreignObject');
 
-      // 只有双击空白区域时才显示快速创建工具栏
+      // 双击空白区域时显示内联文本输入光标
       if (!hitElement && !isInsideInteractive) {
-        const position: [number, number] = [event.clientX, event.clientY];
-        setQuickToolbarPosition(position);
-        setQuickToolbarVisible(true);
+        setInlineTextState({
+          screenPosition: [event.clientX, event.clientY],
+          viewBoxPoint: viewBoxPoint as [number, number],
+        });
       }
     };
 
@@ -1184,12 +1200,6 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
             visible={cloudSyncOpen}
             onClose={() => setCloudSyncOpen(false)}
           />
-          {/* Quick Creation Toolbar - 双击空白区域显示的快捷工具栏 */}
-          <QuickCreationToolbar
-            position={quickToolbarPosition}
-            visible={quickToolbarVisible}
-            onClose={() => setQuickToolbarVisible(false)}
-          />
           {/* Media Viewer - 画布图片/视频预览（支持内置编辑模式） */}
           <UnifiedMediaViewer
             visible={mediaPreviewVisible}
@@ -1218,6 +1228,14 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
           {/* ViewNavigation - 视图导航（缩放 + 小地图） */}
           <ViewNavigation />
           <ToolWinBoxManager />
+          {/* Inline Text Editor - 双击空白区域时的内联文本输入 */}
+          {inlineTextState && (
+            <InlineTextEditor
+              screenPosition={inlineTextState.screenPosition}
+              zoom={board?.viewport?.zoom || 1}
+              onCommit={commitInlineText}
+            />
+          )}
         </Wrapper>
         {/* Command Palette - 命令面板 (Cmd+K) */}
         <CommandPalette
