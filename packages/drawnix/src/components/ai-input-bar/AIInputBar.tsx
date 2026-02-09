@@ -24,7 +24,7 @@ import {
 } from '../icons';
 import { useBoard } from '@plait-board/react-board';
 import { SelectedContentPreview } from '../shared/SelectedContentPreview';
-import { getSelectedElements, ATTACHED_ELEMENT_CLASS_NAME, getRectangleByElements, PlaitBoard, PlaitElement } from '@plait/core';
+import { getSelectedElements, ATTACHED_ELEMENT_CLASS_NAME, getRectangleByElements, PlaitBoard, PlaitElement, RectangleClient } from '@plait/core';
 import { useI18n } from '../../i18n';
 import { TaskStatus } from '../../types/task.types';
 import { taskQueueService } from '../../services/task-queue';
@@ -77,6 +77,10 @@ import { WorkZoneTransforms } from '../../plugins/with-workzone';
 import type { PlaitWorkZone } from '../../types/workzone.types';
 import { toolWindowService } from '../../services/tool-window-service';
 import { useWorkflowSubmission } from '../../hooks/useWorkflowSubmission';
+import { isFrameElement } from '../../types/frame.types';
+import { matchFrameSizeForModel } from '../../utils/frame-size-matcher';
+import { PlaitDrawElement } from '@plait/draw';
+import { isPlaitVideo } from '../../interfaces/video';
 
 /**
  * 将 WorkflowDefinition 转换为 WorkflowMessageData
@@ -176,7 +180,9 @@ const SelectionWatcher: React.FC<{
   onCanvasEmptyChange?: (isEmpty: boolean) => void;
   /** 数据是否已准备好 */
   isDataReady?: boolean;
-}> = React.memo(({ language, onSelectionChange, externalBoardRef, onCanvasEmptyChange, isDataReady }) => {
+  /** 选中单个 Frame 时回调（传递 Frame ID 和宽高），取消选中或选中非 Frame 时传 null */
+  onFrameSelected?: (frameInfo: { id: string; width: number; height: number } | null) => void;
+}> = React.memo(({ language, onSelectionChange, externalBoardRef, onCanvasEmptyChange, isDataReady, onFrameSelected }) => {
   const board = useBoard();
   const boardRef = useRef(board);
   boardRef.current = board;
@@ -233,12 +239,24 @@ const SelectionWatcher: React.FC<{
   const onSelectionChangeRef = useRef(onSelectionChange);
   onSelectionChangeRef.current = onSelectionChange;
 
+  const onFrameSelectedRef = useRef(onFrameSelected);
+  onFrameSelectedRef.current = onFrameSelected;
+
   useEffect(() => {
     const handleSelectionChange = async () => {
       const currentBoard = boardRef.current;
       if (!currentBoard) return;
 
       const selectedElements = getSelectedElements(currentBoard);
+
+      // 检测是否选中了单个 Frame，通知父组件
+      if (selectedElements.length === 1 && isFrameElement(selectedElements[0])) {
+        const frame = selectedElements[0];
+        const rect = RectangleClient.getRectangleByPoints(frame.points);
+        onFrameSelectedRef.current?.({ id: frame.id, width: rect.width, height: rect.height });
+      } else {
+        onFrameSelectedRef.current?.(null);
+      }
 
       if (selectedElements.length === 0) {
         onSelectionChangeRef.current([]);
@@ -671,13 +689,12 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
   // 保存 board 引用供后处理完成后使用
   const SelectionWatcherBoardRef = useRef<any>(null);
 
-  // 使用 SW 工作流提交 Hook
+  // 使用工作流提交 Hook
   const {
     submitWorkflow: submitWorkflowToSW,
   } = useWorkflowSubmission({
     boardRef: SelectionWatcherBoardRef,
     workZoneIdRef: currentWorkZoneIdRef,
-    useSWExecution: true, // 启用 SW 执行
   });
 
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -844,6 +861,19 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
     setSelectedContent(content);
   }, []);
 
+  // 当选中单个 Frame 时，自动切换 size 参数为最接近 Frame 比例的选项
+  // 同时保存 Frame 信息供生成时使用（插入到 Frame 内部并缩放）
+  const selectedFrameRef = useRef<{ id: string; width: number; height: number } | null>(null);
+
+  const handleFrameSelected = useCallback((frameInfo: { id: string; width: number; height: number } | null) => {
+    selectedFrameRef.current = frameInfo;
+    if (!frameInfo) return;
+    const matchedSize = matchFrameSizeForModel(frameInfo.width, frameInfo.height, selectedModel);
+    if (matchedSize) {
+      setSelectedParams(prev => ({ ...prev, size: matchedSize }));
+    }
+  }, [selectedModel]);
+
   // 处理删除上传的图片（index 是在 allContent 中的索引）
   const handleRemoveUploadedContent = useCallback((index: number) => {
     // allContent = [...uploadedContent, ...selectedContent]
@@ -942,12 +972,17 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
     try {
       // 检查 API key，如果没有配置则弹窗获取
       const globalSettings = geminiSettings.get();
+      console.log('[AIInputBar][handleGenerate] API Key 检查:', { hasApiKey: !!globalSettings?.apiKey });
       if (!globalSettings.apiKey) {
+        console.log('[AIInputBar][handleGenerate] 弹窗获取 API Key...');
         const newApiKey = await promptForApiKey();
+        console.log('[AIInputBar][handleGenerate] API Key 输入完成:', { hasNewKey: !!newApiKey });
         if (!newApiKey) {
           setIsSubmitting(false);
           return;
         }
+        const settingsAfter = geminiSettings.get();
+        console.log('[AIInputBar][handleGenerate] API Key 输入后设置状态:', { hasApiKey: !!settingsAfter?.apiKey });
       }
 
       // 构建选中元素的分类信息（使用合并后的 allContent）
@@ -991,6 +1026,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
       const workflow = convertToWorkflow(parsedParams, referenceImages);
 
       // 在画布上创建 WorkZone 显示工作流进度
+      console.log('[AIInputBar][handleGenerate] 即将创建 WorkZone, workflow.steps:', workflow.steps.length);
       const board = SelectionWatcherBoardRef.current;
       if (board) {
         // WorkZone 固定尺寸
@@ -1022,9 +1058,24 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
           if (selectedElements.length > 0) {
             try {
               const selectedRect = getRectangleByElements(board, selectedElements, false);
-              const selectedBottomY = selectedRect.y + selectedRect.height;
-              expectedInsertLeftX = selectedRect.x;
-              expectedInsertY = selectedBottomY + GAP;
+
+              // 检测选中元素是否全部为图片/视频
+              const allMediaElements = selectedElements.every(
+                (el) =>
+                  (PlaitDrawElement.isDrawElement(el) && PlaitDrawElement.isImage(el)) ||
+                  isPlaitVideo(el)
+              );
+
+              if (allMediaElements && selectedRect.width > selectedRect.height) {
+                // 横屏：插入到右侧，顶部对齐
+                expectedInsertLeftX = selectedRect.x + selectedRect.width + GAP;
+                expectedInsertY = selectedRect.y;
+              } else {
+                // 竖屏或非媒体元素：插入到下方
+                expectedInsertLeftX = selectedRect.x;
+                expectedInsertY = selectedRect.y + selectedRect.height + GAP;
+              }
+
               workzoneX = expectedInsertLeftX;
               workzoneY = expectedInsertY;
               positionCalculated = true;
@@ -1061,15 +1112,38 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
         }
 
         const workflowMessageData = toWorkflowMessageData(workflow);
+
+        // 如果选中了 Frame，将 Frame 信息传递给 WorkZone
+        // 生成完成后媒体将插入到 Frame 内部并缩放到 Frame 尺寸
+        const frameInfo = selectedFrameRef.current;
+        let targetFrameId: string | undefined;
+        let targetFrameDimensions: { width: number; height: number } | undefined;
+
+        if (frameInfo) {
+          // 验证 Frame 仍然存在
+          const frameElement = board.children.find((el: { id: string }) => el.id === frameInfo.id);
+          if (frameElement && isFrameElement(frameElement)) {
+            targetFrameId = frameInfo.id;
+            targetFrameDimensions = { width: frameInfo.width, height: frameInfo.height };
+            // Frame 选中时，插入位置设为 Frame 左上角（后续由插入逻辑居中处理）
+            const frameRect = RectangleClient.getRectangleByPoints(frameElement.points);
+            expectedInsertLeftX = frameRect.x;
+            expectedInsertY = frameRect.y;
+          }
+        }
+
         const workzoneElement = WorkZoneTransforms.insertWorkZone(board, {
           workflow: workflowMessageData,
           position: [workzoneX, workzoneY],
           size: { width: WORKZONE_WIDTH, height: WORKZONE_HEIGHT },
           expectedInsertPosition: [expectedInsertLeftX, expectedInsertY],
+          targetFrameId,
+          targetFrameDimensions,
           zoom,
         });
 
         currentWorkZoneIdRef.current = workzoneElement.id;
+        console.log('[AIInputBar][handleGenerate] WorkZone 已创建:', workzoneElement.id);
 
         setTimeout(() => {
           const workzoneCenterX = workzoneX + WORKZONE_WIDTH / 2;
@@ -1109,9 +1183,10 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
       currentRetryContextRef.current = retryContext;
 
       try {
-        console.log('[AIInputBar] Submitting workflow...');
+        console.log('[AIInputBar][handleGenerate] 开始提交工作流 submitWorkflowToSW...');
+        const t0 = Date.now();
         const { usedSW } = await submitWorkflowToSW(parsedParams, referenceImages, retryContext, workflow);
-        console.log('[AIInputBar] submitWorkflowToSW returned:', { usedSW });
+        console.log('[AIInputBar][handleGenerate] submitWorkflowToSW 返回:', { usedSW, 耗时ms: Date.now() - t0 });
         if (usedSW) {
           if (prompt.trim()) {
             const hasSelection = allContent.length > 0;
@@ -1737,6 +1812,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
         externalBoardRef={SelectionWatcherBoardRef}
         onCanvasEmptyChange={setIsCanvasEmpty}
         isDataReady={isDataReady}
+        onFrameSelected={handleFrameSelected}
       />
 
       <InspirationBoard

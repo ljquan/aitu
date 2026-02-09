@@ -8,7 +8,6 @@ import { prepareImageData, processMixedContent } from './utils';
 import { callApiWithRetry, callApiStreamRaw, callVideoApiStreamRaw } from './apiCalls';
 import { geminiSettings, settingsManager } from '../settings-manager';
 import { validateAndEnsureConfig } from './auth';
-import { swChannelClient } from '../../services/sw-channel';
 import {
   startLLMApiLog,
   completeLLMApiLog,
@@ -18,7 +17,7 @@ import {
 /**
  * 调用 Gemini API 进行图像生成
  * 使用专用的 /v1/images/generations 接口
- * 优先使用 Service Worker 发送请求
+ * 不再依赖 SW 任务队列，直接在主线程 fetch
  */
 export async function generateImageWithGemini(
   prompt: string,
@@ -39,87 +38,13 @@ export async function generateImageWithGemini(
   // 优先使用传入的 model 参数，其次使用全局设置
   const modelName = options.model || globalSettings.imageModelName || DEFAULT_CONFIG.modelName || 'gemini-3-pro-image-preview-vip';
 
-  // 尝试使用 SW 模式
-  const useSW = await swChannelClient.initializeChannel();
-  
-  if (useSW) {
-    return generateImageViaSW(prompt, options, modelName);
-  }
-  
   return generateImageDirect(prompt, options, modelName);
 }
 
-/**
- * 通过 Service Worker 生成图片
- */
-async function generateImageViaSW(
-  prompt: string,
-  options: {
-    size?: string;
-    image?: string | string[];
-    response_format?: 'url' | 'b64_json';
-    quality?: '1k' | '2k' | '4k';
-    model?: string;
-  },
-  modelName: string
-): Promise<any> {
-  const taskId = `img_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
-  
-  // 构建参考图片数组
-  let referenceImages: string[] | undefined;
-  if (options.image) {
-    referenceImages = Array.isArray(options.image) ? options.image : [options.image];
-  }
-  
-  // 创建任务并等待完成
-  const result = await swChannelClient.createTask({
-    taskId,
-    taskType: 'image',
-    params: {
-      prompt: `Generate an image: ${prompt}`,
-      size: options.size,
-      referenceImages,
-      model: modelName,
-    },
-  });
-  
-  if (!result.success) {
-    const err = new Error(result.reason || '图片生成失败');
-    throw err;
-  }
-  
-  // 等待任务完成（通过 Promise 包装事件监听）
-  return new Promise((resolve, reject) => {
-    const cleanup = () => {
-      swChannelClient.setEventHandlers({
-        onTaskCompleted: undefined,
-        onTaskFailed: undefined,
-      });
-    };
-
-    swChannelClient.setEventHandlers({
-      onTaskCompleted: (event) => {
-        if (event.taskId !== taskId) return;
-        cleanup();
-        resolve({
-          data: [{
-            url: event.result.url,
-          }],
-        });
-      },
-      onTaskFailed: (event) => {
-        if (event.taskId !== taskId) return;
-        cleanup();
-        const err = new Error(event.error?.message || '图片生成失败');
-        (err as any).apiErrorBody = event.error?.details;
-        reject(err);
-      },
-    });
-  });
-}
+// generateImageViaSW 已移除 - 不再依赖 SW 任务队列
 
 /**
- * 直接使用 fetch 生成图片（降级模式）
+ * 使用 fetch 生成图片
  */
 async function generateImageDirect(
   prompt: string,
@@ -417,8 +342,12 @@ export async function sendChatWithGemini(
   signal?: AbortSignal,
   temporaryModel?: string
 ): Promise<GeminiResponse> {
+  console.log('[sendChatWithGemini] 开始, temporaryModel:', temporaryModel);
+
   // 等待设置管理器初始化完成
+  const t0 = Date.now();
   await settingsManager.waitForInitialization();
+  console.log('[sendChatWithGemini] settingsManager 初始化完成, 耗时:', Date.now() - t0, 'ms');
   
   // 直接从设置中获取配置
   const globalSettings = geminiSettings.get();
@@ -428,12 +357,18 @@ export async function sendChatWithGemini(
     // 优先使用临时模型，其次使用全局 chatModel 设置
     modelName: temporaryModel || globalSettings.chatModel || 'gpt-4o-mini',
   };
+  console.log('[sendChatWithGemini] 配置:', { modelName: config.modelName, hasApiKey: !!config.apiKey, baseUrl: config.baseUrl });
+
+  const t1 = Date.now();
   const validatedConfig = await validateAndEnsureConfig(config);
+  console.log('[sendChatWithGemini] validateAndEnsureConfig 完成, 耗时:', Date.now() - t1, 'ms');
 
   // Use stream if callback provided
   if (onChunk) {
+    console.log('[sendChatWithGemini] 使用流式调用 callApiStreamRaw');
     return await callApiStreamRaw(validatedConfig, messages, onChunk, signal);
   } else {
+    console.log('[sendChatWithGemini] 使用非流式调用 callApiWithRetry');
     // Note: callApiWithRetry doesn't support signal yet, but for now ChatService uses onChunk
     return await callApiWithRetry(validatedConfig, messages);
   }

@@ -32,7 +32,8 @@ import {
   getVideoPromptHistory,
   getImagePromptHistory,
 } from './prompt-storage-service';
-import { swTaskQueueService } from './sw-task-queue-service';
+import { taskStorageReader } from './task-storage-reader';
+import { taskQueueService } from './task-queue';
 import { TaskType, TaskStatus, Task } from '../types/task.types';
 import type { Folder, Board } from '../types/workspace.types';
 import type { StoredAsset } from '../types/asset.types';
@@ -558,8 +559,8 @@ class BackupRestoreService {
 
     // 3. 导出任务数据（用于素材库展示）
     onProgress?.(75, '正在导出任务数据...');
-    // 从 SW 获取所有任务（而非内存中的分页数据）
-    const allTasks = await swTaskQueueService.getAllTasksFromSW();
+    // 从 IndexedDB 获取所有任务
+    const allTasks = await taskStorageReader.getAllTasks();
     // 只导出已完成的图片/视频任务（素材库需要的）
     const completedMediaTasks = allTasks.filter(
       task =>
@@ -729,8 +730,8 @@ class BackupRestoreService {
     let videoPromptHistory = getVideoPromptHistory();
     let imagePromptHistory = getImagePromptHistory();
 
-    // 从 SW 获取所有已完成任务的提示词（而非内存中的分页数据）
-    const completedTasks = await swTaskQueueService.getAllTasksFromSW({ status: TaskStatus.COMPLETED });
+    // 获取所有已完成任务的提示词
+    const completedTasks = await taskStorageReader.getAllTasks({ status: TaskStatus.COMPLETED });
     
     // 提取图片任务的提示词
     const imageTaskPrompts = completedTasks
@@ -1268,8 +1269,8 @@ class BackupRestoreService {
         return { imported: 0, skipped: 0 };
       }
 
-      // 从 SW 获取所有现有任务 ID（而非内存中的分页数据）
-      const existingTasks = await swTaskQueueService.getAllTasksFromSW();
+      // 获取所有现有任务 ID
+      const existingTasks = await taskStorageReader.getAllTasks();
       const existingTaskIds = new Set(existingTasks.map(t => t.id));
 
       // 过滤出需要导入的任务（去重）
@@ -1283,7 +1284,7 @@ class BackupRestoreService {
 
       if (tasksToImport.length > 0) {
         // 使用 restoreTasks 方法恢复任务
-        await swTaskQueueService.restoreTasks(tasksToImport);
+        await taskQueueService.restoreTasks(tasksToImport);
         imported = tasksToImport.length;
       }
     } catch (error) {

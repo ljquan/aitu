@@ -29,9 +29,9 @@ export interface ToolbarConfig {
 
 /**
  * 当前配置版本
- * v6: 将 shape 按钮移至默认显示（位于 freehand 之后）
+ * v7: 添加 lasso 套索选择按钮
  */
-export const TOOLBAR_CONFIG_VERSION = 6;
+export const TOOLBAR_CONFIG_VERSION = 7;
 
 /**
  * 默认显示的按钮
@@ -65,6 +65,7 @@ export const ALL_BUTTON_IDS = [
   'ai-image',
   'ai-video',
   // 默认收起的按钮（放在更多工具里）
+  'lasso',
   'mind',
   'arrow',
   'theme',

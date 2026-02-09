@@ -293,10 +293,25 @@ export const VIDEO_MODEL_CONFIGS: Record<VideoModel, VideoModelConfig> = {
 };
 
 /**
+ * Normalize model name to a known config key; fallback to默认模型（veo3）避免崩溃。
+ */
+export function normalizeVideoModel(model?: string | null): VideoModel {
+  if (model && (VIDEO_MODEL_CONFIGS as any)[model]) {
+    return model as VideoModel;
+  }
+  return 'veo3';
+}
+
+function getConfigOrDefault(model?: string | null): VideoModelConfig {
+  const normalized = normalizeVideoModel(model);
+  return VIDEO_MODEL_CONFIGS[normalized];
+}
+
+/**
  * Get model configuration by model ID
  */
 export function getVideoModelConfig(model: VideoModel): VideoModelConfig {
-  return VIDEO_MODEL_CONFIGS[model];
+  return getConfigOrDefault(model);
 }
 
 /**
@@ -316,7 +331,7 @@ export function getDefaultModelParams(model: VideoModel): {
   duration: string;
   size: string;
 } {
-  const config = VIDEO_MODEL_CONFIGS[model];
+  const config = getConfigOrDefault(model);
   return {
     duration: config.defaultDuration,
     size: config.defaultSize,
@@ -327,7 +342,7 @@ export function getDefaultModelParams(model: VideoModel): {
  * Check if model supports multiple image uploads
  */
 export function supportsMultipleImages(model: VideoModel): boolean {
-  const config = VIDEO_MODEL_CONFIGS[model];
+  const config = getConfigOrDefault(model);
   return config.imageUpload.maxCount > 1;
 }
 
@@ -335,7 +350,7 @@ export function supportsMultipleImages(model: VideoModel): boolean {
  * Get image upload labels for a model
  */
 export function getImageUploadLabels(model: VideoModel): string[] {
-  const config = VIDEO_MODEL_CONFIGS[model];
+  const config = getConfigOrDefault(model);
   return config.imageUpload.labels || ['参考图'];
 }
 
@@ -343,7 +358,7 @@ export function getImageUploadLabels(model: VideoModel): string[] {
  * Check if model supports storyboard mode
  */
 export function supportsStoryboardMode(model: VideoModel): boolean {
-  const config = VIDEO_MODEL_CONFIGS[model];
+  const config = getConfigOrDefault(model);
   return config.storyboardMode?.supported ?? false;
 }
 
@@ -351,12 +366,10 @@ export function supportsStoryboardMode(model: VideoModel): boolean {
  * Get storyboard mode configuration for a model
  */
 export function getStoryboardModeConfig(model: VideoModel) {
-  const config = VIDEO_MODEL_CONFIGS[model];
-  return (
-    config.storyboardMode ?? {
-      supported: false,
-      maxScenes: 15,
-      minSceneDuration: 0.1,
-    }
-  );
+  const config = getConfigOrDefault(model);
+  return config.storyboardMode ?? {
+    supported: false,
+    maxScenes: 15,
+    minSceneDuration: 0.1,
+  };
 }

@@ -1,4 +1,12 @@
-import { createEditor, type Descendant, Range, Transforms } from 'slate';
+import {
+  createEditor,
+  type Descendant,
+  Range,
+  Transforms,
+  Text as SlateText,
+  type NodeEntry,
+  type BaseRange,
+} from 'slate';
 import { isKeyHotkey } from 'is-hotkey';
 import {
   Editable,
@@ -19,6 +27,7 @@ import { withHistory } from 'slate-history';
 import { isUrl, LinkEditor } from '@plait/text-plugins';
 import { withText } from './plugins/with-text';
 import { CustomEditor, RenderElementPropsFor } from './custom-types';
+import { useSearchHighlightQuery } from './search-highlight';
 
 import './styles/index.scss';
 import { LinkComponent, withInlineLink } from './plugins/with-link';
@@ -30,9 +39,34 @@ export const Text: React.FC<TextComponentProps> = (
 ) => {
   const { text, readonly, onChange, onComposition, afterInit } = props;
 
+  const searchQuery = useSearchHighlightQuery();
+
   const renderLeaf = useCallback(
     (props: RenderLeafProps) => <Leaf {...props} />,
     []
+  );
+
+  const decorate = useCallback(
+    ([node, path]: NodeEntry): BaseRange[] => {
+      if (!searchQuery || !SlateText.isText(node)) return [];
+
+      const ranges: BaseRange[] = [];
+      const { text: nodeText } = node;
+      const escaped = searchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const regex = new RegExp(escaped, 'gi');
+      let match;
+
+      while ((match = regex.exec(nodeText)) !== null) {
+        ranges.push({
+          anchor: { path, offset: match.index },
+          focus: { path, offset: match.index + match[0].length },
+          searchHighlight: true,
+        } as BaseRange & { searchHighlight: boolean });
+      }
+
+      return ranges;
+    },
+    [searchQuery]
   );
 
   const initialValue: Descendant[] = [text];
@@ -91,6 +125,7 @@ export const Text: React.FC<TextComponentProps> = (
     >
       <Editable
         className="slate-editable-container plait-text-container"
+        decorate={decorate}
         renderElement={(props) => <Element {...props} />}
         renderLeaf={renderLeaf}
         readOnly={readonly === undefined ? true : readonly}
@@ -234,6 +269,12 @@ const Leaf: React.FC<RenderLeafProps> = ({ children, leaf, attributes }) => {
     style.WebkitTextFillColor = 'transparent';
     // 清除可能冲突的 color
     style.color = undefined;
+  }
+
+  // 搜索高亮（覆盖用户背景色，确保可见性）
+  if ((leaf as any).searchHighlight) {
+    style.backgroundColor = 'rgba(255, 235, 59, 0.6)';
+    style.borderRadius = '2px';
   }
 
   return (

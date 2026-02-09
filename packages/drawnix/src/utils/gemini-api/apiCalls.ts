@@ -1,54 +1,12 @@
 /**
  * Gemini API 调用函数
  * 
- * 支持通过 Service Worker 发送请求，以便在后台处理长时间运行的 API 调用。
+ * 所有 API 请求在主线程直接发起。
  */
 
 import { GeminiConfig, GeminiMessage, GeminiResponse, VideoGenerationOptions } from './types';
 import { DEFAULT_CONFIG, VIDEO_DEFAULT_CONFIG } from './config';
 import { analytics } from '../posthog-analytics';
-import { swChannelClient } from '../../services/sw-channel';
-import type { ChatStartParams, ChatMessage as SWChatMessage } from '../../services/sw-channel';
-import { isAuthError, dispatchApiAuthError } from '../api-auth-error-event';
-
-/**
- * 将 GeminiMessage 转换为 SW ChatMessage 格式
- * 返回消息列表和可能的 system prompt
- */
-function convertToSWMessages(messages: GeminiMessage[]): { 
-  swMessages: SWChatMessage[]; 
-  systemPrompt?: string;
-} {
-  let systemPrompt: string | undefined;
-  const swMessages: SWChatMessage[] = [];
-  
-  for (const msg of messages) {
-    // 提取文本内容
-    let textContent = '';
-    if (Array.isArray(msg.content)) {
-      for (const part of msg.content) {
-        if (part.type === 'text' && part.text) {
-          textContent += part.text;
-        }
-      }
-    } else if (typeof msg.content === 'string') {
-      textContent = msg.content;
-    }
-    
-    // 处理 system 消息
-    if (msg.role === 'system') {
-      systemPrompt = textContent;
-      continue;
-    }
-    
-    swMessages.push({
-      role: msg.role as 'user' | 'assistant',
-      content: textContent,
-    });
-  }
-  
-  return { swMessages, systemPrompt };
-}
 
 /**
  * 使用原始 fetch 调用聊天 API
@@ -153,8 +111,9 @@ export async function callApiRaw(
 }
 
 /**
- * 流式API调用函数
- * 优先使用 Service Worker 发送请求，降级时使用直接 fetch
+ * 流式 API 调用函数
+ *
+ * 在主线程直接使用 fetch 发起流式请求。
  */
 export async function callApiStreamRaw(
   config: GeminiConfig,
@@ -162,138 +121,13 @@ export async function callApiStreamRaw(
   onChunk?: (content: string) => void,
   signal?: AbortSignal
 ): Promise<GeminiResponse> {
-  // 尝试使用 SW 模式
-  const useSW = await swChannelClient.initializeChannel();
-  
-  if (useSW) {
-    // console.log('[ApiCalls] Using SW mode for streaming API call');
-    return callApiStreamViaSW(config, messages, onChunk, signal);
-  }
-  
-  // console.log('[ApiCalls] Using direct fetch for streaming API call');
   return callApiStreamDirect(config, messages, onChunk, signal);
 }
 
-/**
- * 通过 Service Worker 发送流式 API 请求
- */
-async function callApiStreamViaSW(
-  config: GeminiConfig,
-  messages: GeminiMessage[],
-  onChunk?: (content: string) => void,
-  signal?: AbortSignal
-): Promise<GeminiResponse> {
-  const startTime = Date.now();
-  const model = config.modelName || 'gemini-3-pro-image-preview-vip';
-  const endpoint = '/chat/completions';
-
-  // Track API call start
-  analytics.trackAPICallStart({
-    endpoint,
-    model,
-    messageCount: messages.length,
-    stream: true,
-  });
-
-  const chatId = `api_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
-  
-  // 转换消息格式，提取 system prompt
-  const { swMessages, systemPrompt } = convertToSWMessages(messages);
-  
-  // 构建 Chat 参数
-  const chatParams: ChatStartParams = {
-    chatId,
-    messages: swMessages.slice(0, -1), // 历史消息
-    newContent: swMessages[swMessages.length - 1]?.content || '', // 最新消息
-    attachments: [],
-    temporaryModel: model,
-    systemPrompt, // 传递 system prompt
-  };
-
-  return new Promise((resolve, reject) => {
-    let fullContent = '';
-    let isCompleted = false;
-    
-    // 处理取消信号
-    if (signal) {
-      if (signal.aborted) {
-        reject(new Error('Request cancelled'));
-        return;
-      }
-      signal.addEventListener('abort', () => {
-        if (!isCompleted) {
-          swChannelClient.stopChat(chatId);
-          reject(new Error('Request cancelled'));
-        }
-      });
-    }
-    
-    // 设置事件处理器
-    swChannelClient.setEventHandlers({
-      onChatChunk: (event) => {
-        if (event.chatId !== chatId || isCompleted) return;
-        fullContent = event.content;
-        onChunk?.(fullContent);
-      },
-      onChatDone: (event) => {
-        if (event.chatId !== chatId || isCompleted) return;
-        isCompleted = true;
-        
-        const duration = Date.now() - startTime;
-        
-        analytics.trackAPICallSuccess({
-          endpoint,
-          model,
-          duration,
-          responseLength: fullContent.length,
-          stream: true,
-        });
-        
-        resolve({
-          choices: [{
-            message: {
-              role: 'assistant',
-              content: fullContent
-            }
-          }]
-        });
-      },
-      onChatError: (event) => {
-        if (event.chatId !== chatId || isCompleted) return;
-        isCompleted = true;
-        
-        const duration = Date.now() - startTime;
-        console.error('[ApiCalls/SW] Stream error:', event.error);
-        
-        // 检测 401 认证错误，触发打开设置对话框
-        if (isAuthError(event.error)) {
-          dispatchApiAuthError({ message: event.error, source: 'chat' });
-        }
-        
-        analytics.trackAPICallFailure({
-          endpoint,
-          model,
-          duration,
-          error: event.error,
-          stream: true,
-        });
-        
-        reject(new Error(event.error));
-      },
-    });
-    
-    // 启动 chat
-    swChannelClient.startChat(chatParams).catch((err) => {
-      if (!isCompleted) {
-        isCompleted = true;
-        reject(err);
-      }
-    });
-  });
-}
+// callApiStreamViaSW 已移除
 
 /**
- * 直接使用 fetch 发送流式 API 请求（降级模式）
+ * 使用 fetch 发送流式 API 请求
  */
 async function callApiStreamDirect(
   config: GeminiConfig,
@@ -304,6 +138,13 @@ async function callApiStreamDirect(
   const startTime = Date.now();
   const model = config.modelName || 'gemini-3-pro-image-preview-vip';
   const endpoint = '/chat/completions';
+
+  console.log('[callApiStreamDirect] 发起 direct fetch 请求:', {
+    model,
+    baseUrl: config.baseUrl,
+    hasApiKey: !!config.apiKey,
+    messageCount: messages.length,
+  });
 
   // Track API call start
   analytics.trackAPICallStart({

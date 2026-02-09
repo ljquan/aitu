@@ -1,30 +1,19 @@
 /**
  * MCP Storage Service
  * 
- * Stores MCP-related data to IndexedDB for Service Worker to access.
- * Main thread and SW share the same IndexedDB, so data written here
- * can be read by SW without postMessage communication.
+ * Stores MCP-related data to IndexedDB (aitu-app database).
+ * 主线程专用数据库，不再与 SW 共享。
  */
 
-const DB_NAME = 'sw-task-queue';
-const CONFIG_STORE = 'config';
+import { getAppDB, APP_DB_STORES } from './app-database';
+
+const CONFIG_STORE = APP_DB_STORES.CONFIG;
 
 /**
- * Get or create IndexedDB connection
+ * Get IndexedDB connection
  */
 async function getDB(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME);
-    
-    request.onerror = () => {
-      console.error('[MCPStorage] Failed to open IndexedDB:', request.error);
-      reject(request.error);
-    };
-    
-    request.onsuccess = () => {
-      resolve(request.result);
-    };
-  });
+  return getAppDB();
 }
 
 /**
@@ -45,15 +34,9 @@ export async function saveMCPSystemPrompt(systemPrompt: string): Promise<void> {
         updatedAt: Date.now(),
       });
 
-      transaction.oncomplete = () => {
-        db.close();
-        resolve();
-      };
+      transaction.oncomplete = () => resolve();
       
-      transaction.onerror = () => {
-        db.close();
-        reject(transaction.error);
-      };
+      transaction.onerror = () => reject(transaction.error);
     });
   } catch (error) {
     console.error('[MCPStorage] Failed to save system prompt:', error);
@@ -73,15 +56,9 @@ export async function hasMCPSystemPrompt(): Promise<boolean> {
       const store = transaction.objectStore(CONFIG_STORE);
       const request = store.get('systemPrompt');
 
-      request.onsuccess = () => {
-        db.close();
-        resolve(!!request.result?.value);
-      };
+      request.onsuccess = () => resolve(!!request.result?.value);
       
-      request.onerror = () => {
-        db.close();
-        resolve(false);
-      };
+      request.onerror = () => resolve(false);
     });
   } catch {
     return false;

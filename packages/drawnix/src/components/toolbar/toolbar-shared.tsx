@@ -5,6 +5,7 @@
  */
 
 import { PlaitPointerType, ThemeColorMode } from '@plait/core';
+import { LassoPointerType } from '../../plugins/with-lasso-selection';
 import { Translations } from '../../i18n';
 
 /**
@@ -42,7 +43,9 @@ export const CheckIcon = (
  */
 export const isBasicPointer = (pointer: string): boolean => {
   return (
-    pointer === PlaitPointerType.hand || pointer === PlaitPointerType.selection
+    pointer === PlaitPointerType.hand ||
+    pointer === PlaitPointerType.selection ||
+    pointer === LassoPointerType
   );
 };
 

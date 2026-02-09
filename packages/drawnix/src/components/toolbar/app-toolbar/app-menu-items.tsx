@@ -10,6 +10,7 @@ import {
   BookOpenIcon,
   CloudIcon,
   CleanBrokenLinksIcon,
+  CommandPaletteIcon,
 } from '../../icons';
 import { useBoard, useListRender } from '@plait-board/react-board';
 import {
@@ -251,6 +252,28 @@ export const GitHubLink = () => {
   );
 };
 GitHubLink.displayName = 'GitHubLink';
+
+export const QuickCommands = () => {
+  const { appState, setAppState } = useDrawnix();
+  const { t } = useI18n();
+  return (
+    <MenuItem
+      icon={<CommandPaletteIcon />}
+      data-track="toolbar_click_menu_commands"
+      onSelect={() => {
+        setAppState({
+          ...appState,
+          openCommandPalette: true,
+        });
+      }}
+      shortcut="Cmd+K"
+      aria-label={t('menu.commandPalette')}
+    >
+      {t('menu.commandPalette')}
+    </MenuItem>
+  );
+};
+QuickCommands.displayName = 'QuickCommands';
 
 export const UserManual = () => {
   const { t } = useI18n();

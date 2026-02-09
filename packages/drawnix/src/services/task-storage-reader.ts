@@ -12,9 +12,11 @@
 import { Task, TaskStatus, TaskType, GenerationParams } from '../types/task.types';
 import { BaseStorageReader } from './base-storage-reader';
 
-// 与 SW 端 storage.ts 保持一致的数据库配置
-const DB_NAME = 'sw-task-queue';
-const TASKS_STORE = 'tasks';
+import { APP_DB_NAME, APP_DB_STORES, getAppDB } from './app-database';
+
+// 使用主线程专用数据库
+const DB_NAME = APP_DB_NAME;
+const TASKS_STORE = APP_DB_STORES.TASKS;
 
 // SW 端的任务结构（与 SWTask 保持一致）
 interface SWTask {
@@ -89,6 +91,31 @@ class TaskStorageReader extends BaseStorageReader<TaskCache> {
   protected readonly dbName = DB_NAME;
   protected readonly storeName = TASKS_STORE;
   protected readonly logPrefix = 'TaskStorageReader';
+
+  /**
+   * 使用 getAppDB() 获取数据库连接，确保 store 已创建。
+   * BaseStorageReader.openIndexedDB() 不带版本号打开数据库，
+   * 如果数据库不存在会创建空数据库（无 store），导致后续读取全部失败。
+   */
+  protected async getDB(): Promise<IDBDatabase> {
+    if (this.db) {
+      return this.db;
+    }
+
+    if (this.dbPromise) {
+      return this.dbPromise;
+    }
+
+    this.dbPromise = getAppDB().then(db => {
+      this.db = db;
+      return db;
+    }).catch(error => {
+      this.dbPromise = null;
+      throw error;
+    });
+
+    return this.dbPromise;
+  }
 
   /**
    * 获取所有任务（带缓存）

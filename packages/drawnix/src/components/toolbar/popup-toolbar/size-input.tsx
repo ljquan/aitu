@@ -12,7 +12,12 @@ import { PlaitDrawElement } from '@plait/draw';
 import { MindElement } from '@plait/mind';
 import { Freehand } from '../../../plugins/freehand/type';
 import { PenPath } from '../../../plugins/pen/type';
+import { isFrameElement } from '../../../types/frame.types';
 import { LockIcon, UnlockIcon } from '../../icons';
+import { Popover, PopoverContent, PopoverTrigger } from '../../popover/popover';
+import { ChevronDown } from 'lucide-react';
+import { useI18n } from '../../../i18n';
+import { PRESET_SIZES, PresetSize } from '../../../constants/frame-presets';
 import './size-input.scss';
 
 export interface SizeInputProps {
@@ -59,7 +64,14 @@ const scaleElement = (
   const newHeight = elementRect.height * scaleY;
 
   // 根据元素类型更新
-  if (PlaitDrawElement.isDrawElement(element)) {
+  if (isFrameElement(element)) {
+    // Frame 元素 — 直接更新两个角点
+    const newPoints: [Point, Point] = [
+      [newX, newY],
+      [newX + newWidth, newY + newHeight],
+    ];
+    Transforms.setNode(board, { points: newPoints }, [path]);
+  } else if (PlaitDrawElement.isDrawElement(element)) {
     // 图片、形状等使用 points 数组
     const newPoints: [Point, Point] = [
       [newX, newY],
@@ -120,13 +132,17 @@ const scaleElement = (
  * 宽高设置输入组件
  */
 export const SizeInput: React.FC<SizeInputProps> = ({ board }) => {
+  const { language } = useI18n();
+  const isZh = language === 'zh';
   const selectedElements = getSelectedElements(board);
   const [locked, setLocked] = useState(true); // 默认锁定比例
   const [width, setWidth] = useState('');
   const [height, setHeight] = useState('');
   const [aspectRatio, setAspectRatio] = useState(1);
+  const [presetOpen, setPresetOpen] = useState(false);
   // 用于跟踪用户主动设置的目标尺寸，防止 useEffect 覆盖
   const targetSizeRef = useRef<{ width: number; height: number } | null>(null);
+  const container = PlaitBoard.getBoardContainer(board);
 
   // 获取选中元素的边界矩形
   const selectionRect =
@@ -225,6 +241,43 @@ export const SizeInput: React.FC<SizeInputProps> = ({ board }) => {
     });
   }, [board, selectedElements, selectionRect, width, height]);
 
+  // 应用预设尺寸
+  const applyPresetSize = useCallback(
+    (preset: PresetSize) => {
+      if (!selectionRect || selectedElements.length === 0) return;
+
+      const newWidth = preset.width;
+      const newHeight = preset.height;
+
+      // 更新输入框
+      setWidth(newWidth.toString());
+      setHeight(newHeight.toString());
+
+      // 保存目标尺寸
+      targetSizeRef.current = { width: newWidth, height: newHeight };
+
+      // 计算缩放比例
+      const scaleX = newWidth / selectionRect.width;
+      const scaleY = newHeight / selectionRect.height;
+
+      const newRect: RectangleClient = {
+        x: selectionRect.x,
+        y: selectionRect.y,
+        width: newWidth,
+        height: newHeight,
+      };
+
+      selectedElements.forEach((element) => {
+        scaleElement(board, element, selectionRect, newRect, scaleX, scaleY);
+      });
+
+      // 更新宽高比
+      setAspectRatio(newWidth / newHeight);
+      setPresetOpen(false);
+    },
+    [board, selectedElements, selectionRect]
+  );
+
   // 处理键盘事件
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -279,6 +332,47 @@ export const SizeInput: React.FC<SizeInputProps> = ({ board }) => {
           onKeyDown={handleKeyDown}
         />
       </div>
+      <Popover
+        open={presetOpen}
+        onOpenChange={setPresetOpen}
+        placement="bottom-end"
+        sideOffset={8}
+      >
+        <PopoverTrigger asChild>
+          <button
+            className={`size-preset-button ${presetOpen ? 'active' : ''}`}
+            title={isZh ? '常用尺寸' : 'Preset Sizes'}
+            onClick={() => setPresetOpen(!presetOpen)}
+          >
+            <ChevronDown size={12} />
+          </button>
+        </PopoverTrigger>
+        <PopoverContent container={container}>
+          <div className="size-preset-panel">
+            {PRESET_SIZES.map((group) => (
+              <div key={group.category} className="size-preset-category">
+                <div className="size-preset-category-label">
+                  {isZh ? group.category : group.categoryEn}
+                </div>
+                {group.items.map((preset) => (
+                  <button
+                    key={`${preset.width}x${preset.height}-${preset.label}`}
+                    className="size-preset-item"
+                    onClick={() => applyPresetSize(preset)}
+                  >
+                    <span className="size-preset-item-label">
+                      {isZh ? preset.label : preset.labelEn}
+                    </span>
+                    <span className="size-preset-item-size">
+                      {preset.width} x {preset.height}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            ))}
+          </div>
+        </PopoverContent>
+      </Popover>
     </div>
   );
 };

@@ -10,6 +10,9 @@ import { useBoard } from '@plait-board/react-board';
 import React, { useState, useEffect, useRef, memo, useCallback, lazy, Suspense } from 'react';
 import { useDeviceType } from '../../hooks/useDeviceType';
 import { processSelectedContentForAI, extractSelectedContent } from '../../utils/selection-utils';
+import { getSelectedElements, RectangleClient } from '@plait/core';
+import { isFrameElement } from '../../types/frame.types';
+import { matchFrameAspectRatio } from '../../utils/frame-size-matcher';
 import {
   AI_IMAGE_GENERATION_PREVIEW_CACHE_KEY,
   AI_VIDEO_GENERATION_PREVIEW_CACHE_KEY,
@@ -92,6 +95,9 @@ const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) =>
     initialImages: ReferenceImage[];
     selectedElementIds: string[]; // 保存选中元素的IDs
     initialResultUrl?: string; // 初始结果URL,用于显示预览
+    initialAspectRatio?: string; // 选中 Frame 时自动匹配的宽高比
+    targetFrameId?: string; // 目标 Frame ID（用于将生成结果插入到 Frame 内部）
+    targetFrameDimensions?: { width: number; height: number }; // Frame 尺寸
   }>({
     initialPrompt: '',
     initialImages: [],
@@ -233,6 +239,19 @@ const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) =>
           const selectedElementIds = appState.lastSelectedElementIds || [];
           // console.log('Using saved selected element IDs for AI image generation:', selectedElementIds);
 
+          // 检测是否选中了单个 Frame，自动匹配宽高比并保存 Frame 信息
+          let frameAspectRatio: string | undefined;
+          let detectedFrameId: string | undefined;
+          let detectedFrameDimensions: { width: number; height: number } | undefined;
+          const selectedElements = getSelectedElements(board);
+          if (selectedElements.length === 1 && isFrameElement(selectedElements[0])) {
+            const frame = selectedElements[0];
+            const rect = RectangleClient.getRectangleByPoints(frame.points);
+            frameAspectRatio = matchFrameAspectRatio(rect.width, rect.height);
+            detectedFrameId = frame.id;
+            detectedFrameDimensions = { width: rect.width, height: rect.height };
+          }
+
           // 使用新的处理逻辑来处理选中的内容,传入保存的元素IDs
           const processedContent = await processSelectedContentForAI(board, selectedElementIds);
           
@@ -259,7 +278,10 @@ const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) =>
           setAiImageData({
             initialPrompt: processedContent.remainingText || '',
             initialImages: imageItems,
-            selectedElementIds: selectedElementIds
+            selectedElementIds: selectedElementIds,
+            initialAspectRatio: frameAspectRatio,
+            targetFrameId: detectedFrameId,
+            targetFrameDimensions: detectedFrameDimensions,
           });
           
         } catch (error) {
@@ -527,6 +549,9 @@ const TTDDialogComponent = ({ container }: { container: HTMLElement | null }) =>
               initialWidth={appState.dialogInitialData?.initialWidth || appState.dialogInitialData?.width}
               initialHeight={appState.dialogInitialData?.initialHeight || appState.dialogInitialData?.height}
               initialResultUrl={aiImageData.initialResultUrl}
+              initialAspectRatio={aiImageData.initialAspectRatio}
+              targetFrameId={aiImageData.targetFrameId}
+              targetFrameDimensions={aiImageData.targetFrameDimensions}
               selectedModel={selectedImageModel}
               onModelChange={handleImageModelChange}
             />

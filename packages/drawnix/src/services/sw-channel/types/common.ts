@@ -8,13 +8,6 @@ import type { Methods, PostResponse } from 'postmessage-duplex';
 
 // 导入其他模块的类型用于 SWMethods 和 SWEvents
 import type {
-  TaskStatus,
-  TaskType,
-  SWTask,
-  TaskCreateParams,
-  TaskCreateResult,
-  TaskListPaginatedParams,
-  TaskListPaginatedResult,
   TaskOperationParams,
   TaskOperationResult,
   TaskStatusEvent,
@@ -24,20 +17,12 @@ import type {
 } from './task';
 
 import type {
-  ChatStartParams,
-  ChatStopParams,
   ChatChunkEvent,
   ChatDoneEvent,
   ChatErrorEvent,
 } from './chat';
 
 import type {
-  WorkflowSubmitParams,
-  WorkflowSubmitResult,
-  WorkflowStatusResponse,
-  WorkflowAllResponse,
-  CanvasOperationResponse,
-  MainThreadToolResponse,
   WorkflowStatusEvent,
   WorkflowStepStatusEvent,
   WorkflowCompletedEvent,
@@ -214,33 +199,6 @@ export interface MCPToolResultEvent {
  * 格式: methodName: (params) => result
  */
 export interface SWMethods extends Methods {
-  // 初始化
-  'init': (params: InitParams) => InitResult;
-
-  // 任务操作
-  'task:create': (params: TaskCreateParams) => TaskCreateResult;
-  'task:cancel': (params: TaskOperationParams) => TaskOperationResult;
-  'task:retry': (params: TaskOperationParams) => TaskOperationResult;
-  'task:delete': (params: TaskOperationParams) => TaskOperationResult;
-  'task:markInserted': (params: TaskOperationParams) => TaskOperationResult;
-
-  // 任务查询
-  'task:get': (params: TaskOperationParams) => { task: SWTask | null };
-  'task:listPaginated': (params: TaskListPaginatedParams) => TaskListPaginatedResult;
-
-  // Chat
-  'chat:start': (params: ChatStartParams) => TaskOperationResult;
-  'chat:stop': (params: ChatStopParams) => TaskOperationResult;
-  'chat:getCached': (params: { chatId: string }) => { found: boolean; fullContent?: string };
-
-  // Workflow
-  'workflow:submit': (params: WorkflowSubmitParams) => WorkflowSubmitResult;
-  'workflow:cancel': (params: { workflowId: string }) => TaskOperationResult;
-  'workflow:getStatus': (params: { workflowId: string }) => WorkflowStatusResponse;
-  'workflow:getAll': (params?: undefined) => WorkflowAllResponse;
-  'workflow:respondCanvas': (params: CanvasOperationResponse) => TaskOperationResult;
-  'workflow:respondTool': (params: MainThreadToolResponse) => TaskOperationResult;
-
   // Thumbnail
   'thumbnail:generate': (params: ThumbnailGenerateParams) => TaskOperationResult;
   'thumbnail:videoResponse': (params: ThumbnailVideoResponseParams) => TaskOperationResult;

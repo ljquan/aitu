@@ -15,6 +15,9 @@
 @import '../components/ai-input-bar/ai-input-bar.scss'; // AI 输入框
 @import '../components/toolbar/pencil-settings-toolbar/pencil-settings-toolbar.scss'; // 画笔设置工具栏
 @import '../components/toolbar/pen-settings-toolbar/pen-settings-toolbar.scss'; // 钢笔设置工具栏
+@import '../components/command-palette/command-palette.scss'; // 命令面板
+@import '../components/canvas-search/canvas-search.scss'; // 画布搜索
+
 
 .t-dialog__ctx.t-dialog__ctx--fixed{
     z-index: $z-dialog !important;
@@ -732,6 +735,40 @@
     to {
         opacity: 1;
         transform: scale(1);
+    }
+}
+
+// ============================================================================
+// Slideshow Mode: 隐藏所有 UI 覆盖层，只保留画布内容
+// ============================================================================
+.slideshow-active {
+    // 工具栏
+    .unified-toolbar,
+    .popup-toolbar,
+    .pencil-mode-toolbar,
+    .pencil-settings-toolbar,
+    .pen-settings-toolbar,
+    .eraser-settings-toolbar,
+    .quick-creation-toolbar,
+    .app-toolbar,
+    // 抽屉和面板
+    .project-drawer,
+    .chat-drawer,
+    .toolbox-drawer,
+    .performance-panel,
+    // 输入栏和导航
+    .ai-input-bar,
+    .view-navigation,
+    .version-update-prompt,
+    .active-task-warning,
+    // 弹出层
+    .command-palette,
+    .canvas-search,
+    .multi-selection-handles,
+    .auto-complete-shape-picker,
+    .link-popup,
+    .tool-winbox-manager {
+        display: none !important;
     }
 }
 

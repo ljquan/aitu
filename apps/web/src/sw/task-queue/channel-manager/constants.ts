@@ -9,40 +9,10 @@
 // ============================================================================
 
 export const RPC_METHODS = {
-  // 初始化
-  INIT: 'init',
-
-  // 任务操作
-  TASK_CREATE: 'task:create',
-  TASK_CANCEL: 'task:cancel',
-  TASK_RETRY: 'task:retry',
-  TASK_DELETE: 'task:delete',
-  TASK_MARK_INSERTED: 'task:markInserted',
-
-  // 任务查询
-  TASK_GET: 'task:get',
-  // Note: TASK_LIST_PAGINATED 已移除，主线程直接从 IndexedDB 读取
-
-  // Chat
-  CHAT_START: 'chat:start',
-  CHAT_STOP: 'chat:stop',
-  CHAT_GET_CACHED: 'chat:getCached',
-
-  // Workflow
-  WORKFLOW_SUBMIT: 'workflow:submit',
-  WORKFLOW_CANCEL: 'workflow:cancel',
-  // Note: WORKFLOW_GET_STATUS、WORKFLOW_GET_ALL、WORKFLOW_RESPOND_TOOL 已移除
-  // 主线程直接从 IndexedDB 读取，工具响应通过 sendToolRequest 直接返回
-  WORKFLOW_CLAIM: 'workflow:claim', // 客户端声明接管工作流
-
-  // Thumbnail (图片缩略图，由 SW 生成)
+  // 活跃的 RPC
   THUMBNAIL_GENERATE: 'thumbnail:generate',
-
-  // Crash monitoring
   CRASH_SNAPSHOT: 'crash:snapshot',
   CRASH_HEARTBEAT: 'crash:heartbeat',
-
-  // Console
   CONSOLE_REPORT: 'console:report',
 
   // Debug
@@ -77,9 +47,8 @@ export const RPC_METHODS = {
   // Cache management
   CACHE_DELETE: 'cache:delete',
 
-  // Executor (媒体执行器 - SW 可选降级方案)
+  // Health check
   PING: 'ping',
-  EXECUTOR_EXECUTE: 'executor:execute',
 } as const;
 
 // ============================================================================
@@ -87,32 +56,6 @@ export const RPC_METHODS = {
 // ============================================================================
 
 export const SW_EVENTS = {
-  // Task events
-  TASK_CREATED: 'task:created',
-  TASK_STATUS: 'task:status',
-  TASK_PROGRESS: 'task:progress',
-  TASK_COMPLETED: 'task:completed',
-  TASK_FAILED: 'task:failed',
-  TASK_CANCELLED: 'task:cancelled',
-  TASK_DELETED: 'task:deleted',
-  TASK_REJECTED: 'task:rejected',
-  TASK_SUBMITTED: 'task:submitted',
-  QUEUE_INITIALIZED: 'queue:initialized',
-
-  // Chat events
-  CHAT_CHUNK: 'chat:chunk',
-  CHAT_DONE: 'chat:done',
-  CHAT_ERROR: 'chat:error',
-
-  // Workflow events
-  WORKFLOW_STATUS: 'workflow:status',
-  WORKFLOW_STEP_STATUS: 'workflow:stepStatus',
-  WORKFLOW_COMPLETED: 'workflow:completed',
-  WORKFLOW_FAILED: 'workflow:failed',
-  WORKFLOW_STEPS_ADDED: 'workflow:stepsAdded',
-  WORKFLOW_TOOL_REQUEST: 'workflow:toolRequest',
-  WORKFLOW_RECOVERED: 'workflow:recovered',
-
   // Cache events
   CACHE_IMAGE_CACHED: 'cache:imageCached',
   CACHE_DELETED: 'cache:deleted',
@@ -122,10 +65,6 @@ export const SW_EVENTS = {
   SW_NEW_VERSION_READY: 'sw:newVersionReady',
   SW_ACTIVATED: 'sw:activated',
   SW_UPDATED: 'sw:updated',
-  // Note: SW_REQUEST_CONFIG 已移除 - 配置现在同步到 IndexedDB，SW 直接读取
-
-  // MCP events
-  MCP_TOOL_RESULT: 'mcp:toolResult',
 
   // Console events
   CONSOLE_LOG: 'console:log',

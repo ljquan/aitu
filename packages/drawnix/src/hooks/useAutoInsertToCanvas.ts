@@ -26,6 +26,7 @@ import {
   handleSplitAndInsertTask,
   type TaskParams,
 } from '../services/media-result-handler';
+import { insertMediaIntoFrame } from '../utils/frame-insertion-utils';
 
 /**
  * 配置项
@@ -203,15 +204,28 @@ export function useAutoInsertToCanvas(config: Partial<AutoInsertConfig> = {}): v
       const toInsert = new Map(pendingMap);
       pendingMap.clear();
 
-      // 尝试查找与第一个任务关联的 WorkZone，获取预期插入位置
+      // 尝试查找与第一个任务关联的 WorkZone，获取预期插入位置和 Frame 上下文
       const firstTask = Array.from(toInsert.values())[0]?.[0]?.task;
       let insertionPoint: Point | undefined;
+      let targetFrameId: string | undefined;
+      let targetFrameDimensions: { width: number; height: number } | undefined;
 
       if (firstTask) {
         const workzone = findWorkZoneForTask(firstTask.id);
         if (workzone?.expectedInsertPosition) {
           insertionPoint = workzone.expectedInsertPosition;
         }
+        // 获取 Frame 上下文
+        if (workzone?.targetFrameId && workzone?.targetFrameDimensions) {
+          targetFrameId = workzone.targetFrameId;
+          targetFrameDimensions = workzone.targetFrameDimensions;
+        }
+      }
+
+      // 也检查 task.params 中的 Frame 上下文（TTD Dialog 路径）
+      if (!targetFrameId && firstTask?.params?.targetFrameId) {
+        targetFrameId = firstTask.params.targetFrameId as string;
+        targetFrameDimensions = firstTask.params.targetFrameDimensions as { width: number; height: number } | undefined;
       }
 
       // 如果没有找到 WorkZone 或没有预期位置，回退到原来的逻辑
@@ -250,18 +264,19 @@ export function useAutoInsertToCanvas(config: Partial<AutoInsertConfig> = {}): v
             const type = task.type === TaskType.VIDEO ? 'video' : 'image';
             const dimensions = parseSizeToPixels(task.params.size);
 
-            // console.log(`[AutoInsert] Inserting single ${type} for task ${task.id}, url: ${url.substring(0, 80)}...`);
-            // console.log(`[AutoInsert] dimensions:`, dimensions, `insertionPoint:`, insertionPoint);
+            // 检查是否需要插入到 Frame 内部
+            const taskFrameId = targetFrameId || (task.params.targetFrameId as string | undefined);
+            const taskFrameDims = targetFrameDimensions || (task.params.targetFrameDimensions as { width: number; height: number } | undefined);
 
-            if (mergedConfig.insertPrompt) {
-              const result = await insertAIFlow(task.params.prompt, [{ type, url, dimensions }], insertionPoint);
-              // console.log(`[AutoInsert] insertAIFlow result:`, result);
+            if (taskFrameId && taskFrameDims && board) {
+              // 插入到 Frame 内部，contain 模式等比缩放
+              await insertMediaIntoFrame(board, url, type, taskFrameId, taskFrameDims, dimensions);
+            } else if (mergedConfig.insertPrompt) {
+              await insertAIFlow(task.params.prompt, [{ type, url, dimensions }], insertionPoint);
             } else {
-              const result = await quickInsert(type, url, insertionPoint, dimensions);
-              // console.log(`[AutoInsert] quickInsert result:`, result);
+              await quickInsert(type, url, insertionPoint, dimensions);
             }
 
-            // console.log(`[AutoInsert] Successfully inserted ${type} for task ${task.id}`);
             workflowCompletionService.completePostProcessing(task.id, 1, insertionPoint);
           } else {
             // 多个同 Prompt 任务，水平排列
@@ -454,12 +469,14 @@ export function useAutoInsertToCanvas(config: Partial<AutoInsertConfig> = {}): v
 
       // console.log(`[AutoInsert] Received event: ${event.type}, task: ${event.task.id}, status: ${event.task.status}`);
 
-      if (event.type === 'taskUpdated') {
+      if (event.type === 'taskUpdated' || event.type === 'taskCompleted') {
         if (event.task.status === TaskStatus.COMPLETED) {
           handleTaskCompleted(event.task);
         } else if (event.task.status === TaskStatus.FAILED) {
           handleTaskFailed(event.task);
         }
+      } else if (event.type === 'taskFailed') {
+        handleTaskFailed(event.task);
       } else if (event.type === 'taskSynced') {
         if (event.task.status === TaskStatus.COMPLETED) {
           handleTaskCompleted(event.task);

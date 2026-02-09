@@ -729,6 +729,147 @@ const handlePointerMove = (event: PointerEvent) => {
 
 **原因**: `PointerEvent.pressure` 只有压感笔（Apple Pencil、Wacom）才提供真实值（0-1）。鼠标点击固定返回 0.5，触控板也是 0.5。对于不支持压力的设备，应使用绘制速度模拟：慢速 → 高压力（粗），快速 → 低压力（细）。
 
+#### Plait Board Viewport 缩放+平移
+**场景**: 需要将画布视图移动到某个元素并调整缩放时
+
+❌ **错误示例**:
+```typescript
+// 错误：分两步操作，updateZoom 先改变视口位置，moveToCenter 基于错误状态计算
+BoardTransforms.updateZoom(board, zoom);
+BoardTransforms.moveToCenter(board, [centerX, centerY]);
+// 结果：视口位置错乱，元素不在视口中心
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：使用 updateViewport 一次性设置 origination 和 zoom
+const container = PlaitBoard.getBoardContainer(board);
+const viewportWidth = container.clientWidth;
+const viewportHeight = container.clientHeight;
+
+// origination 是视口左上角在世界坐标中的位置
+const origination: [number, number] = [
+  centerX - viewportWidth / 2 / zoom,
+  centerY - viewportHeight / 2 / zoom,
+];
+BoardTransforms.updateViewport(board, origination, zoom);
+```
+
+**原因**: `updateZoom` 会以视口中心为锚点重新计算 origination，改变视口位置。随后 `moveToCenter` 内部依赖 `getSelectedElements` 并基于已被 zoom 改变后的视口状态计算偏移，导致最终位置不正确。使用 `updateViewport` 可以原子性地同时设置缩放和位置。
+
+#### 全屏展示画布局部内容用 viewport 对准 + 隐藏 UI + 蒙层挖洞
+**场景**: 需要全屏/沉浸式展示画布中某个区域的内容时（如 Frame 幻灯片播放、元素预览）
+
+❌ **错误示例 1**:
+```typescript
+// 错误：仅操纵画布 viewport，用户仍能看到画布 UI（抽屉、工具栏等）
+const focusFrame = (frame: PlaitFrame) => {
+  const rect = RectangleClient.getRectangleByPoints(frame.points);
+  const zoom = Math.min(window.innerWidth / rect.width, window.innerHeight / rect.height);
+  const origination: [number, number] = [
+    rect.x + rect.width / 2 - window.innerWidth / 2 / zoom,
+    rect.y + rect.height / 2 - window.innerHeight / 2 / zoom,
+  ];
+  BoardTransforms.updateViewport(board, origination, zoom);
+};
+// 问题：画布工具栏、侧边栏、底部栏仍然可见，用户无法专注于内容
+```
+
+❌ **错误示例 2**:
+```typescript
+// 错误：使用 toImage 截图，可能丢失内容（<defs> 引用、子元素绑定不完全）
+const captureFrameAsImage = async (board: PlaitBoard, frame: PlaitFrame) => {
+  const children = FrameTransforms.getFrameChildren(board, frame);
+  return await toImage(board, { elements: [frame, ...children] });
+};
+// 问题：toImage 对渐变填充、图片引用、SVG <defs> 处理不完善，导致截图内容缺失
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：三步走——① viewport 对准 ② CSS 隐藏 UI ③ 蒙层挖洞
+
+// 步骤 1：进入时隐藏所有 UI 覆盖层
+const SLIDESHOW_CLASS = 'slideshow-active';
+document.documentElement.classList.add(SLIDESHOW_CLASS);
+
+// 步骤 2：viewport 对准 Frame 并计算屏幕位置
+const rect = RectangleClient.getRectangleByPoints(frame.points);
+const container = PlaitBoard.getBoardContainer(board);
+const vw = container.clientWidth;
+const vh = container.clientHeight;
+const zoom = Math.min((vw - PADDING * 2) / rect.width, (vh - PADDING * 2) / rect.height, 3);
+const origination: [number, number] = [
+  rect.x + rect.width / 2 - vw / 2 / zoom,
+  rect.y + rect.height / 2 - vh / 2 / zoom,
+];
+BoardTransforms.updateViewport(board, origination, zoom);
+
+// 步骤 3：直接计算 Frame 在屏幕上的位置（不依赖异步 DOM 查询）
+const containerBounds = container.getBoundingClientRect();
+const screenRect = {
+  left: containerBounds.left + (rect.x - origination[0]) * zoom,
+  top: containerBounds.top + (rect.y - origination[1]) * zoom,
+  width: rect.width * zoom,
+  height: rect.height * zoom,
+};
+// 用四块黑色 div 围住 Frame 区域，中间空出窗口
+
+// 退出时恢复
+document.documentElement.classList.remove(SLIDESHOW_CLASS);
+BoardTransforms.updateViewport(board, savedOrigination, savedZoom);
+```
+
+```scss
+// CSS：slideshow 模式隐藏所有 UI 覆盖层
+.slideshow-active {
+  .unified-toolbar, .popup-toolbar, .project-drawer,
+  .chat-drawer, .toolbox-drawer, .ai-input-bar,
+  .view-navigation, .performance-panel /* ... */ {
+    display: none !important;
+  }
+}
+```
+
+**原因**: `toImage` 截图方案看似干净，但实际有严重缺陷——SVG 中的 `<defs>`（渐变、图案填充）引用会丢失，子元素如果不是通过 `frameId` 绑定而是空间重叠则无法获取，导致截图内容缺失。而仅操纵 viewport 不隐藏 UI 会导致抽屉、工具栏等透过蒙层露出。正确方案是三者结合：viewport 对准确保画布原生渲染（所见即所得）、CSS 隐藏 UI 确保干净背景、蒙层挖洞聚焦目标区域。
+
+#### 编程式选中元素需用 addSelectionWithTemporaryElements 触发渲染
+**场景**: 在自定义插件中编程式选中多个元素后，需要立即显示选中框（如套索选择、批量选中）
+
+❌ **错误示例**:
+```typescript
+// 错误：cacheSelectedElements 只缓存数据，不触发 onChange，选中框不会渲染
+import { cacheSelectedElements } from '@plait/core';
+
+function updateLassoSelection(board: PlaitBoard, hitElements: PlaitElement[]) {
+  cacheSelectedElements(board, hitElements);
+  // 选中框不显示！因为没有触发 onChange 回调链
+}
+
+// addSelectedElement 内部也只是调用 cacheSelectedElements，同样不会触发渲染
+clearSelectedElement(board);
+addSelectedElement(board, element);
+// 在某些场景下选中框可能不会立即显示
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：使用 Transforms.addSelectionWithTemporaryElements 触发完整渲染
+import { Transforms } from '@plait/core';
+
+function updateLassoSelection(board: PlaitBoard, hitElements: PlaitElement[]) {
+  if (hitElements.length > 0) {
+    Transforms.addSelectionWithTemporaryElements(board, hitElements);
+    // 内部流程：
+    // 1. 将 elements 存入 BOARD_TO_TEMPORARY_ELEMENTS
+    // 2. setTimeout 中调用 Transforms.setSelection 触发 onChange
+    // 3. onChange 检测到 temporaryElements，执行 cacheSelectedElements 并渲染选中框
+  }
+}
+```
+
+**原因**: Plait 框架的选中框渲染由 `onChange` 回调链驱动，而 `onChange` 只在 `Transforms.setSelection` 等操作产生 operation 时才会触发。`cacheSelectedElements` 和 `addSelectedElement` 只是在 `BOARD_TO_SELECTED_ELEMENT` WeakMap 中存储数据，不产生 operation，因此不会触发渲染。`Transforms.addSelectionWithTemporaryElements` 是框架提供的标准 API，专门用于自定义选择逻辑（如套索选择、粘贴后选中等）需要同时缓存元素并触发渲染的场景。注意：正常的鼠标点击/框选交互由 `withSelection` 插件自动处理，无需手动调用。
+
 #### Security Guidelines
 - Validate and sanitize all user input
 - Never hardcode sensitive information (API keys, etc.)

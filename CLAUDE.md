@@ -121,6 +121,13 @@ Service Worker (后台执行)
 
 采用 `withXxx` 组合式模式：`withTool`, `withFreehand`, `withImage`, `withVideo`, `withWorkzone` 等。
 
+- **新画布功能必须作为 Plait 插件**：涉及画布交互的功能（如激光笔、画笔变体）必须实现为 `withXxx` 插件复用 Generator/Smoother 等已有基础设施，禁止使用独立 React 组件 + SVG overlay（坐标系不一致、事件冲突）
+- **工具互斥通过 `board.pointer` 管理**：新增工具类型应加入对应枚举（如 `FreehandShape`），通过 Plait 的 `board.pointer` 单值机制自动互斥，禁止使用独立布尔状态（如 `xxxActive`）手动管理
+- **Viewport 缩放+平移用 `updateViewport` 一步完成**：需要同时改变 zoom 和 origination 时，使用 `BoardTransforms.updateViewport(board, origination, zoom)` 一次性设置；禁止 `updateZoom()` + `moveToCenter()` 分两步调用，`updateZoom` 会先改变视口位置，导致 `moveToCenter` 基于错误的视口状态计算偏移。`origination` 是视口左上角在世界坐标中的位置，居中公式：`origination = [centerX - viewportWidth/2/zoom, centerY - viewportHeight/2/zoom]`
+- **全屏展示画布局部内容用「viewport 对准 + 隐藏 UI + 蒙层挖洞」**：需要全屏/沉浸式展示某个区域（如 Frame 幻灯片播放）时，三步走：① viewport 对准目标区域（`updateViewport`）；② 给 `document.documentElement` 添加 CSS class（如 `slideshow-active`），用 `display: none !important` 隐藏所有 UI 覆盖层（工具栏、抽屉、面板、输入栏等）；③ 在画布上方渲染全屏蒙层，用四块黑色 div 围住目标区域，中间留出"窗口"。注意：不要用 `toImage` 截图方案（`<defs>` 引用丢失、子元素绑定不完全导致内容缺失），也不要仅操纵 viewport 而不隐藏 UI（抽屉/工具栏会露出来）
+- **自定义组件 `onContextChanged` 必须处理 viewport 变化**：自定义 Plait 组件（如 `FrameComponent`、`FreehandComponent`、`PenPathComponent`）的 `onContextChanged` 中，必须检测 viewport 变化（`board.viewport.zoom/offsetX/offsetY`）并在元素被选中时重绘选择框（`activeGenerator.processDrawing`）。选择框渲染在 `board-active-svg`（无 viewBox，坐标通过 `toActiveRectangleFromViewBoxRectangle` 实时计算），而元素渲染在 `board-host-svg`（有 viewBox 自动映射），viewport 变化时选择框不会自动跟随，必须手动重绘。参考 `ToolComponent.onContextChanged` 的实现模式
+- **编程式选中元素后必须触发 `onChange` 才会渲染选中框**：`cacheSelectedElements(board, elements)` 只是在 WeakMap 中缓存选中元素列表，不会触发框架的 `onChange` 回调链，因此选中框不会渲染。`addSelectedElement` 内部也只是调用 `cacheSelectedElements`，同样不会触发渲染。要让选中框立即显示，需要使用 `Transforms.addSelectionWithTemporaryElements(board, elements)`——它会将元素存入 `BOARD_TO_TEMPORARY_ELEMENTS`，然后在下一个事件循环调用 `Transforms.setSelection` 触发 `onChange`，`onChange` 中检测到 temporary elements 后执行 `cacheSelectedElements` 并渲染选中框。适用场景：自定义选择逻辑（如套索选择、编程式批量选中）。如果是单个元素在交互流程中选中（如 pointerUp 点击），框架的 `withSelection` 插件会自动处理，无需手动调用
+
 ---
 
 ## 核心编码规则
@@ -160,6 +167,7 @@ Service Worker (后台执行)
 19. **避免过度设计**：优先使用简单的 interface + service 模式；只在有明确需求时才添加 Repository、Strategy 等抽象层
 20. **重构先问问题**：重构前明确要解决的实际问题；验证方案是否真的解决问题而非增加复杂度
 21. **统计上报旁路化**：统计/监控的初始化与上报须在 requestIdleCallback 或 setTimeout 中执行，不在主路径上做脱敏与网络请求；失败静默不向上抛
+22. **第三方 Session Replay**：默认关闭或按采样开启，避免主线程卡顿（wheel/setInterval）与 413；若开启需配置限流与 413 错误处理
 
 ### Service Worker 规则
 
@@ -173,7 +181,7 @@ Service Worker (后台执行)
 8. **Cache.put() 会消费 Response body**：需要缓存到多个 key 时，为每个 key 创建独立的 Response 对象，不要复用后 clone
 9. **fetchOptions 优先级**：优先尝试 `cors` 模式（可缓存），最后才尝试 `no-cors` 模式（无法缓存）
 10. **postmessage-duplex 1.1.0 通信模式**：RPC 用 `call()` 方法（需响应），单向广播用 `broadcast()` + `onBroadcast()`（fire-and-forget）；SW 用 `enableGlobalRouting` 自动管理 channel
-11. **postmessage-duplex 客户端初始化**：`createFromPage()` 设置 `autoReconnect: true` 处理 SW 更新；禁用日志需 `log: {...}` 配合 `as any`（类型定义不含 log）
+11. **postmessage-duplex 单页面单 channel**：同一页面只允许一个 `createFromPage()`（`swChannelClient`），其他模块（如 `FetchRelayClient`）必须复用 `swChannelClient.getChannel()`；多个 channel 会导致 SW `enableGlobalRouting` 按 `clientId` 路由冲突，RPC 响应丢失
 12. **postmessage-duplex 消息大小限制**：单次 RPC 响应不超过 1MB，大数据查询需后端分页+精简数据（去掉 requestBody/responseBody 等大字段）
 13. **主线程直接读取 IndexedDB**：只读数据直接用 `taskStorageReader.getAllTasks()` 读取，避免 postMessage 限制；写操作通过 SW 或 `taskStorageWriter` 保持一致性
 14. **任务数据持久化**：主线程直接通过 `taskStorageWriter` 写入 IndexedDB，无需通过 RPC 通知 SW（断舍离：避免重复写入）
@@ -184,11 +192,15 @@ Service Worker (后台执行)
 19. **同步数据双向合并**：下载远程数据时必须与本地合并（基于 ID 去重，`updatedAt` 判断版本），合并后自动上传确保双向同步
 20. **同步数据格式一致性**：`tasks.json` 结构是 `{ completedTasks: Task[] }` 不是数组，画板文件是 `board_{id}.json` 不是 `.drawnix`
 21. **RPC 超时与重连**：关键 RPC 调用（如工作流提交）需设置合理超时（15-30秒），超时时主动重新初始化 SW 连接并重试
-22. **降级路径功能一致性**：降级到主线程直接调用 API 时，必须保持与 SW 模式相同的功能行为（如 LLM API 日志记录），否则调试工具会漏掉这些调用
+22. **降级路径功能一致性**：降级到主线程直接调用 API 时，必须保持与 SW 模式相同的功能行为（如 LLM API 日志记录）；工作流工具集也需一致，WorkflowEngine.executeToolStep 中 SW 支持的工具在主线程分支也需有对应 case 路由到 executeMainThreadTool，否则会报 Unknown tool
 23. **SW 初始化统一入口**：使用 `swChannelClient.ensureReady()` 作为统一入口，避免在各处重复初始化逻辑；任务队列用 `swTaskQueueService.initialize()`
 24. **配置同步到 IndexedDB**：SW 无法访问 localStorage，`SettingsManager` 自动将配置同步到 IndexedDB（同一数据库 `sw-task-queue`），SW 直接从 IndexedDB 读取，避免依赖 postMessage
 25. **远程同步任务不恢复执行**：通过 `syncedFromRemote` 标记区分本地和远程任务，SW 的 `shouldResumeTask()` 跳过远程任务，避免多设备重复调用大模型接口
 26. **任务参考图传递**：创建图片/视频任务时 `createTask` 的 params 须包含 `referenceImages`（与 `uploadedImages` 一并）；执行时 `executor.generateImage/generateVideo` 须传入 `referenceImages`（或 video 的 `inputReference`），否则 sw=0 降级请求不会带参考图
+27. **SW 可用性检测统一**：决定是否走 SW 时需用 `swChannelClient.isInitialized()` + `ping`，不能仅检查 `navigator.serviceWorker.controller`，否则 channel 未就绪会提交超时
+28. **降级路径强制主线程执行器**：workflow 提交超时后降级时，MainThreadWorkflowEngine 须传 `forceFallbackExecutor: true`，否则 `executorFactory.getExecutor()` 可能仍返回 SW 执行器导致二次超时
+29. **Fetch Relay 初始化超时保护**：`fetchRelayClient.initialize()` 在热路径（如 `generateImage`、`doInitialize`）中必须用 `Promise.race` 加 3s 超时，超时后降级到 `directFetch`
+30. **模块迁移接口完整性**：将模块从 SW 迁移到主线程（或反向）时，新模块的 `interface` 定义必须与原模块逐字段对比，确保无遗漏；不仅调用时传参要完整，**类型定义本身**也要包含所有字段（如 `referenceImages`），否则即使调用方想传数据也无法传入
 
 ### React 规则
 
@@ -205,6 +217,104 @@ Service Worker (后台执行)
 11. **异步操作不阻塞 UI**：远程同步等耗时操作应异步执行（fire-and-forget），不阻塞弹窗关闭
 12. **关键操作直接调用**：不依赖 RxJS 事件订阅触发关键业务逻辑，订阅时序不可靠
 13. **CPU 密集型循环需 yield**：大量 JSON.stringify/加密等操作的循环，每 3-5 次迭代调用 `await yieldToMain()` 让出主线程
+14. **跨 React Root 状态共享**：Plait 文本组件通过 `createRoot` 渲染在独立 React 树中，Context 无法穿透；需用 `useSyncExternalStore` + 模块级 store 共享状态
+15. **列表索引引用须用 ID 追踪**：当 Viewer/弹窗通过 `currentIndex` 引用列表项时，若列表可能动态变化（新项插入/删除），必须通过 item ID 在列表变化后修正索引，否则会显示错误的内容
+16. **RxJS 事件/全局 Store 传递的对象必须是新引用**：当 Service 通过 RxJS Subject 推送事件、或通过 `getAllXxx()` 返回内存中的对象时，React 组件的 `React.memo` 自定义比较函数比较的是属性值而非引用。如果原地修改对象再 emit，`prev.task.progress === next.task.progress` 看到的是同一个已变异对象的同一个值 → 永远相等 → 不重渲染。**必须创建新对象后再存入 Map 并 emit**
+
+#### RxJS 事件传递对象引用导致 React.memo 失效
+
+**场景**: Service 层通过 RxJS Subject 推送任务更新事件，多个 React 组件通过不同方式消费（增量替换 vs 全量快照），但 `TaskItem` 共用同一个 `React.memo` 自定义比较
+
+❌ **错误示例**:
+```typescript
+// Service: 原地修改对象再 emit
+onProgress: (progress) => {
+  const localTask = this.tasks.get(taskId);
+  localTask.progress = progress;         // 原地修改
+  localTask.updatedAt = Date.now();
+  this.emitEvent('taskUpdated', localTask); // 传递同一引用
+}
+
+// Hook A（增量替换）：event.task 与数组中旧对象是同一引用
+setTasks(prev => prev.map(t => t.id === event.task.id ? event.task : t));
+// React.memo: prev.task === next.task（同一对象）→ 不渲染
+
+// Hook B（全量快照）：getAllTasks() 返回 Map 中的原始对象
+setTasks(taskQueueService.getAllTasks());
+// React.memo: prev.task.progress === next.task.progress（同一对象，值已被改过）→ 不渲染
+```
+
+✅ **正确示例**:
+```typescript
+// Service: 创建新对象存入 Map 再 emit
+onProgress: (progress) => {
+  const localTask = this.tasks.get(taskId);
+  const updatedTask = { ...localTask, progress, updatedAt: Date.now() };
+  this.tasks.set(taskId, updatedTask);         // 新对象存入 Map
+  this.emitEvent('taskUpdated', updatedTask);  // 新引用
+}
+
+// emitEvent 中额外浅拷贝（双保险）
+private emitEvent(type, task) {
+  this.taskUpdates$.next({ type, task: { ...task }, timestamp: Date.now() });
+}
+```
+
+**原因**: React.memo 的自定义比较函数比较的是属性值，但如果 `prev.task` 和 `next.task` 指向同一个被原地修改的对象，所有属性比较都会返回 `true`（值已经被改过了）。必须确保每次更新都产生新的对象引用，让 `prev.task.progress !== next.task.progress` 成立。
+
+### API 错误字段类型安全
+
+**场景**: 处理外部 API 返回的 error 字段时，`error` 可能是字符串也可能是对象
+
+❌ **错误示例**:
+```typescript
+// API 返回：{ error: { code: "generation_failed", message: "[403]..." } }
+const data = await response.json();
+throw new Error(data.error || data.message || 'Failed');
+// data.error 是对象 → new Error({...}) → error.message = "[object Object]"
+```
+
+✅ **正确示例**:
+```typescript
+const data = await response.json();
+const errMsg = typeof data.error === 'string'
+  ? data.error
+  : (data.error?.message || data.message || 'Failed');
+const error = new Error(errMsg);
+if (typeof data.error === 'object' && data.error?.code) {
+  (error as any).code = data.error.code;
+}
+throw error;
+```
+
+**原因**: `new Error(value)` 内部调用 `String(value)`，对象会变成 `"[object Object]"`。API 的 `error` 字段格式不统一（有的返回字符串，有的返回 `{ code, message }` 对象），必须用 `typeof` 区分处理。
+
+### 数值范围转换规则
+
+回调链中传递进度/百分比等数值时，必须明确每一层的值域范围并保持一致：
+
+❌ **错误示例**:
+```typescript
+// pollVideoStatus 回调返回 0-1 范围
+onProgress(apiProgress / 100); // 100 → 1.0
+
+// 调用方误以为是 0-100 范围，乘以 0.8
+options?.onProgress?.({ progress: 10 + progress * 0.8 });
+// 结果：10 + 1.0 * 0.8 = 10.8，而非预期的 90
+```
+
+✅ **正确示例**:
+```typescript
+// 明确注释值域范围
+onProgress(apiProgress / 100); // 输出 0-1
+
+// 正确映射：0-1 → 10-90 需乘以 80
+// progress 是 0-1 范围，映射到 10-90：10 + (0~1) * 80
+options?.onProgress?.({ progress: 10 + progress * 80 });
+// 结果：10 + 1.0 * 80 = 90 ✓
+```
+
+**原因**: 回调链跨多层传递数值时，0-1 和 0-100 两种范围容易混淆。每个回调的输入/输出值域必须用注释明确标注，映射公式应能通过边界值（0 和 max）验证正确性。
 
 ### 缓存规则
 

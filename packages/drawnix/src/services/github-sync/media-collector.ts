@@ -7,7 +7,7 @@ import { logDebug, logInfo, logSuccess, logWarning, logError } from './sync-log-
 import { PlaitDrawElement } from '@plait/draw';
 import { workspaceStorageService } from '../workspace-storage-service';
 import { assetStorageService } from '../asset-storage-service';
-import { swTaskQueueService } from '../sw-task-queue-service';
+import { taskStorageReader } from '../task-storage-reader';
 import { unifiedCacheService } from '../unified-cache-service';
 import { isVideoElement } from '../../plugins/with-video';
 import { isVirtualUrl } from '../../utils/asset-cleanup';
@@ -265,8 +265,8 @@ class MediaCollector {
    * 收集任务队列的媒体资源（用于手动同步）
    */
   async collectTaskQueueMedia(): Promise<MediaItem[]> {
-    // 从 SW 获取所有任务（而非内存中的分页数据）
-    const allTasks = await swTaskQueueService.getAllTasksFromSW();
+    // 从 IndexedDB 获取所有任务
+    const allTasks = await taskStorageReader.getAllTasks();
     const items: MediaItem[] = [];
 
     // 筛选已完成的图片/视频任务

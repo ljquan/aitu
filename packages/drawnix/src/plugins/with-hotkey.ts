@@ -16,6 +16,8 @@ import { ArrowLineShape, BasicShapes } from '@plait/draw';
 import { AlignmentTransforms } from '../transforms/alignment';
 import { DistributeTransforms } from '../transforms/distribute';
 import { BooleanTransforms } from '../transforms/boolean';
+import { FramePointerType } from './with-frame';
+import { LassoPointerType } from './with-lasso-selection';
 
 export const buildDrawnixHotkeyPlugin = (
   updateAppState: (appState: Partial<DrawnixState>) => void
@@ -26,6 +28,20 @@ export const buildDrawnixHotkeyPlugin = (
       const isTypingNormal =
         event.target instanceof HTMLInputElement ||
         event.target instanceof HTMLTextAreaElement;
+      // 命令面板和画布搜索快捷键 - 始终可用（不需要画布焦点）
+      if (!isTypingNormal) {
+        if (isHotkey(['mod+k'])(event)) {
+          updateAppState({ openCommandPalette: true });
+          event.preventDefault();
+          return;
+        }
+        if (isHotkey(['mod+f'])(event)) {
+          updateAppState({ openCanvasSearch: true });
+          event.preventDefault();
+          return;
+        }
+      }
+
       if (
         !isTypingNormal &&
         (PlaitBoard.getMovingPointInBoard(board) ||
@@ -152,6 +168,19 @@ export const buildDrawnixHotkeyPlugin = (
         // Note: 复制图片粘贴功能由 with-image.tsx 中的 insertFragment 方法处理
         // 不需要在这里手动处理 Ctrl+V，让 Plait 框架的原生粘贴机制工作
         if (!event.altKey && !event.metaKey && !event.ctrlKey && !event.shiftKey) {
+          if (event.key === 'l') {
+            setCreationMode(board, BoardCreationMode.drawing);
+            BoardTransforms.updatePointerType(board, FreehandShape.laserPointer);
+            updateAppState({ pointer: FreehandShape.laserPointer });
+            event.preventDefault();
+            return;
+          }
+          if (event.key === 'Escape' && PlaitBoard.isPointer(board, FreehandShape.laserPointer)) {
+            BoardTransforms.updatePointerType(board, PlaitPointerType.selection);
+            updateAppState({ pointer: PlaitPointerType.selection });
+            event.preventDefault();
+            return;
+          }
           if (event.key === 'h') {
             BoardTransforms.updatePointerType(board, PlaitPointerType.hand);
             updateAppState({ pointer: PlaitPointerType.hand });
@@ -162,6 +191,10 @@ export const buildDrawnixHotkeyPlugin = (
               PlaitPointerType.selection
             );
             updateAppState({ pointer: PlaitPointerType.selection });
+          }
+          if (event.key === 'q') {
+            BoardTransforms.updatePointerType(board, LassoPointerType);
+            updateAppState({ pointer: LassoPointerType });
           }
           if (event.key === 'm') {
             setCreationMode(board, BoardCreationMode.dnd);
@@ -193,6 +226,11 @@ export const buildDrawnixHotkeyPlugin = (
               BoardTransforms.updatePointerType(board, ArrowLineShape.straight);
               updateAppState({ pointer: ArrowLineShape.straight });
             }
+          }
+          if (event.key === 'f') {
+            setCreationMode(board, BoardCreationMode.drawing);
+            BoardTransforms.updatePointerType(board, FramePointerType);
+            updateAppState({ pointer: FramePointerType });
           }
           if (event.key === 'r' || event.key === 'o' || event.key === 't') {
             const keyToPointer = {

@@ -693,6 +693,16 @@ export const FeltTipPenIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: n
   </svg>
 );
 
+// 激光笔图标
+export const LaserPointerIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 24, ...props }) => (
+  <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round" width={size} height={size} {...props}>
+    <g transform="rotate(90 10 10)">
+      <path clipRule="evenodd" d="m9.644 13.69 7.774-7.773a2.357 2.357 0 0 0-3.334-3.334l-7.773 7.774L8 12l1.643 1.69Z" />
+      <path d="m13.25 3.417 3.333 3.333M10 10l2-2M5 15l3-3M2.156 17.894l1-1M5.453 19.029l-.144-1.407M2.377 11.887l.866 1.118M8.354 17.273l-1.194-.758M.953 14.652l1.408.13" />
+    </g>
+  </svg>
+);
+
 // 钢笔工具图标（矢量路径绘制）
 export const VectorPenIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 24, ...props }) => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" width={size} height={size} {...props}>
@@ -1269,6 +1279,23 @@ export const DebugLogIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: num
   </svg>
 );
 
+export const CommandPaletteIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 24, ...props }) => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    width={size}
+    height={size}
+    {...props}
+  >
+    {/* ⌘ Command symbol */}
+    <path d="M18 3a3 3 0 0 0-3 3v12a3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3H6a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3V6a3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3h12a3 3 0 0 0 3-3 3 3 0 0 0-3-3z" />
+  </svg>
+);
+
 export const BookOpenIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 24, ...props }) => (
   <svg
     viewBox="0 0 24 24"
@@ -1511,5 +1538,34 @@ export const CleanBrokenLinksIcon: React.FC<React.SVGProps<SVGSVGElement> & { si
     {/* 删除标记 */}
     <circle cx="18" cy="18" r="4" fill="#ff4d4f" stroke="#ff4d4f" />
     <path d="M16 18h4" stroke="white" strokeWidth="2" />
+  </svg>
+);
+
+// Frame 容器图标
+export const FrameContainerIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 16, ...props }) => (
+  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" xmlns="http://www.w3.org/2000/svg" width={size} height={size} {...props}>
+    <rect x="1.5" y="3.5" width="13" height="11" rx="1" strokeWidth="1.2" strokeDasharray="3 2" />
+    <text x="3" y="3" fontSize="4" fill="currentColor" stroke="none" fontFamily="system-ui" fontWeight="500">F</text>
+  </svg>
+);
+
+// 套索选择图标
+export const LassoIcon: React.FC<React.SVGProps<SVGSVGElement> & { size?: number }> = ({ size = 24, ...props }) => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    width={size}
+    height={size}
+    {...props}
+  >
+    <path d="M12 4C7.58 4 4 6.69 4 10c0 2.05 1.3 3.86 3.3 5.04" />
+    <path d="M20 10c0-3.31-3.58-6-8-6" strokeDasharray="3 2" />
+    <circle cx="12" cy="14" r="3" />
+    <path d="M12 17v4" />
+    <path d="M10 21h4" />
   </svg>
 );

@@ -23,6 +23,10 @@ export interface PlaitWorkZone extends PlaitElement {
   createdAt: number;
   /** 预期的元素插入位置 [leftX, topY]（leftX 是左边缘X坐标，用于元素生成后左对齐插入） */
   expectedInsertPosition?: Point;
+  /** 目标 Frame ID（选中 Frame 时生成的媒体将插入到 Frame 内部） */
+  targetFrameId?: string;
+  /** 目标 Frame 的尺寸（用于将生成结果缩放到 Frame 尺寸） */
+  targetFrameDimensions?: { width: number; height: number };
   /** 画布缩放级别（用于内容等比缩放） */
   zoom: number;
 }
@@ -39,6 +43,10 @@ export interface WorkZoneCreateOptions {
   size?: { width: number; height: number };
   /** 预期的元素插入位置 [leftX, topY]（leftX 是左边缘X坐标，用于元素生成后左对齐插入） */
   expectedInsertPosition?: Point;
+  /** 目标 Frame ID（选中 Frame 时生成的媒体将插入到 Frame 内部） */
+  targetFrameId?: string;
+  /** 目标 Frame 的尺寸（用于将生成结果缩放到 Frame 尺寸） */
+  targetFrameDimensions?: { width: number; height: number };
   /** 画布缩放级别（用于内容等比缩放） */
   zoom: number;
 }

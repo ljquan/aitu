@@ -8,6 +8,7 @@ export interface Translations {
   // Toolbar items
   'toolbar.hand': string;
   'toolbar.selection': string;
+  'toolbar.lasso': string;
   'toolbar.mind': string;
   'toolbar.text': string;
   'toolbar.pen': string;
@@ -31,13 +32,8 @@ export interface Translations {
   'toolbar.eraserShape': string;
   'toolbar.eraserShape.circle': string;
   'toolbar.eraserShape.square': string;
-  'toolbar.preciseEraser': string;
-  'toolbar.preciseEraserTip': string;
-  'toolbar.preciseEraser.unsupported.openPath': string;
-  'toolbar.preciseEraser.unsupported.image': string;
-  'toolbar.preciseEraser.unsupported.text': string;
-  'toolbar.preciseEraser.unsupported.line': string;
-  'toolbar.preciseEraser.unsupported.other': string;
+  'toolbar.laserPointer': string;
+  'toolbar.frame': string;
   'toolbar.fillColor': string;
   'toolbar.fontColor': string;
   'toolbar.fontSize': string;
@@ -86,6 +82,7 @@ export interface Translations {
   'menu.debugPanel': string;
   'menu.version': string;
   'menu.more': string;
+  'menu.commandPalette': string;
   'menu.userManual': string;
   'menu.cleanInvalidLinks': string;
   'menu.cleanInvalidLinks.scanning': string;
@@ -196,6 +193,7 @@ const translations: Record<Language, Translations> = {
     // Toolbar items
     'toolbar.hand': '手形工具 — H',
     'toolbar.selection': '选择 — V',
+    'toolbar.lasso': '套索选择 — Q',
     'toolbar.mind': '思维导图 — M',
     'toolbar.text': '文本 — T',
     'toolbar.pen': '画笔 — P',
@@ -223,13 +221,8 @@ const translations: Record<Language, Translations> = {
     'toolbar.eraserShape': '橡皮擦形状',
     'toolbar.eraserShape.circle': '圆形',
     'toolbar.eraserShape.square': '方形',
-    'toolbar.preciseEraser': '精确擦除',
-    'toolbar.preciseEraserTip': '只擦除经过的区域，而不是整个图形',
-    'toolbar.preciseEraser.unsupported.openPath': '精确擦除不支持线条，将删除整条线',
-    'toolbar.preciseEraser.unsupported.image': '精确擦除不支持图片元素',
-    'toolbar.preciseEraser.unsupported.text': '精确擦除不支持文本元素',
-    'toolbar.preciseEraser.unsupported.line': '精确擦除不支持线条元素',
-    'toolbar.preciseEraser.unsupported.other': '精确擦除不支持该元素类型',
+    'toolbar.laserPointer': '激光笔 — L',
+    'toolbar.frame': 'Frame 容器 — F',
     'toolbar.fillColor': '填充颜色',
     'toolbar.fontColor': '字体颜色',
     'toolbar.fontSize': '字号',
@@ -274,6 +267,7 @@ const translations: Record<Language, Translations> = {
     'menu.debugPanel': '日志 / 调试',
     'menu.version': '版本',
     'menu.more': '更多',
+    'menu.commandPalette': '快捷命令',
     'menu.userManual': '用户手册',
     'menu.cleanInvalidLinks': '清除失效媒体',
     'menu.cleanInvalidLinks.scanning': '正在扫描失效媒体...',
@@ -381,6 +375,7 @@ const translations: Record<Language, Translations> = {
     // Toolbar items
     'toolbar.hand': 'Hand — H',
     'toolbar.selection': 'Selection — V',
+    'toolbar.lasso': 'Lasso Select — Q',
     'toolbar.mind': 'Mind — M',
     'toolbar.text': 'Text — T',
     'toolbar.pen': 'Pen — P',
@@ -408,13 +403,8 @@ const translations: Record<Language, Translations> = {
     'toolbar.eraserShape': 'Eraser Shape',
     'toolbar.eraserShape.circle': 'Circle',
     'toolbar.eraserShape.square': 'Square',
-    'toolbar.preciseEraser': 'Precise',
-    'toolbar.preciseEraserTip': 'Erase only the path area instead of the whole shape',
-    'toolbar.preciseEraser.unsupported.openPath': 'Precise erase does not support lines, will delete entire line',
-    'toolbar.preciseEraser.unsupported.image': 'Precise erase does not support images',
-    'toolbar.preciseEraser.unsupported.text': 'Precise erase does not support text',
-    'toolbar.preciseEraser.unsupported.line': 'Precise erase does not support lines',
-    'toolbar.preciseEraser.unsupported.other': 'Precise erase does not support this element type',
+    'toolbar.laserPointer': 'Laser Pointer — L',
+    'toolbar.frame': 'Frame Container — F',
     'toolbar.fillColor': 'Fill Color',
     'toolbar.fontColor': 'Font Color',
     'toolbar.fontSize': 'Font Size',
@@ -459,6 +449,7 @@ const translations: Record<Language, Translations> = {
     'menu.debugPanel': 'Log / Debug',
     'menu.version': 'Version',
     'menu.more': 'More',
+    'menu.commandPalette': 'Commands',
     'menu.userManual': 'User Manual',
     'menu.cleanInvalidLinks': 'Clean Invalid Media',
     'menu.cleanInvalidLinks.scanning': 'Scanning invalid media...',

@@ -15,6 +15,7 @@ import {
   memoryMonitorService,
   crashRecoveryService,
   swChannelClient,
+  safeReload,
 } from '@drawnix/drawnix';
 import { sanitizeObject, sanitizeUrl } from '@aitu/utils';
 import { initSWConsoleCapture } from './utils/sw-console-capture';
@@ -245,7 +246,7 @@ if ('serviceWorker' in navigator) {
         }
         // 等待一小段时间，确保新的Service Worker已经完全接管
         setTimeout(() => {
-          window.location.reload();
+          safeReload();
         }, 1000);
       },
       onSWNewVersionReady: (event) => {
@@ -338,8 +339,7 @@ if ('serviceWorker' in navigator) {
 
     // 延迟刷新，确保新Service Worker的缓存已准备好
     setTimeout(() => {
-      // console.log('Reloading page to use new Service Worker...');
-      window.location.reload();
+      safeReload();
     }, 1000);
   });
   

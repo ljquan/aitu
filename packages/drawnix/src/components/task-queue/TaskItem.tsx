@@ -508,6 +508,8 @@ export const TaskItem: React.FC<TaskItemProps> = React.memo(({
   return prev.task.id === next.task.id && 
          prev.task.status === next.task.status &&
          prev.task.progress === next.task.progress &&
+         prev.task.error?.message === next.task.error?.message &&
+         prev.task.result === next.task.result &&
          prev.isSelected === next.isSelected &&
          prev.selectionMode === next.selectionMode &&
          prev.isCompact === next.isCompact;

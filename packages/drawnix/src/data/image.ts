@@ -415,10 +415,7 @@ export const insertImageFromUrl = async (
   // 记录插入前的 children 数量，用于后续找到新插入的元素
   const childrenCountBefore = board.children.length;
 
-  // console.log(`[insertImageFromUrl] Final insertionPoint:`, insertionPoint);
-  // console.log(`[insertImageFromUrl] Calling DrawTransforms.insertImage...`);
   DrawTransforms.insertImage(board, imageItem, insertionPoint);
-  // console.log(`[insertImageFromUrl] DrawTransforms.insertImage completed`);
 
   // 埋点：图片插入画布
   analytics.track('asset_insert_canvas', {
@@ -430,13 +427,17 @@ export const insertImageFromUrl = async (
 
   // 如果跳过了图片加载，异步加载图片并更新元素尺寸
   if (shouldUpdateSizeAfterLoad && referenceDimensions) {
-    updateImageSizeAfterLoad(
-      board,
-      imageUrl,
-      childrenCountBefore,
-      insertionPoint || [0, 0],
-      referenceDimensions
-    );
+    // 同步捕获新插入元素的 ID，避免异步回调中索引失效
+    const newElement = board.children[childrenCountBefore] as any;
+    const elementId = newElement?.id as string | undefined;
+    if (elementId) {
+      updateImageSizeAfterLoad(
+        board,
+        imageUrl,
+        elementId,
+        referenceDimensions
+      );
+    }
   }
 
   // 插入后滚动视口到新元素位置（如果不在视口内）
@@ -457,21 +458,21 @@ export const insertImageFromUrl = async (
 /**
  * 图片加载完成后更新元素尺寸
  * 用于 skipImageLoad=true 的场景，在图片实际加载后自适应调整元素尺寸
+ *
+ * 通过元素 ID 查找（而非索引），确保异步回调中仍能正确定位元素
  */
 function updateImageSizeAfterLoad(
   board: PlaitBoard,
   imageUrl: string,
-  childrenCountBefore: number,
-  insertionPoint: Point,
+  elementId: string,
   referenceDimensions: { width: number; height: number }
 ): void {
-  // 异步加载图片获取实际尺寸
-  loadHTMLImageElement(imageUrl as DataURL, true)
+  // 使用带重试的加载函数，提高虚拟 URL 场景的可靠性
+  loadHTMLImageElementWithRetry(imageUrl as DataURL, true)
     .then((img) => {
       const naturalWidth = img.naturalWidth;
       const naturalHeight = img.naturalHeight;
 
-      // 如果图片加载失败或尺寸无效，不更新
       if (!naturalWidth || !naturalHeight) {
         return;
       }
@@ -496,40 +497,32 @@ function updateImageSizeAfterLoad(
         newWidth = newHeight * imageAspectRatio;
       }
 
-      // 找到刚插入的图片元素
-      const newElement = board.children[childrenCountBefore];
-      if (!newElement || (newElement as any).url !== imageUrl) {
-        // 元素可能已被删除或不是目标元素
+      // 通过 ID 查找元素（比索引更可靠，不受插入/删除影响）
+      const elementIndex = board.children.findIndex(
+        (el: any) => el.id === elementId
+      );
+      if (elementIndex === -1) {
+        // 元素已被删除
         return;
       }
 
-      const elementIndex = childrenCountBefore;
+      const targetElement = board.children[elementIndex];
 
-      // 计算新的 points（保持左上角位置不变）
+      // 使用元素当前的左上角位置（用户可能已移动元素）
+      const currentTopLeft: Point = targetElement.points?.[0] || [0, 0];
+
       const newPoints: [Point, Point] = [
-        insertionPoint,
-        [insertionPoint[0] + newWidth, insertionPoint[1] + newHeight],
+        currentTopLeft,
+        [currentTopLeft[0] + newWidth, currentTopLeft[1] + newHeight],
       ];
 
-      // 更新元素的尺寸
       Transforms.setNode(
         board,
-        {
-          width: newWidth,
-          height: newHeight,
-          points: newPoints,
-        } as any,
+        { points: newPoints },
         [elementIndex]
       );
-
-      // console.log(`[updateImageSizeAfterLoad] Updated element size:`, {
-      //   from: referenceDimensions,
-      //   to: { width: newWidth, height: newHeight },
-      //   imageAspectRatio,
-      // });
     })
     .catch((error) => {
-      // 图片加载失败，保持原有尺寸
       console.warn('[updateImageSizeAfterLoad] Failed to load image for size update:', error);
     });
 }

@@ -14,7 +14,8 @@ import {
   mergeVideoPromptHistory,
   mergeImagePromptHistory,
 } from '../prompt-storage-service';
-import { swTaskQueueService } from '../sw-task-queue-service';
+import { taskStorageReader } from '../task-storage-reader';
+import { taskQueueService } from '../task-queue';
 import { logDebug, logInfo, logSuccess, logWarning, logError } from './sync-log-service';
 import { TaskStatus, TaskType, Task } from '../../types/task.types';
 import { DRAWNIX_DEVICE_ID_KEY } from '../../constants/storage';
@@ -126,8 +127,8 @@ class DataSerializer {
     const videoPromptHistory = getVideoPromptHistory();
     const imagePromptHistory = getImagePromptHistory();
 
-    // 从 SW 获取所有已完成的任务（而非内存中的分页数据）
-    const allTasks = await swTaskQueueService.getAllTasksFromSW();
+    // 从 IndexedDB 获取所有已完成的任务
+    const allTasks = await taskStorageReader.getAllTasks();
     const completedTasks = allTasks.filter(
       task => task.status === TaskStatus.COMPLETED &&
         (task.type === TaskType.IMAGE || task.type === TaskType.VIDEO)
@@ -997,8 +998,8 @@ class DataSerializer {
     });
     
     if (data.tasks && data.tasks.completedTasks && data.tasks.completedTasks.length > 0) {
-      // 从 SW 获取所有本地任务（而非内存中的分页数据）
-      const localTasks = await swTaskQueueService.getAllTasksFromSW();
+      // 从 IndexedDB 获取所有本地任务
+      const localTasks = await taskStorageReader.getAllTasks();
       const localTaskMap = new Map(localTasks.map(t => [t.id, t]));
       
       logDebug('DataSerializer: Local tasks:', {
@@ -1045,7 +1046,7 @@ class DataSerializer {
         
         logDebug('DataSerializer: Calling restoreTasks with', processedTasks.length, 'tasks');
         try {
-          await swTaskQueueService.restoreTasks(processedTasks);
+          await taskQueueService.restoreTasks(processedTasks);
           tasksApplied = processedTasks.length;
           logDebug('DataSerializer: Tasks restored:', tasksApplied);
         } catch (err) {

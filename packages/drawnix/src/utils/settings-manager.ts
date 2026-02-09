@@ -289,10 +289,8 @@ class SettingsManager {
       const settingsJson = JSON.stringify(settingsToSave);
       localStorage.setItem(DRAWNIX_SETTINGS_KEY, settingsJson);
       
-      // 同步到 IndexedDB，供 SW 读取（fire-and-forget，不阻塞）
-      this.syncToIndexedDB().catch((error) => {
-        console.warn('[SettingsManager] Failed to sync to IndexedDB:', error);
-      });
+      // 同步到 IndexedDB，供 SW 读取（必须等待完成，确保首次输入 API Key 后 SW 能立即拿到配置）
+      await this.syncToIndexedDB();
     } catch (error) {
       console.warn('Failed to save settings to localStorage:', error);
     }

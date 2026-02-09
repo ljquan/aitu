@@ -2,7 +2,7 @@
  * 统一媒体预览系统 - 状态管理 Hook
  */
 
-import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import type {
   ViewerMode,
   CompareLayout,
@@ -64,7 +64,7 @@ export function useViewerState(
   const [focusedSlot, setFocusedSlotInternal] = useState<number>(0);
   const [slotCount, setSlotCountInternal] = useState<2 | 3 | 4>(2);
 
-  // visible 变化时重置状态
+  // visible 变化或 initialIndex 变化时重置状态
   useEffect(() => {
     if (visible) {
       setModeInternal(initialMode);
@@ -75,6 +75,27 @@ export function useViewerState(
       setFocusedSlotInternal(0);
     }
   }, [visible, initialMode, initialIndex, getInitialCompareIndices]);
+
+  // items 列表变化时，通过 item id 保持 currentIndex 指向同一项
+  const prevItemsRef = useRef(items);
+  useEffect(() => {
+    if (!visible || items === prevItemsRef.current) {
+      prevItemsRef.current = items;
+      return;
+    }
+    const prevItems = prevItemsRef.current;
+    prevItemsRef.current = items;
+
+    // 找到当前显示项的 id
+    const currentItem = prevItems[currentIndex];
+    if (!currentItem?.id) return;
+
+    // 在新列表中找到同一个 id 的位置
+    const newIndex = items.findIndex(item => item.id === currentItem.id);
+    if (newIndex !== -1 && newIndex !== currentIndex) {
+      setCurrentIndex(newIndex);
+    }
+  }, [visible, items, currentIndex]);
 
   // 状态对象
   const state: ViewerState = useMemo(

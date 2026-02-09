@@ -129,7 +129,7 @@ export function downloadDataUrl(dataUrl: string, filename: string): void {
 export async function processBatchWithConcurrency<T, R>(
   items: T[],
   handler: (item: T, index: number) => Promise<R>,
-  concurrency: number = 3
+  concurrency = 3
 ): Promise<R[]> {
   const results: R[] = [];
   let currentIndex = 0;
@@ -171,7 +171,7 @@ export async function processBatchWithConcurrency<T, R>(
 export async function processBatchWithConcurrencySafe<T, R>(
   items: T[],
   handler: (item: T, index: number) => Promise<R>,
-  concurrency: number = 3
+  concurrency = 3
 ): Promise<{
   results: Array<{ index: number; value: R }>;
   errors: Array<{ index: number; error: Error }>;

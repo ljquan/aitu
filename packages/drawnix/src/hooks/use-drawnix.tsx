@@ -8,6 +8,7 @@ import { MindPointerType } from '@plait/mind';
 import { DrawPointerType } from '@plait/draw';
 import { FreehandShape } from '../plugins/freehand/type';
 import { PenShape } from '../plugins/pen/type';
+import { LassoPointerType } from '../plugins/with-lasso-selection';
 import { Editor } from 'slate';
 import { LinkElement } from '@plait/common';
 
@@ -23,7 +24,9 @@ export type DrawnixPointerType =
   | MindPointerType
   | DrawPointerType
   | FreehandShape
-  | PenShape;
+  | PenShape
+  | typeof import('../plugins/with-frame').FramePointerType
+  | typeof LassoPointerType;
 
 export interface DrawnixBoard extends PlaitBoard {
   appState: DrawnixState;
@@ -58,6 +61,8 @@ export type DrawnixState = {
   dialogInitialData?: DialogInitialData | null;
   openCleanConfirm: boolean;
   openSettings: boolean;
+  openCommandPalette?: boolean;
+  openCanvasSearch?: boolean;
   linkState?: LinkState | null;
   lastSelectedElementIds?: string[]; // 最近选中的元素IDs,用于AI生成插入位置计算
 };

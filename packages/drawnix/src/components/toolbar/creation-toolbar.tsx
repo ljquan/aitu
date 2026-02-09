@@ -7,6 +7,7 @@ import {
   HandIcon,
   MindIcon,
   SelectionIcon,
+  LassoIcon,
   ShapeIcon,
   TextIcon,
   StraightArrowLineIcon,
@@ -48,6 +49,7 @@ import { insertVideoFromUrl } from '../../data/video';
 import { Popover, PopoverContent, PopoverTrigger } from '../popover/popover';
 import { FreehandShape } from '../../plugins/freehand/type';
 import { PenShape } from '../../plugins/pen/type';
+import { LassoPointerType } from '../../plugins/with-lasso-selection';
 import { finishPenOnToolSwitch } from '../../plugins/pen/with-pen-create';
 import {
   DrawnixPointerType,
@@ -96,6 +98,12 @@ export const BUTTONS: AppToolButtonProps[] = [
     pointer: PlaitPointerType.selection,
     titleKey: 'toolbar.selection',
     visibilityKey: 'selection',
+  },
+  {
+    icon: <LassoIcon />,
+    pointer: LassoPointerType,
+    titleKey: 'toolbar.lasso',
+    visibilityKey: 'lasso',
   },
   {
     icon: <MindIcon />,
@@ -395,6 +403,7 @@ export const CreationToolbar: React.FC<ToolbarSectionProps> = ({
     return PlaitBoard.isInPointer(board, [
       FreehandShape.feltTipPen,
       FreehandShape.eraser,
+      FreehandShape.laserPointer,
       PenShape.pen,
     ]);
   };

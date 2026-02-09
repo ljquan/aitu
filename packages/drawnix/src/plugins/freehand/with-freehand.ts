@@ -17,6 +17,7 @@ import {
   WithDrawPluginKey,
 } from '@plait/draw';
 import { withFreehandErase } from './with-freehand-erase';
+import { withLaserPointer } from './with-laser-pointer';
 
 export const withFreehand = (board: PlaitBoard) => {
   const {
@@ -84,5 +85,5 @@ export const withFreehand = (board: PlaitBoard) => {
     { customGeometryTypes: [FREEHAND_TYPE] }
   );
 
-  return withFreehandResize(withFreehandErase(withFreehandFragment(withFreehandCreate(board))));
+  return withLaserPointer(withFreehandResize(withFreehandErase(withFreehandFragment(withFreehandCreate(board)))));
 };

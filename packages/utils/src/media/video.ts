@@ -84,7 +84,7 @@ export function calculateThumbnailSize(
  */
 export async function generateVideoThumbnailFromBlob(
   blob: Blob,
-  maxSize: number = 400
+  maxSize = 400
 ): Promise<Blob> {
   return new Promise((resolve, reject) => {
     const videoUrl = URL.createObjectURL(blob);

@@ -16,6 +16,7 @@
 - [Service Worker 规范](#service-worker-规范)
 - [缓存与存储规范](#缓存与存储规范)
 - [API 与任务处理规范](#api-与任务处理规范)
+- [Plait 插件规范](#plait-插件规范)
 - [UI 交互规范](#ui-交互规范)
 - [E2E 测试规范](#e2e-测试规范)
 - [数据安全规范](#数据安全规范)
@@ -1271,6 +1272,51 @@ return (
 
 **原因**: 基础组件（如 `TaskItem`）已经包含了完善的响应式 Grid 布局逻辑。在子组件容器中强行覆盖布局（如从 Grid 改为 Flex）会导致维护困难、布局不一致，并破坏基础组件原有的响应式能力。应优先通过微调尺寸或传递 Props 让基础组件自我调整。
 
+#### 跨 React Root 状态共享：useSyncExternalStore
+
+**场景**: 需要从主应用向 Plait 文本组件（`react-text` 的 `Text`）传递状态时（如搜索高亮关键词）
+
+Plait 框架通过 `createRoot` 将每个文本组件渲染在独立的 React 树中（见 `react-board/src/plugins/with-react.tsx`），React Context 无法穿透这些独立 Root。
+
+❌ **错误示例**:
+```typescript
+// ❌ 错误：在主应用提供 Context，期望 Text 组件能消费
+// 主应用
+<SearchContext.Provider value={query}>
+  <Board /> {/* Board 内的文本通过 createRoot 渲染，无法访问此 Context */}
+</SearchContext.Provider>
+
+// react-text/text.tsx
+const query = useContext(SearchContext); // 永远是 undefined
+```
+
+✅ **正确示例**:
+```typescript
+// ✅ 正确：使用 useSyncExternalStore + 模块级 store 实现跨 Root 状态共享
+// search-highlight.ts
+let searchQuery = '';
+const listeners = new Set<() => void>();
+
+export function setSearchHighlightQuery(query: string) {
+  if (searchQuery === query) return;
+  searchQuery = query;
+  listeners.forEach(listener => listener());
+}
+
+export function useSearchHighlightQuery(): string {
+  return useSyncExternalStore(
+    (cb) => { listeners.add(cb); return () => listeners.delete(cb); },
+    () => searchQuery,
+    () => searchQuery,
+  );
+}
+
+// text.tsx - 在独立 React Root 中也能正确订阅
+const query = useSearchHighlightQuery(); // ✅ 正常工作
+```
+
+**原因**: `createRoot` 创建的 React 树是完全独立的，不共享父级 Context。`useSyncExternalStore` 订阅模块级全局 store，不依赖 React 树结构，因此能跨 Root 工作。此模式适用于所有需要从主应用向 Plait 文本组件传递状态的场景。
+
 ### CSS/SCSS 规范
 - 使用 BEM 命名规范
 - 优先使用设计系统 CSS 变量
@@ -1919,12 +1965,12 @@ private async handleInit(data: { geminiConfig; videoConfig }) {
 ```typescript
 // 正确：配置同步到 IndexedDB，SW 直接读取
 
-// 1. 主线程 SettingsManager 自动同步配置到 IndexedDB
+// 1. 主线程 SettingsManager 同步配置到 IndexedDB
 private async saveToStorage(): Promise<void> {
   localStorage.setItem(DRAWNIX_SETTINGS_KEY, settingsJson);
   
-  // 同步到 IndexedDB，供 SW 读取
-  this.syncToIndexedDB().catch(console.warn);
+  // 必须 await：首次输入 API Key 后若立即提交工作流，SW 需能读到最新配置
+  await this.syncToIndexedDB();
 }
 
 private async syncToIndexedDB(): Promise<void> {
@@ -1954,6 +2000,353 @@ SW 需要配置 → 直接读取 IndexedDB → 始终可用
 - 任务/工作流仍保留配置快照，用于恢复场景
 
 **原因**: Service Worker 启动后会异步从 IndexedDB 恢复数据（`restoreFromStorage()`），这个过程可能需要一定时间。如果 RPC handler 在恢复完成前被调用，访问的数据是不完整的。需要通过 Promise 机制确保数据恢复完成后再返回响应。
+
+### SW 可用性检测需统一（channel + ping）
+
+**场景**: 决定是否使用 SW 执行工作流时，需与 WorkflowSubmissionService 使用相同的检测逻辑
+
+**问题**: 仅检查 `navigator.serviceWorker.controller` 会误判。controller 存在不代表 duplex channel 已就绪，提交时会超时后降级，WorkZone 卡在「待开始」。
+
+❌ **错误示例**:
+```typescript
+// 错误：仅检查 controller
+function checkSWAvailable(): boolean {
+  return !!(navigator.serviceWorker?.controller);
+}
+// 若 channel 未初始化，submitWorkflow 会超时，降级路径可能仍用 SW 执行器导致二次超时
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：检查 swChannelClient.isInitialized() 且 ping 成功
+async function checkSWChannelAvailable(): Promise<boolean> {
+  if (!swChannelClient.isInitialized()) return false;
+  return await Promise.race([
+    swChannelClient.ping(),
+    new Promise<boolean>((r) => setTimeout(() => r(false), 1500)),
+  ]);
+}
+```
+
+**原因**: controller 存在时 duplex channel 可能仍在初始化或 SW 正在修复 IndexedDB。需统一使用 channel + ping 检测，避免走 SW 路径后超时降级。
+
+### 降级路径强制使用主线程执行器
+
+**场景**: workflow 提交到 SW 超时后，使用 MainThreadWorkflowEngine 降级执行时
+
+**问题**: WorkflowEngine 内部用 `executorFactory.getExecutor()`，当 ping 仍成功时会返回 SW 执行器，导致 `generate_image`/`generate_video` 再次走 SW 并超时，WorkZone 一直「待开始」。
+
+❌ **错误示例**:
+```typescript
+// 错误：降级时仍用 executorFactory（可能返回 SW 执行器）
+this.fallbackEngine = new MainThreadWorkflowEngine({
+  onEvent: (e) => this.handleFallbackEngineEvent(e),
+  executeMainThreadTool: async (name, args) => { /* ... */ },
+});
+// WorkflowEngine 内部: const executor = await executorFactory.getExecutor();
+// → 返回 SW 执行器 → 再次超时
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：强制使用主线程执行器
+this.fallbackEngine = new MainThreadWorkflowEngine({
+  onEvent: (e) => this.handleFallbackEngineEvent(e),
+  forceFallbackExecutor: true,
+  executeMainThreadTool: async (name, args) => { /* ... */ },
+});
+// WorkflowEngine 内部: const executor = this.options.forceFallbackExecutor
+//   ? executorFactory.getFallbackExecutor()
+//   : await executorFactory.getExecutor();
+```
+
+**原因**: 降级路径应完全在主线程执行，直接调用 API，不依赖 SW 或 IndexedDB 就绪。
+
+### 降级路径工作流工具集一致性
+
+**场景**: 工作流降级到主线程执行时，WorkflowEngine 的 `executeToolStep` 用 switch 按 `step.mcp` 分发。SW 侧（如 workflow-executor、swCapabilitiesHandler）支持的工具，主线程分支也必须能路由，否则会落入 default 抛出 `Unknown tool: xxx`。
+
+❌ **错误示例**:
+```typescript
+// 错误：SW 的 handler 支持 generate_grid_image，但 engine 的 switch 没有对应 case
+// sw-capabilities/handler.ts 有 case 'generate_grid_image'
+// workflow-engine/engine.ts 只有 generate_image、generate_video、ai_analyze、insert_*...
+// → generate_grid_image 落入 default，抛 Unknown tool: generate_grid_image
+switch (step.mcp) {
+  case 'generate_image': // ...
+  case 'generate_video': // ...
+  case 'ai_analyze': // ...
+  case 'insert_mermaid':
+  case 'canvas_insert': // ...
+  default:
+    throw new Error(`Unknown tool: ${step.mcp}`);
+}
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：与 DelegatedOperationType / swCapabilitiesHandler.execute 支持的工具集一致
+// 凡由主线程 handler 执行的工具，都走 executeMainThreadTool 分支
+case 'generate_grid_image':
+case 'generate_inspiration_board':
+case 'split_image':
+case 'generate_long_video':
+case 'insert_mermaid':
+case 'insert_mindmap':
+case 'insert_svg':
+case 'canvas_insert':
+case 'insert_to_canvas': {
+  if (!this.options.executeMainThreadTool) {
+    throw new Error(`No main thread tool executor configured for: ${step.mcp}`);
+  }
+  const toolResult = await this.options.executeMainThreadTool(step.mcp, step.args);
+  // ...
+}
+```
+
+**原因**: 降级路径功能一致性要求主线程与 SW 支持相同工具集。新增 DelegatedOperation 类型或在 handler 增加 case 时，需同步在 WorkflowEngine.executeToolStep 中增加对应 case 并路由到 executeMainThreadTool。
+
+**相关文件**:
+- `packages/drawnix/src/services/sw-capabilities/types.ts` - DelegatedOperationType
+- `packages/drawnix/src/services/sw-capabilities/handler.ts` - execute switch
+- `packages/drawnix/src/services/workflow-engine/engine.ts` - executeToolStep switch
+
+### 同页面禁止创建多个 ServiceWorkerChannel
+
+**场景**: 主线程需要与 SW 通信的多个模块（如 `swChannelClient`、`FetchRelayClient`）各自调用 `ServiceWorkerChannel.createFromPage()`。
+
+**问题**: SW 端 `enableGlobalRouting` 按 `event.source.id`（SW client ID）路由消息。同一页面的所有 `createFromPage()` 共享同一个 `clientId`。SW 端 `ensureChannel(clientId)` 只为第一个连接创建 channel 和 subscribeMap，后续连接复用同一个 server-side channel。这导致 RPC 响应可能路由到错误的 client-side channel，`channel.call()` 永远不 resolve。
+
+❌ **错误示例**:
+```typescript
+// FetchRelayClient 创建独立 channel — 与 swChannelClient 冲突！
+class FetchRelayClient {
+  private channel: ServiceWorkerChannel | null = null;
+
+  async doInitialize(): Promise<boolean> {
+    // 创建第二个 channel，但 SW 只有一个 server-side channel
+    this.channel = await ServiceWorkerChannel.createFromPage({ timeout: 120000 });
+    return true;
+  }
+
+  async fetch(url: string, init: RequestInit): Promise<Response> {
+    // channel.call() 永远不 resolve — 响应去了 swChannelClient 的 channel
+    const response = await this.channel!.call('fetchRelay:start', { url, ...init });
+    // ...
+  }
+}
+```
+
+✅ **正确示例**:
+```typescript
+// FetchRelayClient 复用 swChannelClient 的 channel
+class FetchRelayClient {
+  private swChannelClientRef: { getChannel: () => ServiceWorkerChannel | null } | null = null;
+
+  private getChannel(): ServiceWorkerChannel | null {
+    return this.swChannelClientRef?.getChannel() ?? null;
+  }
+
+  async initialize(): Promise<boolean> {
+    const { swChannelClient } = await import('../sw-channel');
+    this.swChannelClientRef = swChannelClient;
+    if (!swChannelClient.isInitialized()) {
+      await swChannelClient.initializeChannel();
+    }
+    return !!swChannelClient.getChannel();
+  }
+
+  async fetch(url: string, init: RequestInit): Promise<Response> {
+    const channel = this.getChannel();
+    if (!channel) return this.directFetch(url, init); // 降级
+    const response = await channel.call('fetchRelay:start', { url, ...init });
+    // ...
+  }
+}
+```
+
+**原因**: `enableGlobalRouting` 按 `clientId` 路由。同一浏览器 tab 的所有 `createFromPage()` 共享同一个 clientId（来自 `event.source.id`）。SW 端只为每个 clientId 维护一个 server-side channel 和一套 subscribeMap。第二个 `createFromPage()` 的握手消息被已有 channel 处理，导致路由混乱。
+
+**相关文件**：
+- `packages/drawnix/src/services/sw-channel/client.ts` - swChannelClient（唯一的 createFromPage 调用点）
+- `packages/drawnix/src/services/fetch-relay/client.ts` - FetchRelayClient（复用 swChannelClient.getChannel()）
+- `apps/web/src/sw/task-queue/channel-manager.ts` - enableGlobalRouting + ensureChannel
+
+### Fetch Relay 初始化超时保护
+
+**场景**: `fetchRelayClient.initialize()` 在热路径中被调用（如 `FallbackMediaExecutor.generateImage()`、`swTaskQueueService.doInitialize()`）。内部 `ServiceWorkerChannel.createFromPage()` 默认超时 120 秒，如果 SW 存在但响应慢（如正在 activate），整个热路径会被阻塞 2 分钟。
+
+❌ **错误示例**:
+```typescript
+// 错误：await 可能阻塞 120 秒
+await fetchRelayClient.initialize();
+
+const relayResponse = await fetchRelayClient.fetch(url, { ... });
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：3 秒超时保护，超时后 isInitialized() 返回 false，
+// fetchRelayClient.fetch() 内部自动降级到 directFetch
+const relayReady = await Promise.race([
+  fetchRelayClient.initialize(),
+  new Promise<boolean>((r) => setTimeout(() => r(false), 3000)),
+]);
+console.debug('[XXX] Fetch Relay ready:', relayReady);
+
+// fetch() 内部会检查 isInitialized()，不可用时自动降级
+const relayResponse = await fetchRelayClient.fetch(url, { ... });
+```
+
+**原因**: `fetchRelayClient.initialize()` 创建的 `ServiceWorkerChannel` 需要与 SW 完成握手。SW 在 activating、更新或忙碌时可能延迟响应。在图片生成、任务初始化等热路径中，2 分钟阻塞会导致用户感知请求未发出。
+
+**补充**：同理，`recoverFetchRelayResults()` 在 `doInitialize()` 中也需加超时，否则会阻塞任务恢复流程（`handleInterruptedTasks` 和 `startPolling` 无法执行）。
+
+**相关文件**：
+- `packages/drawnix/src/services/fetch-relay/client.ts` - FetchRelayClient
+- `packages/drawnix/src/services/media-executor/fallback-executor.ts` - generateImage
+- `packages/drawnix/src/services/sw-task-queue-service.ts` - doInitialize / recoverFetchRelayResults
+
+### 模块迁移时接口定义必须逐字段对比
+
+**场景**: 将模块从 SW 迁移到主线程（或反向迁移）时，在新模块中重新定义了 `interface`，但遗漏了某些字段。
+
+❌ **错误示例**:
+```typescript
+// SW 版本的 llm-api-logger.ts 有完整定义
+interface LLMApiLog {
+  id: string;
+  // ... 基础字段 ...
+  hasReferenceImages?: boolean;
+  referenceImageCount?: number;
+  referenceImages?: LLMReferenceImage[];  // ← SW 版本有这个字段
+}
+
+// 主线程版本迁移时遗漏了 referenceImages
+interface LLMApiLog {
+  id: string;
+  // ... 基础字段 ...
+  hasReferenceImages?: boolean;
+  referenceImageCount?: number;
+  // ❌ referenceImages 字段丢失！类型定义缺失导致调用方无法传入数据
+}
+```
+
+✅ **正确示例**:
+```typescript
+// 主线程版本必须与 SW 版本逐字段对比
+interface LLMApiLog {
+  id: string;
+  // ... 基础字段 ...
+  hasReferenceImages?: boolean;
+  referenceImageCount?: number;
+  referenceImages?: LLMReferenceImage[];  // ✅ 保留所有字段
+}
+```
+
+**原因**: 模块迁移时，不仅调用方传参需要完整，**类型定义本身**也必须包含所有字段。如果 `interface` 缺少字段，即使调用方想传数据也无法传入（TypeScript 严格对象字面量检查会报错）。迁移后应逐字段对比新旧 `interface`，确保功能完整性。本次案例中，主线程 `LLMApiLog` 遗漏 `referenceImages` 导致 debug 面板参考图始终显示"加载中..."。
+
+**相关文件**：
+- `packages/drawnix/src/services/media-executor/llm-api-logger.ts` - 主线程版本
+- `apps/web/src/sw/task-queue/llm-api-logger.ts` - SW 版本
+
+### 中断任务延迟判定
+
+**场景**: 页面刷新后，`handleInterruptedTasks()` 处理仍处于 `processing` 状态的任务。如果图片生成通过 Fetch Relay 代理，SW 可能仍在执行 fetch（尚未完成），此时 `recoverFetchRelayResults()` 找不到结果。
+
+❌ **错误示例**:
+```typescript
+// 错误：立即标记失败，但 SW 可能几秒后就完成了
+private async handleInterruptedTasks(): Promise<void> {
+  for (const task of processingTasks) {
+    if (!task.remoteId) {
+      await taskStorageWriter.failTask(task.id, { code: 'INTERRUPTED', message: '...' });
+    }
+  }
+}
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：延迟 15 秒后再次尝试 Fetch Relay 恢复，仍无法恢复才标记失败
+private async handleInterruptedTasks(): Promise<void> {
+  for (const task of processingTasks) {
+    if (!task.remoteId) {
+      this.delayedInterruptCheck(task); // 15 秒后再检查
+    }
+  }
+}
+
+private delayedInterruptCheck(task: Task): void {
+  setTimeout(async () => {
+    const current = this.tasks.get(task.id);
+    if (!current || current.status !== TaskStatus.PROCESSING) return;
+    await this.recoverFetchRelayResults(); // 再试一次
+    // 仍然 processing → 标记失败
+  }, 15000);
+}
+```
+
+**原因**: Fetch Relay 的 SW 端是异步执行的，图片生成 API 通常需要 5-30 秒。如果立即标记失败，SW 完成的结果会被丢弃，用户看到失败但实际上请求成功了。
+
+### IndexedDB 主线程读取前检查 store 是否存在
+
+**场景**: 主线程 StorageReader（如 WorkflowStorageReader）从 IndexedDB 读取数据时
+
+**问题**: object store 由 SW 在 `onupgradeneeded` 中创建。首次加载或 SW 尚未初始化时 store 可能不存在，直接 `transaction(storeName)` 会抛 `NotFoundError`。
+
+❌ **错误示例**:
+```typescript
+async getWorkflow(id: string): Promise<Workflow | null> {
+  const db = await this.getDB();
+  const swWorkflow = await this.getById(WORKFLOWS_STORE, id);  // store 不存在时抛 NotFoundError
+  return swWorkflow ? convert(swWorkflow) : null;
+}
+```
+
+✅ **正确示例**:
+```typescript
+async getWorkflow(id: string): Promise<Workflow | null> {
+  const db = await this.getDB();
+  if (!db.objectStoreNames.contains(WORKFLOWS_STORE)) return null;
+  const swWorkflow = await this.getById(WORKFLOWS_STORE, id);
+  return swWorkflow ? convert(swWorkflow) : null;
+}
+```
+
+**原因**: 主线程用 `indexedDB.open(dbName)` 不加版本，不会触发 `onupgradeneeded`，无法创建 store。需在读取前检查 `db.objectStoreNames.contains(storeName)`。
+
+### 降级模式持久化失败不阻塞执行
+
+**场景**: MainThreadWorkflowEngine 或 workflowStorageWriter 在降级模式下写入 IndexedDB 时
+
+**问题**: IndexedDB store 可能不存在，`saveWorkflow` 失败会 reject，导致工作流执行中断，用户看不到请求发出。
+
+❌ **错误示例**:
+```typescript
+async saveWorkflow(workflow: Workflow): Promise<void> {
+  const db = await this.getDB();
+  if (!db.objectStoreNames.contains(WORKFLOWS_STORE)) {
+    reject(new Error('Store not found'));  // 导致 WorkflowEngine 捕获异常并标记失败
+  }
+  // ...
+}
+```
+
+✅ **正确示例**:
+```typescript
+async saveWorkflow(workflow: Workflow): Promise<void> {
+  try {
+    const db = await this.getDB();
+    if (!db.objectStoreNames.contains(WORKFLOWS_STORE)) return;
+    // ... 写入
+  } catch {
+    // 静默跳过：降级模式不依赖持久化，优先保证 API 调用执行
+  }
+}
+```
+
+**原因**: 降级模式下用户最关心的是请求能发出，持久化是次要的。失败时 resolve 而非 reject，不阻塞工作流执行。
 
 ### 主线程任务数据必须通过 RPC 持久化到 SW
 
@@ -2227,6 +2620,131 @@ return response.json();
 3. 用户可以手动重试失败的任务
 4. 重试会延长错误反馈时间，影响用户体验
 
+### 新画布功能必须作为 Plait 插件实现
+
+**场景**: 需要在画布上添加新的交互功能（如激光笔、新画笔类型、标注工具等）
+
+❌ **错误做法**：使用独立 React 组件 + SVG overlay
+
+```typescript
+// 错误：独立 React 组件，坐标系与画布不一致
+const LaserPointer: React.FC = ({ active, board }) => {
+  const svgRef = useRef<SVGSVGElement>(null);
+  // 手动监听 pointer 事件，自己计算坐标
+  const handlePointerMove = (e: React.PointerEvent) => {
+    const rect = svgRef.current!.getBoundingClientRect();
+    // 屏幕坐标，未经过画布缩放/平移变换 → 笔迹位置错误
+    trailRef.current.push({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+  };
+  return <svg className="overlay" onPointerMove={handlePointerMove}>...</svg>;
+};
+```
+
+✅ **正确做法**：实现为 `withXxx` 插件，复用框架基础设施
+
+```typescript
+// 正确：作为 Plait 插件，复用 Generator/Smoother/坐标变换
+export const withLaserPointer = (board: PlaitBoard) => {
+  const { pointerDown, pointerMove, pointerUp } = board;
+  const generator = new FreehandGenerator(board);  // 复用已有渲染器
+  const smoother = new FreehandSmoother();          // 复用已有平滑算法
+
+  board.pointerMove = (event: PointerEvent) => {
+    if (isDrawing) {
+      const smoothed = smoother.process([event.x, event.y]);
+      // 使用框架标准坐标变换，与画布缩放/平移一致
+      const point = toViewBoxPoint(board, toHostPoint(board, smoothed[0], smoothed[1]));
+      points.push(point);
+      generator.processDrawing(element, PlaitBoard.getElementTopHost(board));
+      return;
+    }
+    pointerMove(event);
+  };
+  return board;
+};
+```
+
+**原因**:
+1. 独立 SVG overlay 有自己的坐标系，不跟随画布缩放/平移，导致笔迹位置错误
+2. overlay 需要 `stopPropagation` 拦截事件，与画布交互冲突
+3. 无法复用 FreehandGenerator（SVG 渲染）、FreehandSmoother（点平滑）等已有能力
+4. 插件方式通过 `board.pointerDown/Move/Up` 链自然融入事件流
+
+### 工具互斥通过 board.pointer 管理
+
+**场景**: 添加新的工具类型（如激光笔），需要与其他工具（选择、手型、画笔）互斥
+
+❌ **错误做法**：使用独立布尔状态
+
+```typescript
+// 错误：独立状态，需要手动维护互斥
+interface DrawnixState {
+  laserPointerActive?: boolean;  // 独立状态
+}
+
+// 激活激光笔时，不会自动停用其他工具
+updateAppState({ laserPointerActive: true });
+
+// 需要额外逻辑处理互斥
+const [laserActive, setLaserActive] = useState(false);
+useEffect(() => {
+  if (appState.laserPointerActive) {
+    setLaserActive(true);
+    updateState(prev => ({ ...prev, laserPointerActive: false }));
+  }
+}, [appState.laserPointerActive]);
+```
+
+✅ **正确做法**：加入枚举，使用 `board.pointer` 系统
+
+```typescript
+// 正确：加入 FreehandShape 枚举
+export enum FreehandShape {
+  feltTipPen = 'feltTipPen',
+  eraser = 'eraser',
+  laserPointer = 'laserPointer',  // 新增
+}
+
+// 切换工具时，通过框架统一管理
+BoardTransforms.updatePointerType(board, FreehandShape.laserPointer);
+updateAppState({ pointer: FreehandShape.laserPointer });
+
+// board.pointer 是单值，自动与其他工具互斥
+// 判断激活状态
+const isActive = board.pointer === FreehandShape.laserPointer;
+```
+
+**原因**:
+1. `board.pointer` 是单值，设置新工具自动停用旧工具，无需手动管理互斥
+2. 工具栏 UI 通过 `board.pointer === xxx` 自动反映选中状态
+3. 快捷键切换（V/H/L/E 等）只需更新 pointer 一处
+4. 插件中通过 `PlaitBoard.isPointer(board, xxx)` 判断是否激活，逻辑清晰
+
+### Pointer 双更新：board 和 React context 必须同步
+
+**场景**: 切换或恢复工具 pointer 时，只更新了 Plait board 的 pointer 而忘记更新 React context（`appState.pointer`），导致 UI 状态残留（如橡皮擦工具栏在退出幻灯片后仍然显示）
+
+❌ **错误示例**:
+```typescript
+// 退出幻灯片时只恢复了 board pointer
+const handleClose = () => {
+  BoardTransforms.updatePointerType(board, savedPointer);
+  // 遗漏：React context 中的 appState.pointer 仍是 FreehandShape.eraser
+  // 橡皮擦工具栏判断 appState.pointer === FreehandShape.eraser 仍为 true
+};
+```
+
+✅ **正确示例**:
+```typescript
+// 同时更新 board 和 React context
+const handleClose = () => {
+  BoardTransforms.updatePointerType(board, savedPointer);
+  setPointer(savedPointer);  // 同步更新 React context
+};
+```
+
+**原因**: Pointer 状态存在于两层：Plait board（`board.pointer`）和 React context（`appState.pointer`）。UI 组件（如橡皮擦工具栏）依赖 React context 判断显隐，只更新 board 不会触发 React 重渲染，导致 UI 与实际状态不一致。任何修改 pointer 的地方都必须同时调用 `BoardTransforms.updatePointerType` 和 `setPointer`。
+
 ### Plait 选中状态渲染触发
 
 **场景**: 在异步回调（如 `setTimeout`）中使用 `addSelectedElement` 选中元素时
@@ -2350,6 +2868,97 @@ const elementRect = getRectangleByElements(board, [element], false);
 - `PlaitElement.getElementG(element)` - 注意这个不需要 board
 
 **原因**: Plait 的大多数工具函数需要 board 作为上下文，用于访问视口、缩放比例等信息。漏掉 board 参数会导致运行时错误，且错误信息可能难以理解（如将 elements 数组误认为 board 对象导致的方法调用错误）。
+
+### 交互插件必须覆盖所有元素类型
+
+**场景**: 橡皮擦、选择、拖拽等交互插件只处理了部分元素类型，新增元素类型后遗漏更新
+
+❌ **错误示例**:
+```typescript
+// 橡皮擦只处理 Freehand 元素，Frame/Image/Video 完全无法擦除
+const checkAndMarkFreehandElementsForDeletion = (point: Point) => {
+    const freehandElements = board.children.filter((element) =>
+        Freehand.isFreehand(element)
+    ) as Freehand[];
+    // 只遍历 freehand，其他元素类型被忽略
+};
+```
+
+✅ **正确示例**:
+```typescript
+// 遍历所有 children，按类型分别做命中检测
+const checkAndMarkElementsForDeletion = (point: Point) => {
+    board.children.forEach((element) => {
+        if (elementsToDelete.has(element.id)) return;
+        let hit = false;
+        if (Freehand.isFreehand(element)) {
+            hit = isHitFreehandWithRadius(board, element, viewBoxPoint, hitRadius);
+        } else if (isErasableRectElement(element)) {
+            hit = isHitRectElement(element, viewBoxPoint, hitRadius);
+        }
+        if (hit) {
+            PlaitElement.getElementG(element).style.opacity = '0.2';
+            elementsToDelete.add(element.id);
+        }
+    });
+};
+```
+
+**原因**: 新增元素类型（如 Frame、Video）后，所有交互插件（橡皮擦、选择、碰撞检测等）都需要更新以支持新类型。仅过滤特定类型会导致其他类型的元素无法被交互。
+
+### createPortal 到 document.body 会脱离 Plait React Context
+
+**场景**: 在 `createPortal(... document.body)` 渲染的组件中使用 `useBoard()` 等 Plait hooks
+
+❌ **错误示例**:
+```typescript
+// FrameSlideshow 通过 createPortal 渲染到 document.body
+// 内部使用 PencilSettingsToolbar，它调用 useBoard()
+// 报错：The `useBoard` hook must be used inside the <Plait> component's context
+return createPortal(
+    <PencilSettingsToolbar />,  // 内部调用 useBoard() → 报错
+    document.body
+);
+```
+
+✅ **正确示例**:
+```typescript
+// 通过 props 传递 board，直接调用 Plait API
+const FrameSlideshow: React.FC<{ board: PlaitBoard }> = ({ board }) => {
+    const settings = getFreehandSettings(board);
+    const handleColorChange = (color: string) => {
+        setFreehandStrokeColor(board, color);
+    };
+    // 内联实现设置面板，不依赖 useBoard()
+};
+```
+
+**原因**: `createPortal` 渲染到 `document.body` 会脱离 `<Plait>` 组件树，React Context 无法穿透。必须通过 props 传递 `board` 并直接调用 Plait API。
+
+### 蒙层挖洞的 pointer-events 设置
+
+**场景**: 全屏蒙层遮住画布，中间留出"窗口"区域允许交互（如幻灯片播放）
+
+❌ **错误示例**:
+```scss
+// 蒙层容器设置 pointer-events: auto，阻挡了窗口区域的画布交互
+.frame-slideshow__mask {
+    pointer-events: auto;  // 整个容器拦截事件，画布无法交互
+}
+```
+
+✅ **正确示例**:
+```scss
+// 容器透传事件，只有实际遮挡区域拦截
+.frame-slideshow__mask {
+    pointer-events: none;  // 容器不拦截
+}
+.frame-slideshow__mask-block {
+    pointer-events: auto;  // 只有四块遮挡区域拦截事件
+}
+```
+
+**原因**: 蒙层容器覆盖整个视口，如果设置 `pointer-events: auto` 会阻挡中间"窗口"区域的画布事件。正确做法是容器 `pointer-events: none`，仅四块实际遮挡的 div 设置 `pointer-events: auto`。
 
 ### 禁止自动删除用户数据
 
@@ -6017,6 +6626,62 @@ const matchesSource = !filters.activeSource || filters.activeSource === 'ALL' ||
 ---
 
 
+## Plait 插件规范
+
+#### 自定义组件 onContextChanged 必须处理 viewport 变化
+
+**场景**: 创建自定义 Plait 组件（继承 `PlaitPluginElementComponent`）时，选择框（蓝色虚线 + 控制点）在缩放/平移画布后与元素偏移。
+
+❌ **错误示例**:
+```typescript
+// 错误：onContextChanged 没有处理 viewport 变化
+onContextChanged(
+  value: PlaitPluginElementContext<MyElement, PlaitBoard>,
+  previous: PlaitPluginElementContext<MyElement, PlaitBoard>
+): void {
+  if (value.element !== previous.element || value.hasThemeChanged) {
+    this.activeGenerator.processDrawing(this.element, PlaitBoard.getActiveHost(this.board), { selected: this.selected });
+  } else {
+    const needUpdate = value.selected !== previous.selected;
+    if (needUpdate || value.selected) {
+      this.activeGenerator.processDrawing(this.element, PlaitBoard.getActiveHost(this.board), { selected: this.selected });
+    }
+  }
+  // 问题：缩放/平移画布后，选择框位置不更新，与元素产生偏移
+}
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：检测 viewport 变化并重绘选择框（参考 ToolComponent）
+onContextChanged(
+  value: PlaitPluginElementContext<MyElement, PlaitBoard>,
+  previous: PlaitPluginElementContext<MyElement, PlaitBoard>
+): void {
+  const viewportChanged =
+    value.board.viewport.zoom !== previous.board.viewport.zoom ||
+    value.board.viewport.offsetX !== previous.board.viewport.offsetX ||
+    value.board.viewport.offsetY !== previous.board.viewport.offsetY;
+
+  if (value.element !== previous.element || value.hasThemeChanged) {
+    this.activeGenerator.processDrawing(this.element, PlaitBoard.getActiveHost(this.board), { selected: this.selected });
+  } else if (viewportChanged && value.selected) {
+    // viewport 改变且元素被选中时，更新选择框位置
+    this.activeGenerator.processDrawing(this.element, PlaitBoard.getActiveHost(this.board), { selected: this.selected });
+  } else {
+    const needUpdate = value.selected !== previous.selected;
+    if (needUpdate || value.selected) {
+      this.activeGenerator.processDrawing(this.element, PlaitBoard.getActiveHost(this.board), { selected: this.selected });
+    }
+  }
+}
+```
+
+**原因**: 选择框渲染在 `board-active-svg`（独立 SVG，无 viewBox），坐标通过 `toActiveRectangleFromViewBoxRectangle` 实时计算。而元素渲染在 `board-host-svg`（有 viewBox 自动映射坐标）。当 viewport 变化时，host-svg 中的元素位置自动调整，但 active-svg 上的选择框必须手动重新计算坐标才能对齐。`ToolComponent` 已正确实现了此模式。
+
+---
+
+
 ## UI 交互规范
 
 #### 媒体预览统一使用公共组件
@@ -6563,6 +7228,41 @@ export const healthDataFetcher = HealthDataFetcher.getInstance();
 ```
 
 **原因**: 外部接口数据通常有刷新周期（如 5 分钟），在刷新周期内重复请求是浪费。单例模式可以：1) 设置最小调用间隔避免频繁请求；2) 复用进行中的 Promise 防止并发请求；3) 统一管理缓存，所有调用方共享数据。
+
+#### 第三方统计与 Session Replay 对主线程与请求体的影响
+
+**场景**: 接入第三方统计/监控（如 PostHog）或开启 Session Replay（如 rrweb）时。
+
+**要点**:
+- 开启 Session Replay 前需评估：主线程开销（wheel、mousemove、setInterval 等）、单次上报体体积（易触发 413 Content Too Large）。
+- 默认建议关闭或按采样开启；若开启，需配置限流、单批大小与 413 错误处理（如 on_xhr_error / on_request_error 中识别 413 后丢弃或有限重试并打 debug 日志），避免无限重试加重主线程与网络负担。
+- 统计上报须遵循「统计上报旁路化」：初始化与上报在 requestIdleCallback 或 setTimeout 中执行，不在主路径上做脱敏与网络请求；失败静默不向上抛。
+
+❌ **错误示例**:
+```javascript
+// 错误：默认开启 Session Recording，导致 wheel/setInterval 卡顿与 413
+posthog.init('phc_xxx', {
+  api_host: 'https://us.i.posthog.com',
+  // 未设置 disable_session_recording，rrweb 默认录制
+});
+```
+
+✅ **正确示例**:
+```javascript
+// 正确：默认关闭 Session Recording，并处理 413 避免重试风暴
+posthog.init('phc_xxx', {
+  api_host: 'https://us.i.posthog.com',
+  disable_session_recording: true,
+  rate_limiting: { events_per_second: 10, events_burst_limit: 30 },
+  on_xhr_error: function(err) {
+    if (err && (err.statusCode ?? err.status) === 413) {
+      console.debug('[PostHog] 413 Content Too Large, batch dropped');
+    }
+  },
+});
+```
+
+**原因**: Session Replay（rrweb）在滚轮、鼠标移动和定时器中录制 DOM/输入，会直接占用主线程并产生大量数据，单次 flush 易超服务端限制导致 413；413 响应常不带 CORS 头，浏览器会先报 CORS。关闭或按采样开启、并处理 413 可消除卡顿与报错。
 
 #### 无效配置下的数据不应被持久化或执行
 

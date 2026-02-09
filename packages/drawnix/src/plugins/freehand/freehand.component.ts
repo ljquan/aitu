@@ -51,10 +51,22 @@ export class FreehandComponent
     value: PlaitPluginElementContext<Freehand, PlaitBoard>,
     previous: PlaitPluginElementContext<Freehand, PlaitBoard>
   ) {
+    // 检查 viewport (zoom/scroll) 是否改变
+    const viewportChanged =
+      value.board.viewport.zoom !== previous.board.viewport.zoom ||
+      value.board.viewport.offsetX !== previous.board.viewport.offsetX ||
+      value.board.viewport.offsetY !== previous.board.viewport.offsetY;
+
     // 检查元素或主题是否变化
     if (value.element !== previous.element || value.hasThemeChanged) {
-      // 使用 this.element 进行重绘（与 @plait/draw 的 GeometryComponent 保持一致）
       this.generator.processDrawing(this.element, this.getElementG());
+      this.activeGenerator.processDrawing(
+        this.element,
+        PlaitBoard.getActiveHost(this.board),
+        { selected: this.selected }
+      );
+    } else if (viewportChanged && value.selected) {
+      // viewport 改变且元素被选中时，更新选择框位置
       this.activeGenerator.processDrawing(
         this.element,
         PlaitBoard.getActiveHost(this.board),

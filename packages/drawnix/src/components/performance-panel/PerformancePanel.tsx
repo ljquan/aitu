@@ -12,6 +12,7 @@ import { memoryMonitorService, MemoryStats } from '../../services/memory-monitor
 import { Z_INDEX } from '../../constants/z-index';
 import { useI18n } from '../../i18n';
 import { PlaitElement } from '@plait/core';
+import { safeReload } from '../../utils/active-tasks';
 import './performance-panel.scss';
 
 // 存储键 - 只保存位置和固定状态，dismissed 不持久化
@@ -232,7 +233,7 @@ export const PerformancePanel: React.FC<PerformancePanelProps> = ({
 
   // 刷新页面释放内存
   const handleRefresh = useCallback(() => {
-    window.location.reload();
+    safeReload();
   }, []);
 
   // 创建新项目

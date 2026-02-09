@@ -55,7 +55,7 @@ export function withTimeout<T>(
 export function withTimeoutError<T>(
   promise: Promise<T>,
   timeoutMs: number,
-  errorMessage: string = 'Operation timed out'
+  errorMessage = 'Operation timed out'
 ): Promise<T> {
   return Promise.race([
     promise,

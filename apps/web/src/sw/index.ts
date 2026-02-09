@@ -3,20 +3,9 @@
 
 // Import task queue module
 import {
-  initTaskQueue,
-  getTaskQueue,
-  initWorkflowHandler,
-  updateWorkflowConfig,
-  isWorkflowMessage,
-  handleWorkflowMessage,
-  handleMainThreadToolResponse,
-  resendPendingToolRequests,
   taskQueueStorage,
   initChannelManager,
   getChannelManager,
-  ensureWorkflowHandlerInitialized,
-  type WorkflowMainToSWMessage,
-  type MainThreadToolResponseMessage,
 } from './task-queue';
 import {
   setDebugFetchBroadcast,
@@ -75,13 +64,8 @@ export {
   IMAGE_CACHE_NAME,
 };
 
-// Initialize task queue (instance used by channelManager for RPC handlers)
-const taskQueue = initTaskQueue(sw);
-
 // Initialize channel manager for duplex communication (postmessage-duplex)
 const channelManager = initChannelManager(sw);
-channelManager.setTaskQueue(taskQueue);
-taskQueue.setChannelManager(channelManager);
 
 // 设置调试客户端数量变化回调
 // 当调试页面连接时自动启用调试模式，当所有调试页面关闭时自动禁用
@@ -681,7 +665,6 @@ function getDebugStatus(): {
   debugLogsCount: number;
   consoleLogsCount: number;
   debugModeEnabled: boolean;
-  workflowHandlerInitialized: boolean;
   memoryStats: {
     pendingRequestsMapSize: number;
     completedRequestsMapSize: number;
@@ -712,7 +695,6 @@ function getDebugStatus(): {
     debugLogsCount: debugLogs.length,
     consoleLogsCount: consoleLogs.length,
     debugModeEnabled,
-    workflowHandlerInitialized,
     // 运行时内存统计
     memoryStats: {
       pendingRequestsMapSize: pendingImageRequests.size,
@@ -1285,20 +1267,6 @@ sw.addEventListener('activate', (event: ExtendableEvent) => {
   );
 });
 
-// Track if workflow handler is initialized
-let workflowHandlerInitialized = false;
-
-// Store config for lazy initialization
-let storedGeminiConfig: any = null;
-let storedVideoConfig: any = null;
-
-// Pending workflow messages waiting for config
-interface PendingWorkflowMessage {
-  message: WorkflowMainToSWMessage;
-  clientId: string;
-}
-const pendingWorkflowMessages: PendingWorkflowMessage[] = [];
-
 // Helper function to broadcast PostMessage log to debug panel
 function broadcastPostMessageLog(entry: PostMessageLogEntry): void {
   if (debugModeEnabled) {
@@ -1353,68 +1321,6 @@ sw.addEventListener('message', (event: ExtendableMessageEvent) => {
         broadcastPostMessageLog(entry);
       }
     }
-  }
-
-  // Handle workflow messages
-  if (event.data && isWorkflowMessage(event.data)) {
-    const wfClientId = (event.source as Client)?.id || '';
-
-    // Lazy initialize workflow handler if not yet initialized
-    if (
-      !workflowHandlerInitialized &&
-      storedGeminiConfig &&
-      storedVideoConfig
-    ) {
-      initWorkflowHandler(sw, storedGeminiConfig, storedVideoConfig);
-      workflowHandlerInitialized = true;
-    }
-
-    // If still not initialized, try to load config from IndexedDB
-    // 主线程会自动同步配置到 IndexedDB，SW 可以直接读取
-    if (!workflowHandlerInitialized) {
-      // Use async IIFE to handle the async operation
-      (async () => {
-        try {
-          // 使用 ensureWorkflowHandlerInitialized 从 IndexedDB 加载配置
-          const initialized = await ensureWorkflowHandlerInitialized(sw);
-          
-          if (initialized) {
-            workflowHandlerInitialized = true;
-            // console.log('Service Worker: Workflow handler initialized from IndexedDB');
-
-            // Now handle the message (use wfClientId from outer scope)
-            handleWorkflowMessage(
-              event.data as WorkflowMainToSWMessage,
-              wfClientId
-            );
-          } else {
-            // 配置不存在时，将消息暂存
-            // 注意：配置应由主线程同步到 IndexedDB，不再请求主线程发送
-            console.warn('[SW] No config in IndexedDB, queueing workflow message');
-            pendingWorkflowMessages.push({
-              message: event.data as WorkflowMainToSWMessage,
-              clientId: wfClientId,
-            });
-          }
-        } catch (error) {
-          // 只记录错误类型，不记录详细信息（可能包含敏感配置）
-          console.error(
-            '[SW] Failed to load config from storage:',
-            getSafeErrorMessage(error)
-          );
-        }
-      })();
-      return;
-    }
-
-    handleWorkflowMessage(event.data as WorkflowMainToSWMessage, wfClientId);
-    return;
-  }
-
-  // Handle main thread tool response
-  if (event.data && event.data.type === 'MAIN_THREAD_TOOL_RESPONSE') {
-    handleMainThreadToolResponse(event.data as MainThreadToolResponseMessage);
-    return;
   }
 
   // Handle thumbnail generation request from main thread
@@ -2228,19 +2134,6 @@ sw.addEventListener('fetch', (event: FetchEvent) => {
   const url = new URL(event.request.url);
   const startTime = Date.now();
 
-  // 辅助函数：确定请求类型
-  function getRequestType(): string {
-    if (url.pathname.startsWith(CACHE_URL_PREFIX)) return 'cache-url';
-    if (url.pathname.startsWith(ASSET_LIBRARY_PREFIX)) return 'asset-library';
-    if (isVideoRequest(url, event.request)) return 'video';
-    if (isFontRequest(url, event.request)) return 'font';
-    if (url.origin !== location.origin && isImageRequest(url, event.request))
-      return 'image';
-    if (event.request.mode === 'navigate') return 'navigation';
-    if (event.request.destination) return event.request.destination;
-    return 'other';
-  }
-
   // 只处理 http 和 https 协议的请求，忽略 chrome-extension、data、blob 等
   if (url.protocol !== 'http:' && url.protocol !== 'https:') {
     addDebugLog({
@@ -2602,7 +2495,7 @@ sw.addEventListener('fetch', (event: FetchEvent) => {
           // 克隆请求以读取 body
           const requestClone = event.request.clone();
           let requestBody: string | undefined;
-          let requestHeaders: Record<string, string> = {};
+          const requestHeaders: Record<string, string> = {};
 
           // 提取请求头
           event.request.headers.forEach((value, key) => {
@@ -4041,7 +3934,7 @@ async function handleImageRequestInternal(
   requestUrl: string,
   dedupeKey: string,
   requestId: string,
-  bypassCache: boolean = false,
+  bypassCache = false,
   requestedThumbnailSize?: 'small' | 'large'
 ): Promise<Response> {
   try {
@@ -4154,7 +4047,7 @@ async function handleImageRequestInternal(
 
     // 尝试多种获取方式，每种方式都支持重试和域名切换
     let response;
-    let fetchOptions = [
+    const fetchOptions = [
       // 1. 优先尝试cors模式（可以缓存响应）
       {
         method: 'GET',
@@ -4202,7 +4095,7 @@ async function handleImageRequestInternal(
         // console.log(`Service Worker [${requestId}]: 原始URL失败，尝试备用域名:`, currentUrl);
       }
 
-      for (let options of fetchOptions) {
+      for (const options of fetchOptions) {
         try {
           // console.log(`Service Worker [${requestId}]: Trying fetch with options (${isUsingFallback ? 'fallback' : 'original'} URL, mode: ${options.mode || 'default'}):`, options);
 

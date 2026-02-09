@@ -6,7 +6,7 @@
  */
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { taskQueueService, swTaskQueueService, shouldUseSWTaskQueue } from '../services/task-queue';
+import { taskQueueService } from '../services/task-queue';
 import { taskStorageReader } from '../services/task-storage-reader';
 import { Task, TaskStatus, TaskType, GenerationParams } from '../types/task.types';
 
@@ -94,14 +94,9 @@ export function useTaskQueue(): UseTaskQueueReturn {
   const maxRetries = 3;
   const retryDelay = 500;
 
-  // 更新分页状态
+  // 分页状态（不再使用 SW 分页，数据直接从 IndexedDB 加载）
   const updatePaginationState = useCallback(() => {
-    if (shouldUseSWTaskQueue()) {
-      const state = swTaskQueueService.getPaginationState();
-      setHasMore(state.hasMore);
-      setTotalCount(state.total);
-      setLoadedCount(state.loadedCount);
-    }
+    // No-op: all data loaded from IndexedDB directly
   }, []);
 
   // Subscribe to task updates
@@ -140,22 +135,20 @@ export function useTaskQueue(): UseTaskQueueReturn {
         // 直接从 IndexedDB 读取任务（SW 和降级模式统一逻辑）
         const storedTasks = await taskStorageReader.getAllTasks();
         
-        // 直接使用从 IndexedDB 读取的任务，不再依赖 taskQueueService 的内存状态
-        // 这样可以避免 restoreTasks 的异步问题，同时也避免了循环依赖
-        setTasks(storedTasks);
-        
-        // 直接设置分页状态，不依赖 swTaskQueueService（此时它还没有加载数据）
-        setTotalCount(storedTasks.length);
-        setLoadedCount(storedTasks.length);
-        setHasMore(false); // 直接从 IndexedDB 加载的是全部数据
-        
-        // 同时恢复到 taskQueueService 内存中（用于后续的实时更新和其他组件）
-        // 这是 fire-and-forget，不阻塞 UI
+        // 先恢复到 taskQueueService 内存中（merge 模式，不会覆盖正在执行的任务）
+        // 然后从内存读取合并后的最新状态，确保 UI 显示与内存一致
         if (storedTasks.length > 0) {
-          Promise.resolve(taskQueueService.restoreTasks(storedTasks)).catch(() => {
-            // 静默处理失败
-          });
+          taskQueueService.restoreTasks(storedTasks);
         }
+        
+        // 从 taskQueueService 内存获取合并后的状态（比 storedTasks 更准确）
+        setTasks(taskQueueService.getAllTasks());
+        
+        // 设置分页状态
+        const allTasks = taskQueueService.getAllTasks();
+        setTotalCount(allTasks.length);
+        setLoadedCount(allTasks.length);
+        setHasMore(false); // 直接从 IndexedDB 加载的是全部数据
         return true;
       } catch {
         return false;
@@ -192,32 +185,10 @@ export function useTaskQueue(): UseTaskQueueReturn {
     };
   }, [updatePaginationState, retryCount]);
 
-  // 加载更多任务
+  // 加载更多任务（不再需要 SW 分页，直接返回）
   const loadMore = useCallback(async () => {
-    if (!shouldUseSWTaskQueue() || !hasMore || isLoadingMore || loadMoreLock.current) {
-      return;
-    }
-
-    loadMoreLock.current = true;
-    setIsLoadingMore(true);
-
-    try {
-      const stillHasMore = await swTaskQueueService.loadMoreTasks();
-      // 从 swTaskQueueService 获取任务并更新本地 taskQueueService
-      const swTasks = swTaskQueueService.getAllTasks();
-      if (swTasks.length > 0) {
-        taskQueueService.restoreTasks(swTasks);
-      }
-      setTasks(taskQueueService.getAllTasks());
-      setHasMore(stillHasMore);
-      updatePaginationState();
-    } catch {
-      // 静默忽略错误
-    } finally {
-      setIsLoadingMore(false);
-      loadMoreLock.current = false;
-    }
-  }, [hasMore, isLoadingMore, updatePaginationState]);
+    // All tasks loaded from IndexedDB on mount, no pagination needed
+  }, []);
 
   // 注意：任务状态更新主要依赖 SW 的广播事件
   // visibility 监听器会在页面变为可见时同步第一页

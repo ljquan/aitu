@@ -304,14 +304,15 @@ class AgentExecutor {
       // 获取全局设置的文本模型
       const globalSettings = geminiSettings.get();
       const textModel = globalSettings.textModelName;
-      // console.log('[AgentExecutor] Using text model from global settings:', textModel);
+      console.log('[AgentExecutor] 使用文本模型:', textModel, ', hasApiKey:', !!globalSettings.apiKey);
 
       while (iterations < maxIterations) {
         iterations++;
-        // console.log(`[AgentExecutor] Iteration ${iterations}/${maxIterations}`);
+        console.log(`[AgentExecutor] 迭代 ${iterations}/${maxIterations}, 即将调用 sendChat...`);
 
         // 调用 LLM，使用全局设置的文本模型
         let fullResponse = '';
+        const t0 = Date.now();
         const response = await defaultGeminiClient.sendChat(
           messages,
           (accumulatedContent) => {
@@ -322,13 +323,14 @@ class AgentExecutor {
           signal,
           textModel // 使用全局设置的文本模型
         );
+        console.log(`[AgentExecutor] sendChat 返回, 耗时: ${Date.now() - t0}ms`);
 
         // 获取完整响应
         if (response.choices && response.choices.length > 0) {
           fullResponse = response.choices[0].message.content || fullResponse;
         }
 
-        // console.log('[AgentExecutor] LLM response:', fullResponse.substring(0, 200));
+        console.log('[AgentExecutor] LLM 响应长度:', fullResponse.length, ', 前100字:', fullResponse.substring(0, 100));
 
         // 解析工具调用
         const toolCalls = parseToolCalls(fullResponse);

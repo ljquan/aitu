@@ -266,7 +266,7 @@ export function createStep<TStep extends BaseWorkflowStep>(
  * @param prefix - Optional prefix for the ID (default: 'wf')
  * @returns A unique workflow ID
  */
-export function generateWorkflowId(prefix: string = 'wf'): string {
+export function generateWorkflowId(prefix = 'wf'): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
 }
 

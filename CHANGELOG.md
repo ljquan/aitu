@@ -1,3 +1,166 @@
+## 0.5.91 (2026-02-08)
+
+### 🩹 Fixes
+
+- 视频任务状态 ([ea3c2ccc](https://github.com/ljquan/aitu/commit/ea3c2ccc))
+
+### 🔧 Chores
+
+- docs(claude): 添加新规则 - 数值范围转换规则、列表索引ID追踪 ([fbb91726](https://github.com/ljquan/aitu/commit/fbb91726))
+- refactor: remove unused SW RPC methods and optimize communication ([e36bbc76](https://github.com/ljquan/aitu/commit/e36bbc76))
+- fixed:本次修改解决了ai生成图片中点击提示的下拉框手机端溢出问题&agent生成长方形图片容器溢出问题 ([64c4da2d](https://github.com/ljquan/aitu/commit/64c4da2d))
+
+### ❤️  Thank You
+
+- liquid <ljquan@qq.com>
+- liangyufeng <l.yfeng@qq.com>
+
+## 0.5.90 (2026-02-08)
+
+### 🚀 Features
+
+- 添加套索选择工具及工具栏/命令面板集成 ([0d5e1d82](https://github.com/ljquan/aitu/commit/0d5e1d82))
+
+### 🔧 Chores
+
+- 更新应用版本至 0.5.89 ([8ff11e56](https://github.com/ljquan/aitu/commit/8ff11e56))
+- docs(claude): 添加新规则 - 编程式选中元素需用 addSelectionWithTemporaryElements 触发渲染 ([a2b0cd01](https://github.com/ljquan/aitu/commit/a2b0cd01))
+
+### ❤️  Thank You
+
+- liquid <ljquan@qq.com>
+
+## 0.5.89 (2026-02-08)
+
+### 🚀 Features
+
+- 添加 Frame 和幻灯片播放功能 ([c9859671](https://github.com/ljquan/aitu/commit/c9859671))
+- implement new canvas features and command palette ([47dfcf12](https://github.com/ljquan/aitu/commit/47dfcf12))
+
+### 🔧 Chores
+
+- update version to 0.5.88 and improve task storage handling ([1adae49f](https://github.com/ljquan/aitu/commit/1adae49f))
+- docs(claude): 添加新规则 - 自定义 Plait 组件 onContextChanged 必须处理 viewport 变化 ([bfad96d5](https://github.com/ljquan/aitu/commit/bfad96d5))
+- docs(claude): 更新规则 - 全屏展示画布局部内容改用 viewport+隐藏UI+蒙层挖洞方案 ([e09e0e80](https://github.com/ljquan/aitu/commit/e09e0e80))
+- docs(claude): 添加新规则 - 全屏展示画布局部内容用 toImage 截图独立渲染 ([649c02bf](https://github.com/ljquan/aitu/commit/649c02bf))
+- docs(claude): 添加新规则 - Plait Board Viewport 缩放+平移用 updateViewport 一步完成 ([643cc38d](https://github.com/ljquan/aitu/commit/643cc38d))
+
+### ❤️  Thank You
+
+- liquid <ljquan@qq.com>
+
+## 0.5.87 (2026-02-07)
+
+### 🚀 Features
+
+- enhance logging and error handling in WorkflowEngine ([5074339b](https://github.com/ljquan/aitu/commit/5074339b))
+
+### 🔧 Chores
+
+- bump version to 0.5.86 ([2394021b](https://github.com/ljquan/aitu/commit/2394021b))
+- bump version to 0.5.85 ([8e45567e](https://github.com/ljquan/aitu/commit/8e45567e))
+- bump version to 0.5.84 ([1aea9496](https://github.com/ljquan/aitu/commit/1aea9496))
+- docs(claude): 添加新规则 - 模块迁移接口完整性 ([afb95640](https://github.com/ljquan/aitu/commit/afb95640))
+
+### ❤️  Thank You
+
+- liquid <ljquan@qq.com>
+- liquidliang <ljquan@qq.com>
+
+## 0.5.86 (2026-02-07)
+
+### 🚀 Features
+
+- improve fallback engine handling and logging in workflow submission service ([88a7199e](https://github.com/ljquan/aitu/commit/88a7199e))
+
+### 🩹 Fixes
+
+- update DelegatedOperation type usage in workflow submission service ([ac40be77](https://github.com/ljquan/aitu/commit/ac40be77))
+
+### 🔧 Chores
+
+- bump version to 0.5.85 ([694d1ca6](https://github.com/ljquan/aitu/commit/694d1ca6))
+- bump version to 0.5.84 ([9e307468](https://github.com/ljquan/aitu/commit/9e307468))
+
+### ❤️  Thank You
+
+- liquid <ljquan@qq.com>
+- liquidliang <ljquan@qq.com>
+
+## 0.5.85 (2026-02-07)
+
+### 🚀 Features
+
+- add batch clear failed tasks button in generation task list ([e303baf8](https://github.com/ljquan/aitu/commit/e303baf8))
+
+### 🩹 Fixes
+
+- guard video model config lookups ([16473751](https://github.com/ljquan/aitu/commit/16473751))
+- 修复视频 API 请求格式错误 ([0262697f](https://github.com/ljquan/aitu/commit/0262697f))
+
+### 🔧 Chores
+
+- bump version to 0.5.84 ([fd194ee7](https://github.com/ljquan/aitu/commit/fd194ee7))
+
+### ❤️  Thank You
+
+- liquid <ljquan@qq.com>
+- liangyufeng <l.yfeng@qq.com>
+- gongchengtu <1817063960@qq.com>
+
+## 0.5.84 (2026-02-07)
+
+### 🔧 Chores
+
+- update version to 0.5.82 and adjust build time ([87a5198d](https://github.com/ljquan/aitu/commit/87a5198d))
+
+### ❤️  Thank You
+
+- liquidliang <ljquan@qq.com>
+
+## 0.5.83 (2026-02-07)
+
+### 🚀 Features
+
+- enhance logging and error handling in AI analysis and agent execution ([cc03ce1c](https://github.com/ljquan/aitu/commit/cc03ce1c))
+
+### 🔧 Chores
+
+- bump version to 0.5.82 ([692f0eff](https://github.com/ljquan/aitu/commit/692f0eff))
+
+### ❤️  Thank You
+
+- liquid <ljquan@qq.com>
+- liquidliang <ljquan@qq.com>
+
+## 0.5.82 (2026-02-07)
+
+### 🚀 Features
+
+- enhance session replay management and error handling ([8a190371](https://github.com/ljquan/aitu/commit/8a190371))
+- improve Service Worker channel validation for streaming API calls ([8f81e6ef](https://github.com/ljquan/aitu/commit/8f81e6ef))
+
+### ❤️  Thank You
+
+- liquid <ljquan@qq.com>
+- liquidliang <ljquan@qq.com>
+
+## 0.5.81 (2026-02-07)
+
+### 🚀 Features
+
+- unify Service Worker availability checks and enforce main thread executor in fallback scenarios ([e27d14e0](https://github.com/ljquan/aitu/commit/e27d14e0))
+- enhance workflow submission and error handling ([3365fdfc](https://github.com/ljquan/aitu/commit/3365fdfc))
+
+### 🔧 Chores
+
+- update app version to 0.5.80 and adjust build time ([dbdb729b](https://github.com/ljquan/aitu/commit/dbdb729b))
+
+### ❤️  Thank You
+
+- liquidliang <ljquan@qq.com>
+- liquid <ljquan@qq.com>
+
 ## 0.5.79 (2026-02-06)
 
 ### 🚀 Features

@@ -6,6 +6,7 @@ import {
   EraseIcon,
   FeltTipPenIcon,
   VectorPenIcon,
+  LaserPointerIcon,
 } from '../../icons';
 import { BoardTransforms } from '@plait/core';
 import React from 'react';
@@ -41,6 +42,11 @@ export const FREEHANDS: FreehandProps[] = [
       icon: <EraseIcon />,
       pointer: FreehandShape.eraser,
       titleKey: 'toolbar.eraser',
+    },
+    {
+      icon: <LaserPointerIcon />,
+      pointer: FreehandShape.laserPointer,
+      titleKey: 'toolbar.laserPointer',
     },
 ];
 

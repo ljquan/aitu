@@ -78,7 +78,7 @@ class TaskQueueService {
   }
 
   /**
-   * Execute task using fallback executor (for legacy/fallback mode)
+   * Execute task using executor (for legacy/fallback mode)
    * This is called automatically after task creation
    */
   private async executeTask(task: Task): Promise<void> {
@@ -96,6 +96,26 @@ class TaskQueueService {
       // Get executor
       const executor = await executorFactory.getExecutor();
 
+      // 实时进度回调：executor 执行期间同步更新内存中的 task 状态
+      // 注意：必须创建新对象存入 Map，不能原地修改旧对象
+      // 否则 useTaskQueue 通过 getAllTasks() 获取的对象引用不变，
+      // React.memo 比较 prev.task.progress === next.task.progress 时永远相等
+      const executionOptions = {
+        onProgress: (progress: { progress: number; phase?: string }) => {
+          const localTask = this.tasks.get(task.id);
+          if (localTask) {
+            const updatedTask: Task = {
+              ...localTask,
+              progress: progress.progress,
+              updatedAt: Date.now(),
+              ...(progress.phase && { executionPhase: progress.phase as Task['executionPhase'] }),
+            };
+            this.tasks.set(task.id, updatedTask);
+            this.emitEvent('taskUpdated', updatedTask);
+          }
+        },
+      };
+
       // Execute based on task type
       switch (task.type) {
         case TaskType.IMAGE:
@@ -107,62 +127,79 @@ class TaskQueueService {
             referenceImages: task.params.referenceImages as string[] | undefined,
             count: task.params.count as number | undefined,
             uploadedImages: task.params.uploadedImages as Array<{ url?: string }> | undefined,
-          });
+          }, executionOptions);
           break;
         case TaskType.VIDEO: {
+          // 从 uploadedImages（UI 层传入的 UploadedVideoImage[]）中提取 URL
+          const uploaded = task.params.uploadedImages as Array<{ url?: string }> | undefined;
+          const uploadedUrls = uploaded
+            ?.map((img) => img.url)
+            .filter((url): url is string => !!url);
+          // 兼容旧字段 referenceImages / inputReference
           const refImages = task.params.referenceImages as string[] | undefined;
           const inputRef = (task.params as { inputReference?: string }).inputReference;
+          const finalRefs =
+            uploadedUrls && uploadedUrls.length > 0
+              ? uploadedUrls
+              : refImages && refImages.length > 0
+                ? refImages
+                : inputRef
+                  ? [inputRef]
+                  : undefined;
           await executor.generateVideo({
             taskId: task.id,
             prompt: task.params.prompt,
             model: task.params.model,
-            duration: task.params.duration?.toString(),
+            duration: (task.params.duration ?? task.params.seconds)?.toString(),
             size: task.params.size,
-            referenceImages:
-              refImages && refImages.length > 0
-                ? refImages
-                : inputRef
-                  ? [inputRef]
-                  : undefined,
-          });
+            referenceImages: finalRefs,
+          }, executionOptions);
           break;
         }
         default:
           throw new Error(`Unsupported task type: ${task.type}`);
       }
 
-      // Poll for task completion
+      // Poll for task completion (executor 已完成，此处主要是从 IndexedDB 读取最终结果)
       const result = await waitForTaskCompletion(task.id, {
         timeout: 10 * 60 * 1000, // 10 minutes
         onProgress: (updatedTask) => {
           // Update local state with progress
+          // 注意：同时同步 result/error/completedAt，避免 status=completed 但 result 为空的中间状态
+          // 创建新对象存入 Map，确保 React 能检测到引用变化
           const localTask = this.tasks.get(task.id);
           if (localTask) {
-            localTask.status = updatedTask.status as TaskStatus;
-            localTask.progress = updatedTask.progress;
-            localTask.updatedAt = Date.now();
-            this.emitEvent('taskUpdated', localTask);
+            const newTask: Task = {
+              ...localTask,
+              status: updatedTask.status as TaskStatus,
+              progress: updatedTask.progress,
+              updatedAt: Date.now(),
+              ...(updatedTask.result && { result: updatedTask.result }),
+              ...(updatedTask.error && { error: updatedTask.error }),
+              ...(updatedTask.completedAt && { completedAt: updatedTask.completedAt }),
+            };
+            this.tasks.set(task.id, newTask);
+            this.emitEvent('taskUpdated', newTask);
           }
         },
       });
 
-      // Update final state
+      // Update final state & persist
       const localTask = this.tasks.get(task.id);
       if (localTask && result.task) {
-        localTask.status = result.task.status as TaskStatus;
-        localTask.result = result.task.result;
-        localTask.error = result.task.error;
-        localTask.completedAt = result.task.completedAt;
-        localTask.updatedAt = Date.now();
+        const finalTask: Task = {
+          ...localTask,
+          status: result.task.status as TaskStatus,
+          result: result.task.result,
+          error: result.task.error,
+          completedAt: result.task.completedAt,
+          updatedAt: Date.now(),
+        };
+        this.tasks.set(task.id, finalTask);
 
         // Persist final state
-        this.persistTask(localTask);
-
-        if (result.success) {
-          this.emitEvent('taskUpdated', localTask);
-        } else {
-          this.emitEvent('taskUpdated', localTask);
-        }
+        this.persistTask(finalTask);
+        this.emitEvent('taskUpdated', finalTask);
       }
     } catch (error: any) {
       console.error('[TaskQueueService] Task execution failed:', error);
@@ -178,7 +215,7 @@ class TaskQueueService {
           },
           updatedAt: now,
           completedAt: now,
-          progress: undefined, // 清除进行中进度，避免仍显示百分比
+          progress: undefined,
         };
         this.tasks.set(task.id, failedTask);
         this.persistTask(failedTask);
@@ -458,22 +495,45 @@ class TaskQueueService {
 
   /**
    * Restores tasks from storage
+   * 
+   * Uses merge strategy: only restores tasks that don't already exist in memory,
+   * or whose in-memory version is older than the stored version.
+   * This prevents overwriting active tasks whose status has been updated
+   * by executeTask() but not yet persisted to IndexedDB at read time.
    *
    * @param tasks - Array of tasks to restore
    */
   restoreTasks(tasks: Task[]): void {
-    this.tasks.clear();
+    let restoredCount = 0;
     tasks.forEach(task => {
+      const existing = this.tasks.get(task.id);
+
+      // Skip if in-memory task is newer or at a more advanced status
+      if (existing) {
+        // If in-memory task was updated more recently, keep it
+        if (existing.updatedAt >= task.updatedAt) {
+          return;
+        }
+      }
+
       // Ensure video tasks have progress field (for backward compatibility)
       const restoredTask: Task = task.type === TaskType.VIDEO && task.progress === undefined
         ? { ...task, progress: 0 }
         : task;
 
       this.tasks.set(restoredTask.id, restoredTask);
-      // Emit event for each restored task so subscribers can update UI
-      this.emitEvent('taskCreated', restoredTask);
+      restoredCount++;
     });
-    // console.log(`[TaskQueueService] Restored ${tasks.length} tasks`);
+
+    // Emit a single batch update event instead of per-task events
+    if (restoredCount > 0) {
+      // Use the first task to emit a generic update that triggers UI refresh
+      const allTasks = Array.from(this.tasks.values());
+      if (allTasks.length > 0) {
+        this.emitEvent('taskCreated', allTasks[0]);
+      }
+    }
+    // console.log(`[TaskQueueService] Restored ${restoredCount}/${tasks.length} tasks (merged)`);
   }
 
   /**
@@ -526,9 +586,13 @@ class TaskQueueService {
    * @private
    */
   private emitEvent(type: TaskEvent['type'], task: Task): void {
+    // 浅拷贝 task 对象，确保 React 组件的 memo/shouldComponentUpdate 能检测到变化
+    // 否则 useFilteredTaskQueue 收到的 event.task 与数组中已有的对象是同一引用，
+    // React.memo 比较 prev.task.progress === next.task.progress 时看到的是同一个已变异对象，
+    // 永远相等，导致不重新渲染
     this.taskUpdates$.next({
       type,
-      task,
+      task: { ...task },
       timestamp: Date.now(),
     });
   }

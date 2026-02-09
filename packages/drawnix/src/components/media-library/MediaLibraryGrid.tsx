@@ -51,7 +51,7 @@ import { insertImageFromUrl } from '../../data/image';
 import { insertVideoFromUrl } from '../../data/video';
 import { useGitHubSync } from '../../contexts/GitHubSyncContext';
 import { mediaSyncService } from '../../services/github-sync/media-sync-service';
-import { swTaskQueueService } from '../../services/sw-task-queue-service';
+import { taskQueueService } from '../../services/task-queue';
 import { TaskStatus, TaskType } from '../../types/task.types';
 import './MediaLibraryGrid.scss';
 import './VirtualAssetGrid.scss';
@@ -581,7 +581,7 @@ export function MediaLibraryGrid({
     selectedAssets
       .filter(a => a.source === AssetSource.AI_GENERATED)
       .forEach(a => {
-        const task = swTaskQueueService.getTask(a.id);
+        const task = taskQueueService.getTask(a.id);
         if (task && task.status === TaskStatus.COMPLETED && task.result?.url) {
           const syncStatus = mediaSyncService.getUrlSyncStatus(task.result.url);
           if (syncStatus !== 'synced') {
@@ -642,7 +642,7 @@ export function MediaLibraryGrid({
     // AI 生成素材：检查任务是否存在且已完成，且未同步
     const aiSyncable = selectedAssets.filter(a => {
       if (a.source !== AssetSource.AI_GENERATED) return false;
-      const task = swTaskQueueService.getTask(a.id);
+      const task = taskQueueService.getTask(a.id);
       if (!task) return false;
       if (task.status !== TaskStatus.COMPLETED) return false;
       if (!task.result?.url) return false;
