@@ -17,7 +17,6 @@ import {
   Transforms,
   clearSelectedElement,
   addSelectedElement,
-  getSelectedElements,
 } from '@plait/core';
 import { PlaitFrame, isFrameElement } from '../../types/frame.types';
 import { FrameTransforms } from '../../plugins/with-frame';
@@ -41,7 +40,6 @@ export const FramePanel: React.FC = () => {
   const [selectedFrameId, setSelectedFrameId] = useState<string | null>(null);
   const [addDialogVisible, setAddDialogVisible] = useState(false);
   const [slideshowVisible, setSlideshowVisible] = useState(false);
-  const [slideshowInitialFrameId, setSlideshowInitialFrameId] = useState<string | undefined>();
   const [contextMenu, setContextMenu] = useState<{
     visible: boolean;
     x: number;
@@ -296,13 +294,7 @@ export const FramePanel: React.FC = () => {
             size="small"
             icon={<PlayCircleIcon />}
             disabled={frames.length === 0}
-            onClick={() => {
-              // 检测画布当前选中的 Frame，作为幻灯片起始页
-              const selected = getSelectedElements(board);
-              const selectedFrame = selected.find((el) => isFrameElement(el));
-              setSlideshowInitialFrameId(selectedFrame?.id);
-              setSlideshowVisible(true);
-            }}
+            onClick={() => setSlideshowVisible(true)}
           >
             幻灯片播放
           </Button>
@@ -440,11 +432,7 @@ export const FramePanel: React.FC = () => {
       <FrameSlideshow
         visible={slideshowVisible}
         board={board}
-        initialFrameId={slideshowInitialFrameId}
-        onClose={() => {
-          setSlideshowVisible(false);
-          setSlideshowInitialFrameId(undefined);
-        }}
+        onClose={() => setSlideshowVisible(false)}
       />
     </div>
   );

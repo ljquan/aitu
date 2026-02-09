@@ -31,45 +31,97 @@ export interface MarkdownToDrawnixLibProps {
 
 const getMarkdownExample = (language: 'zh' | 'en') => {
   if (language === 'zh') {
-    return `# 我开始了
+    return `# Milkdown 入门
 
-- 让我看看是谁搞出了这个 bug 🕵️ ♂️ 🔍
-  - 😯 💣
-    - 原来是我 👈 🎯 💘
+Milkdown 是一个强大的所见即所得 Markdown 编辑器，兼具 Markdown 的简洁和现代编辑器的灵活性。它轻量且可扩展，适合从简单到复杂的编辑需求。
 
-- 竟然不可以运行，为什么呢 🚫 ⚙️ ❓
-  - 竟然可以运行了，为什么呢？🎢 ✨
-    - 🤯 ⚡ ➡️ 🎉
+## 快速开始
+最快的方式是使用 @milkdown/crepe。
 
-- 能运行起来的 🐞 🚀
-  - 就不要去动它 🛑 ✋
-    - 👾 💥 🏹 🎯
-    
-## 男孩还是女孩 👶 ❓ 🤷 ♂️ ♀️
+## 核心概念
+Milkdown 由两部分组成：
+1. 核心包（@milkdown/core）
+   - 插件加载器
+   - 内置插件
+2. 扩展插件
+   - 语法支持
+   - 命令
+   - UI 组件
+   - 自定义能力
 
-### Hello world 👋 🌍 ✨ 💻
+## 关键特性
+- 📝 所见即所得 Markdown
+- 🎨 可主题化
+- 🎮 可扩展
+- ⚡ Slash 与 Tooltip
+- 🧮 LaTeX 数学公式
+- 📊 表格
+- 🍻 协作（yjs）
+- 💾 剪贴板
+- 👍 Emoji
 
-#### 哇 是个程序员 🤯 ⌨️ 💡 👩 💻`;
+## 技术栈
+- Prosemirror
+- Remark
+- TypeScript
+
+## 创建你的第一个编辑器
+Milkdown 提供两种方式：
+
+### 🍼 使用 @milkdown/kit（从零构建）
+适合需要完全控制、自由组合功能的场景。
+
+### 🥞 使用 @milkdown/crepe（开箱即用）
+适合快速落地、开箱即用的生产环境。
+
+## 下一步
+🍼 有趣的事实：这个文档也是由 Milkdown 渲染的！`;
   } else {
-    return `# I have started
+    return `# Getting Started with Milkdown
 
-- Let me see who made this bug 🕵️ ♂️ 🔍
-  - 😯 💣
-    - Turns out it was me 👈 🎯 💘
+Milkdown is a powerful WYSIWYG markdown editor that combines the simplicity of markdown with the flexibility of a modern editor. It's designed to be lightweight yet extensible, making it perfect for both simple and complex editing needs.
 
-- Unexpectedly, it cannot run; why is that 🚫 ⚙️ ❓
-  - Unexpectedly, it can run now; why is that? 🎢 ✨
-    - 🤯 ⚡ ➡️ 🎉
+## Quick Start
+The fastest way to get started is using @milkdown/crepe.
 
-- What can run 🐞 🚀
-  - then do not touch it 🛑 ✋
-    - 👾 💥 🏹 🎯
-    
-## Boy or girl 👶 ❓ 🤷 ♂️ ♀️
+## Core Concepts
+Milkdown consists of two main parts:
+1. Core Package (@milkdown/core)
+   - Plugin loader
+   - Internal plugins
+2. Additional Plugins
+   - Syntax support
+   - Commands
+   - UI components
+   - Custom features
 
-### Hello world 👋 🌍 ✨ 💻
+## Key Features
+- 📝 WYSIWYG Markdown
+- 🎨 Themable
+- 🎮 Hackable
+- ⚡ Slash & Tooltip
+- 🧮 Math (LaTeX)
+- 📊 Table
+- 🍻 Collaborate (yjs)
+- 💾 Clipboard
+- 👍 Emoji
 
-#### Wow, a programmer 🤯 ⌨️ 💡 👩 💻`;
+## Tech Stack
+- Prosemirror
+- Remark
+- TypeScript
+
+## Creating Your First Editor
+Milkdown provides two distinct approaches to create an editor:
+
+### 🍼 Using @milkdown/kit (Build from Scratch)
+Use this if you want full control and a custom editor from the ground up.
+
+### 🥞 Using @milkdown/crepe (Ready to Use)
+Use this if you want a production-ready editor with minimal setup.
+
+## Next Steps
+🍼 Fun fact: This documentation is rendered by Milkdown itself!`;
   }
 };
 

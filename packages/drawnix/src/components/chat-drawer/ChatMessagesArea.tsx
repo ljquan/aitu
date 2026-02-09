@@ -6,12 +6,11 @@ import {
   type ChatHandler,
   type Message,
 } from '@llamaindex/chat-ui';
-import '@llamaindex/chat-ui/styles/markdown.css';
 import '@llamaindex/chat-ui/styles/pdf.css';
-import { MermaidRenderer } from './MermaidRenderer';
 import { WorkflowMessageBubble } from './WorkflowMessageBubble';
 import { UserMessageBubble } from './UserMessageBubble';
 import type { WorkflowMessageData } from '../../types/chat.types';
+import MarkdownEditor from '../MarkdownEditor';
 
 // 工作流消息的特殊标记前缀
 const WORKFLOW_MESSAGE_PREFIX = '[[WORKFLOW_MESSAGE]]';
@@ -50,6 +49,13 @@ export const ChatMessagesArea: React.FC<ChatMessagesAreaProps> = ({
   // 检查用户消息是否包含图片
   const hasImages = useCallback((message: Message): boolean => {
     return message.parts.some((p) => p.type === 'data-file');
+  }, []);
+
+  const getMessageMarkdown = useCallback((message: Message) => {
+    const parts = message.parts
+      .filter((part) => part.type === 'text' && 'text' in part)
+      .map((part) => (typeof part.text === 'string' ? part.text : String(part.text ?? '')));
+    return parts.join('');
   }, []);
 
   return (
@@ -103,11 +109,12 @@ export const ChatMessagesArea: React.FC<ChatMessagesAreaProps> = ({
               >
                 <ChatMessage.Avatar className="chat-message-avatar" />
                 <ChatMessage.Content className="chat-message-content">
-                  <ChatMessage.Content.Markdown
+                  <MarkdownEditor
+                    markdown={getMessageMarkdown(message)}
+                    readOnly
+                    showModeSwitch={false}
+                    initialMode="wysiwyg"
                     className="chat-markdown"
-                    languageRenderers={{
-                      mermaid: MermaidRenderer,
-                    }}
                   />
                 </ChatMessage.Content>
                 {message.role === 'assistant' && !isError && (
