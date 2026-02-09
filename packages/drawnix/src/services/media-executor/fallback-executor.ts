@@ -24,12 +24,9 @@ import {
   updateLLMApiLogMetadata,
   LLMReferenceImage,
 } from './llm-api-logger';
-import { parseToolCalls, extractTextContent, compressImageBlob } from '@aitu/utils';
+import { parseToolCalls, extractTextContent } from '@aitu/utils';
 import { isAuthError, dispatchApiAuthError } from '../../utils/api-auth-error-event';
 import { unifiedCacheService } from '../unified-cache-service';
-import { getDataURL } from '../../data/blob';
-/** 参考图转 base64 时最大体积（1MB），避免请求体过大 */
-const MAX_REFERENCE_IMAGE_BYTES = 1 * 1024 * 1024;
 import { submitVideoGeneration } from '../media-api';
 import {
   extractPromptFromMessages,
@@ -38,7 +35,13 @@ import {
   pollVideoStatus,
   isAsyncImageModel,
   generateAsyncImage,
+  ensureBase64ForAI,
 } from './fallback-utils';
+import { resolveAdapterForModel } from '../model-adapters';
+import {
+  executeImageViaAdapter,
+  executeVideoViaAdapter,
+} from './fallback-adapter-routes';
 
 /** 从 uploadedImages 提取 URL 列表，与 SW ImageHandler 逻辑一致 */
 function extractUrlsFromUploadedImages(uploadedImages: unknown): string[] | undefined {
@@ -47,41 +50,6 @@ function extractUrlsFromUploadedImages(uploadedImages: unknown): string[] | unde
     .filter((img) => img && typeof img === 'object' && typeof img.url === 'string')
     .map((img) => img.url as string);
   return urls.length > 0 ? urls : undefined;
-}
-
-/** 将 Blob 压缩到 1MB 以内再转 base64（仅图片类型） */
-async function blobToBase64Under1MB(blob: Blob): Promise<string> {
-  let target = blob;
-  if (
-    blob.type.startsWith('image/') &&
-    blob.size > MAX_REFERENCE_IMAGE_BYTES
-  ) {
-    target = await compressImageBlob(blob, 1);
-  }
-  return getDataURL(target);
-}
-
-/** 确保图片为 base64 数据（API 要求），且体积控制在 1MB 内；getImageForAI 对未缓存远程 URL 可能返回 URL，需再转 base64 */
-async function ensureBase64ForAI(
-  imageData: { type: string; value: string },
-  signal?: AbortSignal
-): Promise<string> {
-  const value = imageData.value;
-  if (value.startsWith('data:')) {
-    const base64Part = value.slice(value.indexOf(',') + 1);
-    const estimatedBytes = (base64Part.length * 3) / 4;
-    if (estimatedBytes <= MAX_REFERENCE_IMAGE_BYTES) return value;
-    const res = await fetch(value, { signal });
-    const blob = await res.blob();
-    return blobToBase64Under1MB(blob);
-  }
-  if (value.startsWith('http://') || value.startsWith('https://')) {
-    const res = await fetch(value, { signal });
-    if (!res.ok) throw new Error(`Failed to fetch reference image: ${res.status}`);
-    const blob = await res.blob();
-    return blobToBase64Under1MB(blob);
-  }
-  return value;
 }
 
 /**
@@ -125,6 +93,12 @@ export class FallbackMediaExecutor implements IMediaExecutor {
 
     const startTime = Date.now();
     const modelName = model || config.geminiConfig.modelName;
+
+    // 专用 adapter 路由（mj-imagine 等非 gemini 模型）
+    const imageAdapter = resolveAdapterForModel(modelName, 'image');
+    if (imageAdapter && imageAdapter.kind === 'image' && imageAdapter.id !== 'gemini-image-adapter') {
+      return executeImageViaAdapter(taskId, imageAdapter, { prompt, model: modelName, size, quality, count, referenceImages }, options, startTime);
+    }
 
     // 异步图片模型：使用 /v1/videos 接口（与 SW 模式一致）
     if (isAsyncImageModel(modelName)) {
@@ -369,6 +343,12 @@ export class FallbackMediaExecutor implements IMediaExecutor {
 
     await taskStorageWriter.updateStatus(taskId, 'processing');
     options?.onProgress?.({ progress: 0, phase: 'submitting' });
+
+    // 专用 adapter 路由（kling 等非 gemini 模型）
+    const videoAdapter = resolveAdapterForModel(model, 'video');
+    if (videoAdapter && videoAdapter.kind === 'video' && videoAdapter.id !== 'gemini-video-adapter') {
+      return executeVideoViaAdapter(taskId, videoAdapter, { prompt, model, size, duration, referenceImages: params.referenceImages, inputReference: params.inputReference }, options, startTime);
+    }
 
     // 收集参考图原始 URL（用于日志记录）
     const logRefUrls =

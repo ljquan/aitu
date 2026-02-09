@@ -19,10 +19,16 @@ import type {
 import { registerModelAdapter } from './registry';
 import { registerKlingAdapter } from './kling-adapter';
 import { registerMJImageAdapter } from './mj-image-adapter';
+import { registerFluxAdapter } from './flux-adapter';
 
 const imageModelIds = [...IMAGE_MODEL_VIP_OPTIONS, ...IMAGE_MODEL_MORE_OPTIONS]
   .map((model) => model.id)
-  .filter((modelId) => !modelId.startsWith('mj-'));
+  .filter(
+    (modelId) =>
+      !modelId.startsWith('mj-') &&
+      !modelId.startsWith('bfl-flux-') &&
+      !modelId.startsWith('flux-kontext-')
+  );
 
 const videoModelIds = VIDEO_MODELS.map((model) => model.id).filter(
   (modelId) => !modelId.startsWith('kling')
@@ -85,11 +91,22 @@ export const geminiImageAdapter: ImageModelAdapter = {
     const model = request.model || DEFAULT_IMAGE_MODEL_ID;
 
     if (isAsyncImageModel(model)) {
-      const result = await asyncImageAPIService.generateWithPolling({
-        model,
-        prompt: request.prompt,
-        size: request.size,
-      });
+      const result = await asyncImageAPIService.generateWithPolling(
+        {
+          model,
+          prompt: request.prompt,
+          size: request.size,
+        },
+        {
+          interval: 5000,
+          onProgress: request.params?.onProgress as
+            | ((progress: number, status?: string) => void)
+            | undefined,
+          onSubmitted: request.params?.onSubmitted as
+            | ((remoteId: string) => void)
+            | undefined,
+        }
+      );
       const { url, format } = asyncImageAPIService.extractUrlAndFormat(result);
       return { url, format, raw: result };
     }
@@ -121,21 +138,36 @@ export const geminiVideoAdapter: VideoModelAdapter = {
   defaultModel: DEFAULT_VIDEO_MODEL_ID,
   async generateVideo(_context, request: VideoGenerationRequest) {
     const model = (request.model || DEFAULT_VIDEO_MODEL_ID) as any;
-    const seconds = request.duration
-      ? String(request.duration)
-      : model?.toString().startsWith('sora')
-      ? '10'
-      : '8';
+    const durationEncoded =
+      model && model.startsWith('sora-2-') && /\d+s$/.test(model);
+    const seconds = durationEncoded
+      ? undefined
+      : request.duration
+        ? String(request.duration)
+        : model?.toString().startsWith('sora')
+          ? '10'
+          : '8';
     const size = request.size || '1280x720';
     const inputReferences = toUploadedVideoImages(request.referenceImages);
 
-    const result = await videoAPIService.generateVideoWithPolling({
-      model,
-      prompt: request.prompt,
-      seconds,
-      size,
-      inputReferences,
-    });
+    const result = await videoAPIService.generateVideoWithPolling(
+      {
+        model,
+        prompt: request.prompt,
+        seconds,
+        size,
+        inputReferences,
+      },
+      {
+        interval: 5000,
+        onProgress: request.params?.onProgress as
+          | ((progress: number, status?: string) => void)
+          | undefined,
+        onSubmitted: request.params?.onSubmitted as
+          | ((videoId: string) => void)
+          | undefined,
+      }
+    );
 
     const url = result.video_url || result.url;
     if (!url) {
@@ -156,4 +188,5 @@ export function registerDefaultModelAdapters(): void {
   registerModelAdapter(geminiVideoAdapter);
   registerKlingAdapter();
   registerMJImageAdapter();
+  registerFluxAdapter();
 }
