@@ -7,6 +7,8 @@ export interface PlaitFrame extends PlaitElement {
   type: 'frame';
   name: string;
   points: [Point, Point];
+  /** 背景图 URL */
+  backgroundUrl?: string;
 }
 
 export const isFrameElement = (element: PlaitElement): element is PlaitFrame => {

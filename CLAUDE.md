@@ -127,6 +127,7 @@ Service Worker (后台执行)
 - **全屏展示画布局部内容用「viewport 对准 + 隐藏 UI + 蒙层挖洞」**：需要全屏/沉浸式展示某个区域（如 Frame 幻灯片播放）时，三步走：① viewport 对准目标区域（`updateViewport`）；② 给 `document.documentElement` 添加 CSS class（如 `slideshow-active`），用 `display: none !important` 隐藏所有 UI 覆盖层（工具栏、抽屉、面板、输入栏等）；③ 在画布上方渲染全屏蒙层，用四块黑色 div 围住目标区域，中间留出"窗口"。注意：不要用 `toImage` 截图方案（`<defs>` 引用丢失、子元素绑定不完全导致内容缺失），也不要仅操纵 viewport 而不隐藏 UI（抽屉/工具栏会露出来）
 - **自定义组件 `onContextChanged` 必须处理 viewport 变化**：自定义 Plait 组件（如 `FrameComponent`、`FreehandComponent`、`PenPathComponent`）的 `onContextChanged` 中，必须检测 viewport 变化（`board.viewport.zoom/offsetX/offsetY`）并在元素被选中时重绘选择框（`activeGenerator.processDrawing`）。选择框渲染在 `board-active-svg`（无 viewBox，坐标通过 `toActiveRectangleFromViewBoxRectangle` 实时计算），而元素渲染在 `board-host-svg`（有 viewBox 自动映射），viewport 变化时选择框不会自动跟随，必须手动重绘。参考 `ToolComponent.onContextChanged` 的实现模式
 - **编程式选中元素后必须触发 `onChange` 才会渲染选中框**：`cacheSelectedElements(board, elements)` 只是在 WeakMap 中缓存选中元素列表，不会触发框架的 `onChange` 回调链，因此选中框不会渲染。`addSelectedElement` 内部也只是调用 `cacheSelectedElements`，同样不会触发渲染。要让选中框立即显示，需要使用 `Transforms.addSelectionWithTemporaryElements(board, elements)`——它会将元素存入 `BOARD_TO_TEMPORARY_ELEMENTS`，然后在下一个事件循环调用 `Transforms.setSelection` 触发 `onChange`，`onChange` 中检测到 temporary elements 后执行 `cacheSelectedElements` 并渲染选中框。适用场景：自定义选择逻辑（如套索选择、编程式批量选中）。如果是单个元素在交互流程中选中（如 pointerUp 点击），框架的 `withSelection` 插件会自动处理，无需手动调用
+- **Frame 拖动元素检测只在开始时执行**：Frame 移动时同步移动内部元素，必须在 `pointerDown` 时记录相交元素 ID，`afterChange` 中只移动预先记录的元素；禁止每次移动都重新检测相交，否则会"吸附"路过的元素
 
 ---
 

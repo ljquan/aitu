@@ -31,7 +31,7 @@ export function generateOutlineSystemPrompt(options: PPTGenerateOptions = {}): s
   const { pageCount = 'normal', language = '中文' } = options;
   const range = PAGE_COUNT_RANGES[pageCount] || PAGE_COUNT_RANGES.normal;
 
-  return `你是一位专业的PPT大纲设计师。请根据用户提供的主题，生成一份结构清晰、逻辑严密的PPT大纲。
+  return `你是一位专业的PPT大纲设计师。请根据用户提供的主题，生成一份结构清晰、逻辑严密、内容丰富的PPT大纲。
 
 ## 输出要求
 1. 输出格式：严格JSON，符合 PPTOutline 接口定义
@@ -53,7 +53,7 @@ interface PPTOutline {
 
 interface PPTPageSpec {
   layout: "cover" | "toc" | "title-body" | "image-text" | "comparison" | "ending";
-  title: string;          // 页面标题
+  title: string;          // 页面标题（控制在10个中文字符以内，避免换行）
   subtitle?: string;      // 副标题（cover/ending页使用）
   bullets?: string[];     // 要点列表（title-body/image-text/comparison页使用）
   imagePrompt?: string;   // 配图描述（仅image-text页需要，英文）
@@ -65,13 +65,16 @@ interface PPTPageSpec {
 - 仅为 image-text 版式的页面生成 imagePrompt
 - imagePrompt 使用英文描述，便于图片生成模型理解
 - 描述应具体、可视化，包含主体、风格、氛围等要素
-- 示例："A futuristic city with flying cars and holographic billboards, cyberpunk style, vibrant neon lights"
+- 风格统一为：professional, modern, clean, flat design illustration
+- 示例："A futuristic city with flying cars and holographic billboards, professional flat design illustration, clean and modern style"
 
 ## 设计原则
-1. 逻辑清晰：内容有明确的起承转合
-2. 详略得当：重点内容可多用几页展开
-3. 图文并茂：适当使用 image-text 版式（建议占比 30-50%）
-4. 要点精炼：每个 bullet 控制在 15 字以内
+1. **标题精简**：每页标题控制在 10 个中文字符以内（约 20 个英文字符），避免在幻灯片上换行
+2. **内容充实**：每页 4-6 个要点，每个要点 10-20 字，信息密度适中
+3. **图文并茂**：大量使用 image-text 版式（建议占比 50-70%），让 PPT 更丰富
+4. **逻辑清晰**：内容有明确的起承转合
+5. **版式多样**：合理搭配不同版式，避免连续多页相同版式
+6. **对比页要点**：comparison 版式需要 6 个要点（左右各 3 个），方便排版
 
 ## 输出格式
 直接输出JSON对象，不要包含markdown代码块标记。`;
@@ -126,10 +129,53 @@ export function validateOutline(outline: unknown): outline is import('./ppt.type
 }
 
 /**
+ * 从文本中提取 JSON 对象字符串
+ * 通过花括号匹配找到最外层的 JSON 对象
+ */
+function extractJsonObject(text: string): string | null {
+  const start = text.indexOf('{');
+  if (start === -1) return null;
+
+  let depth = 0;
+  let inString = false;
+  let escape = false;
+
+  for (let i = start; i < text.length; i++) {
+    const ch = text[i];
+
+    if (escape) {
+      escape = false;
+      continue;
+    }
+
+    if (ch === '\\' && inString) {
+      escape = true;
+      continue;
+    }
+
+    if (ch === '"') {
+      inString = !inString;
+      continue;
+    }
+
+    if (inString) continue;
+
+    if (ch === '{') depth++;
+    else if (ch === '}') {
+      depth--;
+      if (depth === 0) {
+        return text.slice(start, i + 1);
+      }
+    }
+  }
+
+  return null;
+}
+
+/**
  * 解析 AI 返回的大纲 JSON
  */
 export function parseOutlineResponse(response: string): import('./ppt.types').PPTOutline {
-  // 尝试直接解析
   let jsonStr = response.trim();
 
   // 移除可能的 markdown 代码块标记
@@ -143,13 +189,46 @@ export function parseOutlineResponse(response: string): import('./ppt.types').PP
   }
   jsonStr = jsonStr.trim();
 
+  // 策略1: 直接解析
   try {
     const parsed = JSON.parse(jsonStr);
-    if (!validateOutline(parsed)) {
-      throw new Error('Invalid PPT outline structure');
+    if (validateOutline(parsed)) {
+      return parsed;
     }
-    return parsed;
-  } catch (error) {
-    throw new Error(`Failed to parse PPT outline: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  } catch {
+    // 直接解析失败，尝试其他策略
   }
+
+  // 策略2: 提取 JSON 对象（处理前后有多余文本、注释等情况）
+  const extracted = extractJsonObject(jsonStr);
+  if (extracted) {
+    try {
+      const parsed = JSON.parse(extracted);
+      if (validateOutline(parsed)) {
+        return parsed;
+      }
+    } catch {
+      // 提取后仍然解析失败
+    }
+  }
+
+  // 策略3: 尝试修复常见 JSON 问题（如尾部逗号、单引号等）
+  try {
+    const fixedStr = (extracted || jsonStr)
+      .replace(/,\s*([}\]])/g, '$1')       // 移除尾部逗号
+      .replace(/(['"])?(\w+)(['"])?\s*:/g, '"$2":') // 修复未引用的 key
+      .replace(/:\s*'([^']*)'/g, ':"$1"'); // 单引号转双引号
+
+    const parsed = JSON.parse(fixedStr);
+    if (validateOutline(parsed)) {
+      return parsed;
+    }
+  } catch {
+    // 修复也失败
+  }
+
+  throw new Error(
+    `Failed to parse PPT outline. AI response may contain invalid JSON. ` +
+    `Response preview: ${response.slice(0, 200)}...`
+  );
 }

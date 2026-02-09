@@ -18,6 +18,7 @@ import { BooleanTransforms } from '../../transforms/boolean';
 import { CommandItem } from './command-palette.types';
 import { Language } from '../../i18n';
 import { FramePointerType } from '../../plugins/with-frame';
+import { fitFrame } from '../../utils/fit-frame';
 
 export type CommandRegistryUpdater = (appState: Record<string, any>) => void;
 
@@ -335,6 +336,13 @@ export function buildDefaultCommands(
       keywords: ['fit', 'viewport', 'auto', '自适应', '视口', '适应'],
       category: 'view',
       perform: (board) => BoardTransforms.fitViewport(board),
+    },
+    {
+      id: 'view-zoom-fit-frame',
+      label: isZh ? '自适应 Frame' : 'Fit Frame',
+      keywords: ['fit', 'frame', '自适应', '幻灯片', 'ppt', 'slide'],
+      category: 'view',
+      perform: (board) => fitFrame(board),
     },
     {
       id: 'view-zoom-100',

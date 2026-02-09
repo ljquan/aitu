@@ -248,6 +248,43 @@
 .workzone-content__error {
   background: #fef2f2;
   color: #dc2626;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+// 重试按钮
+.workzone-content__retry-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border: 1px solid #dc2626;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #dc2626;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  pointer-events: auto !important;
+  position: relative;
+  z-index: 10;
+
+  &:hover:not(:disabled) {
+    background: #dc2626;
+    color: #ffffff;
+  }
+
+  &:active:not(:disabled) {
+    transform: scale(0.97);
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
 }
 
 .workzone-content__success {

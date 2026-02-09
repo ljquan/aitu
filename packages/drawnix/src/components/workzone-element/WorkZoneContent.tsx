@@ -5,8 +5,8 @@
  * 这是 WorkflowMessageBubble 的简化版本，适合在画布元素中使用
  */
 
-import React, { useMemo, useEffect, useRef } from 'react';
-import { Trash2 } from 'lucide-react';
+import React, { useMemo, useEffect, useRef, useState, useCallback } from 'react';
+import { Trash2, RotateCcw } from 'lucide-react';
 import type { WorkflowMessageData } from '../../types/chat.types';
 import './workzone-content.scss';
 
@@ -30,6 +30,8 @@ interface WorkZoneContentProps {
   onDelete?: () => void;
   /** 当 SW 中找不到工作流或工作流状态变更时的回调 */
   onWorkflowStateChange?: (workflowId: string, status: 'completed' | 'failed', error?: string) => void;
+  /** 从失败步骤重试工作流 */
+  onRetry?: (workflow: WorkflowMessageData, stepIndex: number) => Promise<void>;
 }
 
 export const WorkZoneContent: React.FC<WorkZoneContentProps> = ({
@@ -37,9 +39,11 @@ export const WorkZoneContent: React.FC<WorkZoneContentProps> = ({
   className = '',
   onDelete,
   onWorkflowStateChange,
+  onRetry,
 }) => {
   // 用于追踪是否已经尝试 claim
   const hasClaimedRef = useRef(false);
+  const [isRetrying, setIsRetrying] = useState(false);
 
   // 页面刷新后，尝试接管工作流或同步状态
   // 注意：只对"旧"工作流执行 claim，新创建的工作流不需要 claim
@@ -212,6 +216,24 @@ export const WorkZoneContent: React.FC<WorkZoneContentProps> = ({
     : workflow.generationType === 'video' ? '🎬'
     : '📝';
 
+  // 找到第一个失败步骤的索引
+  const firstFailedStepIndex = useMemo(() => {
+    return workflow.steps.findIndex(s => s.status === 'failed');
+  }, [workflow.steps]);
+
+  // 是否可以重试（有重试回调、有 retryContext、有失败步骤）
+  const canRetry = workflowStatus.status === 'failed' && onRetry && workflow.retryContext && firstFailedStepIndex >= 0;
+
+  const handleRetry = useCallback(async () => {
+    if (!onRetry || firstFailedStepIndex < 0 || isRetrying) return;
+    setIsRetrying(true);
+    try {
+      await onRetry(workflow, firstFailedStepIndex);
+    } finally {
+      setIsRetrying(false);
+    }
+  }, [onRetry, workflow, firstFailedStepIndex, isRetrying]);
+
   return (
     <div
       className={`workzone-content workzone-content--${workflowStatus.status} ${className}`}
@@ -274,7 +296,7 @@ export const WorkZoneContent: React.FC<WorkZoneContentProps> = ({
 
       {/* 步骤列表（简化版） */}
       <div className="workzone-content__steps">
-        {workflow.steps.map((step, index) => (
+        {workflow.steps.map((step) => (
           <div
             key={step.id}
             className={`workzone-content__step workzone-content__step--${step.status}`}
@@ -293,10 +315,36 @@ export const WorkZoneContent: React.FC<WorkZoneContentProps> = ({
         ))}
       </div>
 
-      {/* 失败提示 */}
+      {/* 失败提示 + 重试按钮 */}
       {workflowStatus.status === 'failed' && (
         <div className="workzone-content__error">
-          ❌ {workflow.steps.find(s => s.status === 'failed')?.error || '执行失败'}
+          <span>❌ {workflow.steps.find(s => s.status === 'failed')?.error || '执行失败'}</span>
+          {canRetry && (
+            <button
+              className="workzone-content__retry-btn"
+              disabled={isRetrying}
+              onPointerDown={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+              }}
+              onPointerUp={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                handleRetry();
+              }}
+              onMouseDown={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+              }}
+              onClick={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+              }}
+            >
+              <RotateCcw size={12} />
+              <span>{isRetrying ? '重试中...' : '从失败步骤重试'}</span>
+            </button>
+          )}
         </div>
       )}
 

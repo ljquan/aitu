@@ -1,7 +1,7 @@
 /**
  * Frame 元素渲染生成器
  *
- * 在 SVG 画布上渲染 Frame 容器（虚线矩形 + 标题标签）
+ * 在 SVG 画布上渲染 Frame 容器（虚线矩形 + 可选背景图 + 标题标签）
  */
 import { RectangleClient } from '@plait/core';
 import { PlaitFrame } from '../../types/frame.types';
@@ -18,6 +18,11 @@ export class FrameGenerator {
   private rectElement: SVGRectElement | null = null;
   private titleText: SVGTextElement | null = null;
   private titleBg: SVGRectElement | null = null;
+  /** 背景图相关 SVG 元素 */
+  private bgClipPath: SVGClipPathElement | null = null;
+  private bgImage: SVGImageElement | null = null;
+  private bgDefs: SVGDefsElement | null = null;
+  private currentBgUrl: string | undefined = undefined;
 
   processDrawing(element: PlaitFrame, parentG: SVGGElement): SVGGElement {
     const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
@@ -40,6 +45,11 @@ export class FrameGenerator {
     this.rectElement.setAttribute('stroke-dasharray', '8 4');
     g.appendChild(this.rectElement);
 
+    // 背景图（如果有）
+    if (element.backgroundUrl) {
+      this.createBackgroundImage(g, element, rect);
+    }
+
     // 标题背景
     this.titleBg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
     g.appendChild(this.titleBg);
@@ -61,7 +71,7 @@ export class FrameGenerator {
     return g;
   }
 
-  updateDrawing(element: PlaitFrame, _g: SVGGElement): void {
+  updateDrawing(element: PlaitFrame, g: SVGGElement): void {
     const rect = RectangleClient.getRectangleByPoints(element.points);
 
     if (this.rectElement) {
@@ -71,6 +81,25 @@ export class FrameGenerator {
       this.rectElement.setAttribute('height', String(rect.height));
     }
 
+    // 更新背景图
+    if (element.backgroundUrl !== this.currentBgUrl) {
+      if (element.backgroundUrl) {
+        if (this.bgImage) {
+          // 更新现有背景图 URL
+          this.updateBackgroundImage(element, rect);
+        } else {
+          // 新增背景图（插入到 rectElement 之后，titleBg 之前）
+          this.createBackgroundImage(g, element, rect);
+        }
+      } else {
+        // 移除背景图
+        this.removeBackgroundImage();
+      }
+    } else if (this.bgImage) {
+      // URL 没变但可能位置/尺寸变了
+      this.updateBackgroundImage(element, rect);
+    }
+
     if (this.titleText) {
       this.titleText.setAttribute('x', String(rect.x + FRAME_TITLE_PADDING));
       this.titleText.setAttribute('y', String(rect.y + FRAME_TITLE_OFFSET_Y));
@@ -78,6 +107,99 @@ export class FrameGenerator {
     }
 
     this.updateTitleBackground(rect.x, rect.y);
+  }
+
+  /**
+   * 创建背景图 SVG 元素（clipPath + image）
+   */
+  private createBackgroundImage(
+    g: SVGGElement,
+    element: PlaitFrame,
+    rect: RectangleClient
+  ): void {
+    const clipId = `frame-bg-clip-${element.id}`;
+
+    // 创建 <defs> 用于 clipPath
+    this.bgDefs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+    this.bgClipPath = document.createElementNS('http://www.w3.org/2000/svg', 'clipPath');
+    this.bgClipPath.setAttribute('id', clipId);
+
+    const clipRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    clipRect.setAttribute('x', String(rect.x));
+    clipRect.setAttribute('y', String(rect.y));
+    clipRect.setAttribute('width', String(rect.width));
+    clipRect.setAttribute('height', String(rect.height));
+    clipRect.setAttribute('rx', '8');
+    clipRect.setAttribute('ry', '8');
+    this.bgClipPath.appendChild(clipRect);
+    this.bgDefs.appendChild(this.bgClipPath);
+
+    // 插入到 g 的最前面（在 rectElement 之后）
+    if (this.rectElement && this.rectElement.nextSibling) {
+      g.insertBefore(this.bgDefs, this.rectElement.nextSibling);
+    } else {
+      g.appendChild(this.bgDefs);
+    }
+
+    // 创建 <image> 元素
+    this.bgImage = document.createElementNS('http://www.w3.org/2000/svg', 'image');
+    this.bgImage.setAttribute('x', String(rect.x));
+    this.bgImage.setAttribute('y', String(rect.y));
+    this.bgImage.setAttribute('width', String(rect.width));
+    this.bgImage.setAttribute('height', String(rect.height));
+    this.bgImage.setAttribute('href', element.backgroundUrl!);
+    this.bgImage.setAttribute('preserveAspectRatio', 'xMidYMid slice');
+    this.bgImage.setAttribute('clip-path', `url(#${clipId})`);
+    this.bgImage.setAttribute('opacity', '0.3');
+
+    // 插入到 defs 之后
+    if (this.bgDefs.nextSibling) {
+      g.insertBefore(this.bgImage, this.bgDefs.nextSibling);
+    } else {
+      g.appendChild(this.bgImage);
+    }
+
+    this.currentBgUrl = element.backgroundUrl;
+  }
+
+  /**
+   * 更新背景图位置和尺寸
+   */
+  private updateBackgroundImage(element: PlaitFrame, rect: RectangleClient): void {
+    if (this.bgImage) {
+      this.bgImage.setAttribute('x', String(rect.x));
+      this.bgImage.setAttribute('y', String(rect.y));
+      this.bgImage.setAttribute('width', String(rect.width));
+      this.bgImage.setAttribute('height', String(rect.height));
+      if (element.backgroundUrl) {
+        this.bgImage.setAttribute('href', element.backgroundUrl);
+      }
+    }
+
+    // 更新 clipPath 中的 rect
+    if (this.bgClipPath) {
+      const clipRect = this.bgClipPath.querySelector('rect');
+      if (clipRect) {
+        clipRect.setAttribute('x', String(rect.x));
+        clipRect.setAttribute('y', String(rect.y));
+        clipRect.setAttribute('width', String(rect.width));
+        clipRect.setAttribute('height', String(rect.height));
+      }
+    }
+
+    this.currentBgUrl = element.backgroundUrl;
+  }
+
+  /**
+   * 移除背景图
+   */
+  private removeBackgroundImage(): void {
+    this.bgDefs?.remove();
+    this.bgImage?.remove();
+    this.bgDefs = null;
+    this.bgClipPath = null;
+    this.bgImage = null;
+    this.currentBgUrl = undefined;
   }
 
   private updateTitleBackground(frameX: number, frameY: number): void {
@@ -103,5 +225,6 @@ export class FrameGenerator {
     this.rectElement = null;
     this.titleText = null;
     this.titleBg = null;
+    this.removeBackgroundImage();
   }
 }

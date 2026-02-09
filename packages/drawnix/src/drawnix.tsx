@@ -118,6 +118,8 @@ export type DrawnixProps = {
   afterInit?: (board: PlaitBoard) => void;
   /** Called when board is switched */
   onBoardSwitch?: (board: WorkspaceBoard) => void;
+  /** Called when tab sync is needed (other tab modified data) */
+  onTabSyncNeeded?: () => void;
   /** 数据是否已准备好（用于判断画布是否为空） */
   isDataReady?: boolean;
 } & Omit<React.HTMLAttributes<HTMLDivElement>, 'onChange'>;
@@ -133,6 +135,7 @@ export const Drawnix: React.FC<DrawnixProps> = ({
   onValueChange,
   afterInit,
   onBoardSwitch,
+  onTabSyncNeeded,
   isDataReady = false,
 }) => {
   const options: PlaitBoardOptions = {
@@ -684,6 +687,7 @@ export const Drawnix: React.FC<DrawnixProps> = ({
                       onValueChange={onValueChange}
                       afterInit={afterInit}
                       onBoardSwitch={onBoardSwitch}
+                      onTabSyncNeeded={onTabSyncNeeded}
                       handleProjectDrawerToggle={handleProjectDrawerToggle}
                       handleToolboxDrawerToggle={handleToolboxDrawerToggle}
                       handleTaskPanelToggle={handleTaskPanelToggle}
@@ -739,6 +743,7 @@ interface DrawnixContentProps {
   onValueChange?: (value: PlaitElement[]) => void;
   afterInit?: (board: PlaitBoard) => void;
   onBoardSwitch?: (board: WorkspaceBoard) => void;
+  onTabSyncNeeded?: () => void;
   handleProjectDrawerToggle: () => void;
   handleToolboxDrawerToggle: () => void;
   handleTaskPanelToggle: () => void;
@@ -775,6 +780,7 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
   onValueChange,
   afterInit,
   onBoardSwitch,
+  onTabSyncNeeded,
   handleProjectDrawerToggle,
   handleToolboxDrawerToggle,
   handleTaskPanelToggle,
@@ -799,9 +805,14 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
   // 标签页同步
   useTabSync({
     onSyncNeeded: useCallback(() => {
-      // 当其他标签页修改数据时，刷新页面以获取最新数据
-      safeReload();
-    }, []),
+      // 如果父组件提供了回调，使用无刷新同步
+      if (onTabSyncNeeded) {
+        onTabSyncNeeded();
+      } else {
+        // 否则降级到刷新页面（向后兼容）
+        safeReload();
+      }
+    }, [onTabSyncNeeded]),
     enabled: true,
   });
 

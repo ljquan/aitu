@@ -17,6 +17,7 @@ import { Transforms, BoardTransforms, PlaitBoard as PlaitBoardUtils, RectangleCl
 import { DrawTransforms } from '@plait/draw';
 import { getBoard } from './shared';
 import { FrameTransforms } from '../../plugins/with-frame';
+import { insertPPTImagePlaceholder } from '../../utils/frame-insertion-utils';
 import { isFrameElement, PlaitFrame } from '../../types/frame.types';
 import { defaultGeminiClient } from '../../utils/gemini-api';
 import { geminiSettings } from '../../utils/settings-manager';
@@ -31,6 +32,7 @@ import {
   generateOutlineSystemPrompt,
   generateOutlineUserPrompt,
   parseOutlineResponse,
+  createStyledTextElement,
   layoutPageContent,
   convertToAbsoluteCoordinates,
   PPT_FRAME_WIDTH,
@@ -41,10 +43,9 @@ import {
 const FRAME_GAP = 60;
 
 /**
- * 计算新 Frame 的插入位置
- * PPT Frame 固定 1920x1080（横屏），放在最右侧 Frame 的右边
+ * 计算 PPT 起始位置（在现有 Frame 最右侧之后）
  */
-function calcNewFramePosition(board: PlaitBoard): Point {
+function calcPPTStartPosition(board: PlaitBoard): Point {
   const existingFrames: RectangleClient[] = [];
 
   for (const el of board.children) {
@@ -55,13 +56,16 @@ function calcNewFramePosition(board: PlaitBoard): Point {
 
   // 无 Frame 时居中显示
   if (existingFrames.length === 0) {
-    const container = PlaitBoardUtils.getBoardContainer(board);
-    const vw = container.clientWidth;
-    const vh = container.clientHeight;
     const zoom = board.viewport?.zoom ?? 1;
     const orig = board.viewport?.origination;
     const ox = orig ? orig[0] : 0;
     const oy = orig ? orig[1] : 0;
+
+    // getBoardContainer 可能在 DOM 未挂载时返回 undefined
+    const container = PlaitBoardUtils.getBoardContainer(board);
+    const vw = container?.clientWidth ?? 1920;
+    const vh = container?.clientHeight ?? 1080;
+
     const cx = ox + vw / 2 / zoom;
     const cy = oy + vh / 2 / zoom;
     return [cx - PPT_FRAME_WIDTH / 2, cy - PPT_FRAME_HEIGHT / 2];
@@ -196,8 +200,9 @@ function createPPTPage(
     // 记录插入前的 children 数量
     const childrenCountBefore = board.children.length;
 
-    // 插入文本
-    DrawTransforms.insertText(board, insertPoint, element.text);
+    // 插入带样式的文本（Slate Element 包含字号/粗细/颜色）
+    const styledText = createStyledTextElement(element);
+    DrawTransforms.insertText(board, insertPoint, styledText);
 
     // 绑定到 Frame
     if (board.children.length > childrenCountBefore) {
@@ -215,6 +220,7 @@ function createPPTPage(
   };
   if (pageSpec.imagePrompt) {
     pptMeta.imagePrompt = pageSpec.imagePrompt;
+    pptMeta.imageStatus = 'placeholder';
   }
   if (pageSpec.notes) {
     pptMeta.notes = pageSpec.notes;
@@ -224,6 +230,10 @@ function createPPTPage(
   const frameIndex = board.children.findIndex((el) => el.id === frame.id);
   if (frameIndex !== -1) {
     Transforms.setNode(board, { pptMeta } as any, [frameIndex]);
+  }
+
+  if (pageSpec.imagePrompt) {
+    insertPPTImagePlaceholder(board, frame, pageSpec.imagePrompt);
   }
 
   return frame;
@@ -275,34 +285,39 @@ async function executePPTGeneration(
 
     options.onChunk?.(`\n正在创建 Frame 并布局内容...\n\n`);
 
-    // 2. 逐页创建 Frame
-    let firstFrame: PlaitFrame | null = null;
+    // 2. 预计算所有 Frame 位置（按顺序横向排列）
+    const startPosition = calcPPTStartPosition(board);
+    const framePositions: Point[] = [];
+    for (let i = 0; i < outline.pages.length; i++) {
+      framePositions.push([
+        startPosition[0] + i * (PPT_FRAME_WIDTH + FRAME_GAP),
+        startPosition[1],
+      ]);
+    }
+
+    // 3. 逆序创建 Frame（因为 insertFrame 总是插入到 [0]，逆序创建可保持正确排列）
+    const createdFrames: PlaitFrame[] = new Array(outline.pages.length);
     let createdCount = 0;
 
-    for (let i = 0; i < outline.pages.length; i++) {
+    for (let i = outline.pages.length - 1; i >= 0; i--) {
       const pageSpec = outline.pages[i];
       const pageIndex = i + 1;
-
-      // 计算 Frame 位置
-      const framePosition = calcNewFramePosition(board);
+      const framePosition = framePositions[i];
 
       // 创建页面
       const frame = createPPTPage(board, pageSpec, pageIndex, framePosition);
-
-      if (i === 0) {
-        firstFrame = frame;
-      }
+      createdFrames[i] = frame;
 
       createdCount++;
-      options.onChunk?.(`✓ 第 ${pageIndex}/${outline.pages.length} 页已创建\n`);
+      options.onChunk?.(`✓ 第 ${createdCount}/${outline.pages.length} 页已创建\n`);
     }
 
-    // 3. 聚焦到第一个 Frame
-    if (firstFrame) {
-      focusOnFrame(board, firstFrame);
+    // 4. 聚焦到第一个 Frame（封面页）
+    if (createdFrames[0]) {
+      focusOnFrame(board, createdFrames[0]);
     }
 
-    // 4. 统计配图页面
+    // 5. 统计配图页面
     const pagesWithImage = outline.pages.filter((p) => p.imagePrompt).length;
 
     options.onChunk?.(`\n🎉 **PPT 生成完成！**\n`);

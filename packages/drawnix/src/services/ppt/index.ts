@@ -13,6 +13,10 @@ export type {
   LayoutElement,
   FrameRect,
   PPTGenerationParams,
+  // 思维导图转 PPT 相关类型
+  MindmapNodeInfo,
+  MindmapToPPTOptions,
+  MindmapToPPTResult,
 } from './ppt.types';
 
 // 提示词模块
@@ -27,7 +31,18 @@ export {
 export {
   PPT_FRAME_WIDTH,
   PPT_FRAME_HEIGHT,
+  PPT_FONT_STYLES,
+  createStyledTextElement,
   layoutPageContent,
   convertToAbsoluteCoordinates,
   getImageRegion,
 } from './ppt-layout-engine';
+export type { FontStyleLevel } from './ppt-layout-engine';
+
+// 思维导图转 PPT
+export {
+  extractMindmapStructure,
+  convertMindmapToOutline,
+  generatePPTFromMindmap,
+  isPlaitMind,
+} from './mindmap-to-ppt';

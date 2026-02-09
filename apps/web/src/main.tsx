@@ -329,11 +329,8 @@ if ('serviceWorker' in navigator) {
   // 监听controller变化（新的Service Worker接管）
   // 只有用户主动确认升级后才刷新页面
   navigator.serviceWorker.addEventListener('controllerchange', () => {
-    // console.log('Service Worker controller changed');
-
     // 只有用户主动确认升级后才刷新页面
     if (!userConfirmedUpgrade) {
-      // console.log('Controller changed but user has not confirmed upgrade, skipping reload');
       return;
     }
 
@@ -347,23 +344,23 @@ if ('serviceWorker' in navigator) {
   window.addEventListener('user-confirmed-upgrade', () => {
     // 标记用户已确认升级，允许后续的 reload
     userConfirmedUpgrade = true;
-    
+
     // 优先使用 pendingWorker
     if (pendingWorker) {
       pendingWorker.postMessage({ type: 'SKIP_WAITING' });
       return;
     }
-    
+
     // 如果没有 pendingWorker，尝试查找 waiting 状态的 worker
     if (swRegistration && swRegistration.waiting) {
       swRegistration.waiting.postMessage({ type: 'SKIP_WAITING' });
       return;
     }
-    
+
     // 如果都没有 waiting worker，说明 SW 已经是最新的 active 状态
     // 这种情况通常发生在首次安装后，SW 直接 activate 了
     // 清除缓存并强制刷新
-    
+
     // 清除旧的静态资源缓存以确保获取最新资源
     caches.keys().then(cacheNames => {
       const staticCaches = cacheNames.filter(name => name.startsWith('drawnix-static-v'));

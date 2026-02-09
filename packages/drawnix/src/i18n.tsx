@@ -46,6 +46,7 @@ export interface Translations {
   'zoom.in': string;
   'zoom.out': string;
   'zoom.fit': string;
+  'zoom.fitFrame': string;
   'zoom.100': string;
   
   // Themes
@@ -225,12 +226,13 @@ const translations: Record<Language, Translations> = {
     'toolbar.frame': 'Frame 容器 — F',
     'toolbar.fillColor': '填充颜色',
     'toolbar.fontColor': '字体颜色',
-    'toolbar.fontSize': '字号',
+    'toolbar.fontSize': '字体样式',
 
     // Zoom controls
     'zoom.in': '放大 — Cmd++',
     'zoom.out': '缩小 — Cmd+-',
     'zoom.fit': '自适应',
+    'zoom.fitFrame': '自适应 Frame',
     'zoom.100': '缩放至 100%',
     
     // Themes
@@ -407,12 +409,13 @@ const translations: Record<Language, Translations> = {
     'toolbar.frame': 'Frame Container — F',
     'toolbar.fillColor': 'Fill Color',
     'toolbar.fontColor': 'Font Color',
-    'toolbar.fontSize': 'Font Size',
+    'toolbar.fontSize': 'Font Style',
 
     // Zoom controls
     'zoom.in': 'Zoom In — Cmd++',
     'zoom.out': 'Zoom Out — Cmd+-',
     'zoom.fit': 'Fit to Screen',
+    'zoom.fitFrame': 'Fit Frame',
     'zoom.100': 'Zoom to 100%',
     
     // Themes

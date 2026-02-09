@@ -11,7 +11,7 @@ import {
   safeReload,
   useDocumentTitle,
 } from '@drawnix/drawnix';
-import { PlaitBoard, PlaitElement, PlaitTheme, Viewport } from '@plait/core';
+import { PlaitBoard, PlaitElement, PlaitTheme, Viewport, updateViewBox, initializeViewBox, updateViewportOffset } from '@plait/core';
 import { MessagePlugin } from 'tdesign-react';
 import { CrashRecoveryDialog } from './CrashRecoveryDialog';
 
@@ -34,16 +34,24 @@ function getBoardIdFromUrl(): string | null {
 
 /**
  * 更新 URL 中的画布 ID 参数（不刷新页面）
+ * @param boardId 画布 ID
+ * @param replace 是否使用 replaceState（默认 false，使用 pushState）
  */
-function updateBoardIdInUrl(boardId: string | null): void {
+function updateBoardIdInUrl(boardId: string | null, replace: boolean = false): void {
   const url = new URL(window.location.href);
   if (boardId) {
     url.searchParams.set(BOARD_URL_PARAM, boardId);
   } else {
     url.searchParams.delete(BOARD_URL_PARAM);
   }
-  // 使用 replaceState 避免产生新的历史记录
-  window.history.replaceState({}, '', url.toString());
+
+  // 使用 pushState 产生历史记录，支持浏览器前进后退
+  // 初始加载时使用 replaceState 避免重复记录
+  if (replace) {
+    window.history.replaceState({ boardId }, '', url.toString());
+  } else {
+    window.history.pushState({ boardId }, '', url.toString());
+  }
 }
 
 export function App() {
@@ -62,6 +70,10 @@ export function App() {
   const latestViewportRef = useRef<Viewport | undefined>();
   // 防抖定时器
   const viewportSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
+  // 标记是否正在处理浏览器前进后退
+  const isHandlingPopStateRef = useRef<boolean>(false);
+  // 保存 board 引用，用于手动触发边界更新
+  const boardRef = useRef<PlaitBoard | null>(null);
 
   // 使用 useDocumentTitle hook 管理页面标题
   useDocumentTitle(currentBoardId);
@@ -199,7 +211,7 @@ export function App() {
         }
         // 更新 URL 参数和当前画布 ID
         if (currentBoard) {
-          updateBoardIdInUrl(currentBoard.id);
+          updateBoardIdInUrl(currentBoard.id, true); // 初始加载使用 replace
           setCurrentBoardId(currentBoard.id);
         }
 
@@ -242,9 +254,7 @@ export function App() {
   }, []);
 
   // Handle board switching
-  const handleBoardSwitch = useCallback(async (board: Board) => {
-    console.log('[App] handleBoardSwitch called:', board.id);
-    
+  const handleBoardSwitch = useCallback(async (board: Board, skipUrlUpdate: boolean = false) => {
     // 在设置 state 之前，预先恢复失效的视频 URL
     const elements = await recoverVideoUrlsInElements(board.elements || []);
 
@@ -253,13 +263,92 @@ export function App() {
       viewport: board.viewport,
       theme: board.theme,
     });
-    
-    // 更新 URL 参数
-    console.log('[App] Updating URL with board id:', board.id);
-    updateBoardIdInUrl(board.id);
-    
+
+    // 更新 URL 参数（popstate 事件触发时跳过，因为 URL 已被浏览器更新）
+    if (!skipUrlUpdate) {
+      updateBoardIdInUrl(board.id);
+    }
+
     // 更新当前画板 ID（用于页面标题更新）
     setCurrentBoardId(board.id);
+
+    // 等待 React 更新完成后，手动触发画布边界更新
+    // 使用 setTimeout 而不是 queueMicrotask，给 React 更多时间完成 DOM 更新
+    setTimeout(() => {
+      if (boardRef.current) {
+        // 完整的边界更新流程
+        initializeViewBox(boardRef.current);
+        updateViewBox(boardRef.current);
+        updateViewportOffset(boardRef.current);
+      }
+    }, 0);
+  }, []);
+
+  // Handle browser back/forward navigation
+  useEffect(() => {
+    const handlePopState = async () => {
+      if (isHandlingPopStateRef.current) {
+        return;
+      }
+
+      isHandlingPopStateRef.current = true;
+
+      try {
+        const urlBoardId = getBoardIdFromUrl();
+
+        // 如果 URL 中的画布 ID 与当前画布不同，则切换
+        if (urlBoardId && urlBoardId !== currentBoardId) {
+          const workspaceService = WorkspaceService.getInstance();
+          const board = await workspaceService.switchBoard(urlBoardId);
+
+          if (board) {
+            // skipUrlUpdate: true 因为 URL 已被浏览器更新
+            await handleBoardSwitch(board, true);
+          }
+        }
+      } catch (error) {
+        console.error('[App] Failed to handle browser navigation:', error);
+      } finally {
+        isHandlingPopStateRef.current = false;
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, [currentBoardId, handleBoardSwitch]);
+
+  // Handle tab sync (when other tab modified data)
+  const handleTabSyncNeeded = useCallback(async () => {
+    const workspaceService = WorkspaceService.getInstance();
+    const currentBoard = workspaceService.getCurrentBoard();
+
+    if (!currentBoard) {
+      return;
+    }
+
+    try {
+      // 使用 reloadBoard 强制从 IndexedDB 重新加载数据（而不是使用缓存）
+      const updatedBoard = await workspaceService.reloadBoard(currentBoard.id);
+
+      if (updatedBoard) {
+        // 恢复视频 URL
+        const elements = await recoverVideoUrlsInElements(updatedBoard.elements || []);
+
+        // 更新 React 状态，触发重新渲染
+        setValue({
+          children: elements,
+          viewport: updatedBoard.viewport,
+          theme: updatedBoard.theme,
+        });
+      }
+    } catch (error) {
+      console.error('[App] Failed to sync board data:', error);
+      // 如果同步失败，降级到刷新页面
+      safeReload();
+    }
   }, []);
 
   // Handle board changes (auto-save)
@@ -413,8 +502,12 @@ export function App() {
         onChange={handleBoardChange}
         onViewportChange={handleViewportChange}
         onBoardSwitch={handleBoardSwitch}
+        onTabSyncNeeded={handleTabSyncNeeded}
         isDataReady={isDataReady}
         afterInit={(board) => {
+          // 保存 board 引用，用于手动触发边界更新
+          boardRef.current = board;
+
           (
             window as unknown as {
               __drawnix__web__console: (value: string) => void;

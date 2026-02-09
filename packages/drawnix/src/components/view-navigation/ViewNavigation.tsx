@@ -14,6 +14,7 @@ import { useChatDrawerControl } from '../../contexts/ChatDrawerContext';
 import { Popover, PopoverContent, PopoverTrigger } from '../popover/popover';
 import { Z_INDEX } from '../../constants/z-index';
 import { useI18n } from '../../i18n';
+import { fitFrame } from '../../utils/fit-frame';
 import './view-navigation.scss';
 
 export interface ViewNavigationProps {
@@ -74,6 +75,12 @@ export const ViewNavigation: React.FC<ViewNavigationProps> = ({
 
   const handleZoom100 = useCallback(() => {
     BoardTransforms.updateZoom(board, 1);
+    setZoomMenuOpen(false);
+  }, [board]);
+
+  // 自适应 Frame：将选中的 Frame（或第一个 Frame）缩放到可视区域完整显示
+  const handleFitFrame = useCallback(() => {
+    fitFrame(board);
     setZoomMenuOpen(false);
   }, [board]);
 
@@ -233,6 +240,13 @@ export const ViewNavigation: React.FC<ViewNavigationProps> = ({
               >
                 <span className="zoom-menu-item__label">{t('zoom.fit')}</span>
                 <span className="zoom-menu-item__shortcut">⌘⇧=</span>
+              </button>
+              <button
+                className="zoom-menu-item"
+                onClick={handleFitFrame}
+                data-track="view_nav_zoom_fit_frame"
+              >
+                <span className="zoom-menu-item__label">{t('zoom.fitFrame')}</span>
               </button>
               <button
                 className="zoom-menu-item"

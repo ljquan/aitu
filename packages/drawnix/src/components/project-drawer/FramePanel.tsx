@@ -5,13 +5,15 @@
  * 支持点击聚焦到对应 Frame 视图
  */
 
-import React, { useMemo, useCallback, useState, useEffect } from 'react';
+import React, { useMemo, useCallback, useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import classNames from 'classnames';
 import { Input, Button, MessagePlugin, Tooltip, Loading } from 'tdesign-react';
-import { SearchIcon, EditIcon, DeleteIcon, ViewListIcon, AddIcon, PlayCircleIcon, ImageIcon } from 'tdesign-icons-react';
+import { SearchIcon, EditIcon, DeleteIcon, ViewListIcon, AddIcon, PlayCircleIcon, ImageIcon, LayersIcon, FileCopyIcon } from 'tdesign-icons-react';
 import {
   PlaitBoard,
+  PlaitElement,
+  Path,
   BoardTransforms,
   RectangleClient,
   Transforms,
@@ -25,11 +27,22 @@ import { useDragSort } from '../../hooks/use-drag-sort';
 import { AddFrameDialog } from './AddFrameDialog';
 import { FrameSlideshow } from './FrameSlideshow';
 import { generateImage } from '../../mcp/tools/image-generation';
-import { insertMediaIntoFrame } from '../../utils/frame-insertion-utils';
-import type { PPTFrameMeta } from '../../services/ppt';
+import {
+  insertMediaIntoFrame,
+  insertPPTImagePlaceholder,
+  removePPTImagePlaceholder,
+  setFramePPTImageStatus,
+  setPPTImagePlaceholderStatus,
+} from '../../utils/frame-insertion-utils';
+import { getImageRegion, type PPTFrameMeta } from '../../services/ppt';
+import { duplicateFrame, focusFrame } from '../../utils/frame-duplicate';
+import { useI18n } from '../../i18n';
 
 interface FrameInfo {
   frame: PlaitFrame;
+  path: Path;
+  listKey: string;
+  isRoot: boolean;
   childCount: number;
   width: number;
   height: number;
@@ -39,43 +52,85 @@ interface FrameInfo {
 
 export const FramePanel: React.FC = () => {
   const { board } = useDrawnix();
+  const { language } = useI18n();
   const [searchQuery, setSearchQuery] = useState('');
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingKey, setEditingKey] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
-  const [selectedFrameId, setSelectedFrameId] = useState<string | null>(null);
+  const [selectedFrameKey, setSelectedFrameKey] = useState<string | null>(null);
   const [addDialogVisible, setAddDialogVisible] = useState(false);
   const [slideshowVisible, setSlideshowVisible] = useState(false);
   const [generatingImageIds, setGeneratingImageIds] = useState<Set<string>>(new Set());
   const [isGeneratingAll, setIsGeneratingAll] = useState(false);
+  const bgFileInputRef = useRef<HTMLInputElement>(null);
   const [contextMenu, setContextMenu] = useState<{
     visible: boolean;
     x: number;
     y: number;
-    frame: PlaitFrame;
+    frameInfo: FrameInfo;
   } | null>(null);
 
-  // 收集画布中的所有 Frame 及其信息
+  // 监听画布变化，强制刷新 Frame 列表
+  // FramePanel 在 BoardContext（Wrapper）外部渲染，无法通过 BoardContext 的 v 版本号触发重渲染
+  // 因此需要通过包装 board.afterChange 来检测 children 变化
+  const [refreshKey, setRefreshKey] = useState(0);
+  useEffect(() => {
+    if (!board) return;
+    const originalAfterChange = board.afterChange;
+    board.afterChange = () => {
+      originalAfterChange();
+      setRefreshKey((k) => k + 1);
+    };
+    return () => {
+      board.afterChange = originalAfterChange;
+    };
+  }, [board]);
+
+  // 收集画布中的所有 Frame 及其信息（支持嵌套结构）
   const frames: FrameInfo[] = useMemo(() => {
     if (!board || !board.children) return [];
 
     const result: FrameInfo[] = [];
-    for (const element of board.children) {
-      if (isFrameElement(element)) {
-        const frame = element as PlaitFrame;
-        const rect = RectangleClient.getRectangleByPoints(frame.points);
-        const children = FrameTransforms.getFrameChildren(board, frame);
-        const pptMeta = (frame as any).pptMeta as PPTFrameMeta | undefined;
-        result.push({
-          frame,
-          childCount: children.length,
-          width: Math.round(rect.width),
-          height: Math.round(rect.height),
-          pptMeta,
-        });
-      }
-    }
+    const childCountMap = new Map<string, number>();
+
+    const walk = (elements: PlaitElement[], parentPath: Path = []) => {
+      elements.forEach((element, index) => {
+        const path: Path = [...parentPath, index];
+        const frameId = (element as PlaitElement & { frameId?: string }).frameId;
+        if (frameId) {
+          childCountMap.set(frameId, (childCountMap.get(frameId) ?? 0) + 1);
+        }
+
+        if (isFrameElement(element)) {
+          const frame = element as PlaitFrame;
+          const rect = RectangleClient.getRectangleByPoints(frame.points);
+          const pptMeta = (frame as any).pptMeta as PPTFrameMeta | undefined;
+          result.push({
+            frame,
+            path,
+            listKey: `${frame.id}-${path.join('.')}`,
+            isRoot: parentPath.length === 0,
+            childCount: 0,
+            width: Math.round(rect.width),
+            height: Math.round(rect.height),
+            pptMeta,
+          });
+        }
+
+        if (element.children && element.children.length > 0) {
+          walk(element.children as PlaitElement[], path);
+        }
+      });
+    };
+
+    walk(board.children as PlaitElement[]);
+
+    result.forEach((info) => {
+      info.childCount = childCountMap.get(info.frame.id) ?? 0;
+    });
+
     return result;
-  }, [board, board?.children]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [board, refreshKey]);
 
   // 过滤 Frame
   const filteredFrames = useMemo(() => {
@@ -86,50 +141,67 @@ export const FramePanel: React.FC = () => {
     );
   }, [frames, searchQuery]);
 
-  const frameIndexMap = useMemo(() => {
+  const rootFrames = useMemo(() => {
+    return frames.filter((item) => item.isRoot);
+  }, [frames]);
+
+  const rootIndexMap = useMemo(() => {
     const map = new Map<string, number>();
-    frames.forEach((item, index) => {
-      map.set(item.frame.id, index);
+    rootFrames.forEach((item, index) => {
+      map.set(item.listKey, index);
     });
     return map;
-  }, [frames]);
+  }, [rootFrames]);
 
   // 点击 Frame：选中并聚焦视图
   const handleFrameClick = useCallback(
-    (frame: PlaitFrame) => {
+    (frameInfo: FrameInfo) => {
       if (!board) return;
 
-      setSelectedFrameId(frame.id);
+      setSelectedFrameKey(frameInfo.listKey);
 
       // 选中该 Frame
       clearSelectedElement(board);
-      const element = board.children.find((el) => el.id === frame.id);
-      if (element) {
-        addSelectedElement(board, element);
-      }
+      addSelectedElement(board, frameInfo.frame);
 
       // 计算 Frame 矩形
-      const rect = RectangleClient.getRectangleByPoints(frame.points);
+      const rect = RectangleClient.getRectangleByPoints(frameInfo.frame.points);
       const padding = 80;
 
-      // 获取视口尺寸
+      // 获取画布容器尺寸
       const container = PlaitBoard.getBoardContainer(board);
-      const viewportWidth = container.clientWidth;
-      const viewportHeight = container.clientHeight;
+      let viewportWidth = container.clientWidth;
+      let viewportHeight = container.clientHeight;
 
-      // 计算缩放比例，让 Frame 适应视口
-      const scaleX = viewportWidth / (rect.width + padding * 2);
-      const scaleY = viewportHeight / (rect.height + padding * 2);
+      // 获取左侧抽屉宽度（如果存在）
+      const drawer = document.querySelector('.project-drawer');
+      const drawerWidth = drawer ? (drawer as HTMLElement).offsetWidth : 0;
+
+      // 获取底部输入框高度（如果存在）
+      const inputBar = document.querySelector('.ai-input-bar');
+      const inputBarHeight = inputBar ? (inputBar as HTMLElement).offsetHeight : 0;
+
+      // 计算实际可见区域尺寸
+      const visibleWidth = viewportWidth - drawerWidth;
+      const visibleHeight = viewportHeight - inputBarHeight;
+
+      // 计算缩放比例，让 Frame 适应可见区域
+      const scaleX = visibleWidth / (rect.width + padding * 2);
+      const scaleY = visibleHeight / (rect.height + padding * 2);
       const zoom = Math.min(scaleX, scaleY, 2);
 
       // 计算 Frame 中心点
       const centerX = rect.x + rect.width / 2;
       const centerY = rect.y + rect.height / 2;
 
-      // 计算 origination：使 Frame 中心对齐视口中心
+      // 计算可见区域的中心点（考虑抽屉和输入框的偏移）
+      const visibleCenterX = drawerWidth + visibleWidth / 2;
+      const visibleCenterY = visibleHeight / 2;
+
+      // 计算 origination：使 Frame 中心对齐可见区域中心
       const origination: [number, number] = [
-        centerX - viewportWidth / 2 / zoom,
-        centerY - viewportHeight / 2 / zoom,
+        centerX - visibleCenterX / zoom,
+        centerY - visibleCenterY / zoom,
       ];
 
       BoardTransforms.updateViewport(board, origination, zoom);
@@ -139,23 +211,23 @@ export const FramePanel: React.FC = () => {
 
   // 开始重命名
   const handleStartRename = useCallback(
-    (frame: PlaitFrame, e: React.MouseEvent) => {
+    (frameInfo: FrameInfo, e: React.MouseEvent) => {
       e.stopPropagation();
-      setEditingId(frame.id);
-      setEditingName(frame.name);
+      setEditingKey(frameInfo.listKey);
+      setEditingName(frameInfo.frame.name);
     },
     []
   );
 
   // 完成重命名
   const handleFinishRename = useCallback(
-    (frame: PlaitFrame) => {
+    (frameInfo: FrameInfo) => {
       if (!board) return;
       const newName = editingName.trim();
-      if (newName && newName !== frame.name) {
-        FrameTransforms.renameFrame(board, frame, newName);
+      if (newName && newName !== frameInfo.frame.name) {
+        Transforms.setNode(board, { name: newName } as any, frameInfo.path);
       }
-      setEditingId(null);
+      setEditingKey(null);
       setEditingName('');
     },
     [board, editingName]
@@ -163,22 +235,37 @@ export const FramePanel: React.FC = () => {
 
   // 删除 Frame
   const handleDelete = useCallback(
-    (frame: PlaitFrame, e?: React.MouseEvent) => {
+    (frameInfo: FrameInfo, e?: React.MouseEvent) => {
       e?.stopPropagation();
       if (!board) return;
-      const index = board.children.findIndex((el) => el.id === frame.id);
-      if (index !== -1) {
-        // 先解绑所有子元素
-        const children = FrameTransforms.getFrameChildren(board, frame);
-        for (const child of children) {
-          FrameTransforms.unbindFromFrame(board, child);
-        }
-        // 删除 Frame
-        Transforms.removeNode(board, [index]);
-        MessagePlugin.success('已删除 Frame');
+
+      // 先解绑所有子元素
+      const children = FrameTransforms.getFrameChildren(board, frameInfo.frame);
+      for (const child of children) {
+        FrameTransforms.unbindFromFrame(board, child);
       }
+
+      // 删除 Frame
+      Transforms.removeNode(board, frameInfo.path);
+      MessagePlugin.success('已删除 Frame');
     },
     [board]
+  );
+
+  // 复制 Frame
+  const handleDuplicate = useCallback(
+    (frameInfo: FrameInfo, e?: React.MouseEvent) => {
+      e?.stopPropagation();
+      if (!board) return;
+
+      const clonedFrame = duplicateFrame(board, frameInfo.frame, language as 'zh' | 'en');
+
+      // 如果复制成功，自动聚焦到新 Frame
+      if (clonedFrame) {
+        focusFrame(board, clonedFrame);
+      }
+    },
+    [board, language]
   );
 
   const reorderFrames = useCallback(
@@ -213,11 +300,34 @@ export const FramePanel: React.FC = () => {
   );
 
   const { getDragProps } = useDragSort({
-    items: frames,
-    getId: (item) => item.frame.id,
+    items: rootFrames,
+    getId: (item) => item.listKey,
     onReorder: reorderFrames,
-    enabled: !searchQuery.trim(),
+    enabled: !searchQuery.trim() && rootFrames.length > 1,
   });
+
+  const noop = useCallback(() => {}, []);
+  const getFrameDragProps = useCallback(
+    (info: FrameInfo) => {
+      if (!info.isRoot) {
+        return {
+          draggable: false,
+          onDragStart: noop,
+          onDragEnd: noop,
+          onDragOver: noop,
+          onDragEnter: noop,
+          onDragLeave: noop,
+          onDrop: noop,
+          'data-dragging': false,
+          'data-drag-over': false,
+          'data-drag-position': undefined,
+        };
+      }
+      const index = rootIndexMap.get(info.listKey) ?? 0;
+      return getDragProps(info.listKey, index);
+    },
+    [getDragProps, rootIndexMap, noop]
+  );
 
   const closeContextMenu = useCallback(() => {
     setContextMenu(null);
@@ -236,40 +346,98 @@ export const FramePanel: React.FC = () => {
   }, [contextMenu?.visible, closeContextMenu]);
 
   const handleContextMenu = useCallback(
-    (e: React.MouseEvent, frame: PlaitFrame) => {
+    (e: React.MouseEvent, frameInfo: FrameInfo) => {
       e.preventDefault();
       e.stopPropagation();
-      setSelectedFrameId(frame.id);
+      setSelectedFrameKey(frameInfo.listKey);
       setContextMenu({
         visible: true,
         x: e.clientX,
         y: e.clientY,
-        frame,
+        frameInfo,
       });
     },
     []
   );
 
   const handleContextMenuAction = useCallback(
-    (action: 'rename' | 'delete') => {
+    (action: 'rename' | 'duplicate' | 'delete') => {
       if (!contextMenu) return;
-      const frame = contextMenu.frame;
+      const frameInfo = contextMenu.frameInfo;
       if (action === 'rename') {
-        setEditingId(frame.id);
-        setEditingName(frame.name);
+        setEditingKey(frameInfo.listKey);
+        setEditingName(frameInfo.frame.name);
+      }
+      if (action === 'duplicate') {
+        handleDuplicate(frameInfo);
       }
       if (action === 'delete') {
-        handleDelete(frame);
+        handleDelete(frameInfo);
       }
       closeContextMenu();
     },
-    [contextMenu, handleDelete, closeContextMenu]
+    [contextMenu, handleDelete, handleDuplicate, closeContextMenu]
   );
 
   // 统计有配图提示词的 Frame 数量
   const framesWithImagePrompt = useMemo(() => {
     return frames.filter((f) => f.pptMeta?.imagePrompt).length;
   }, [frames]);
+
+  // 统计 PPT Frame 数量（有 pptMeta 的 Frame）
+  const pptFrames = useMemo(() => {
+    return frames.filter((f) => f.pptMeta);
+  }, [frames]);
+
+  // 检查当前是否已有背景图
+  const currentBackgroundUrl = useMemo(() => {
+    const firstPptFrame = pptFrames.find((f) => f.frame.backgroundUrl);
+    return firstPptFrame?.frame.backgroundUrl;
+  }, [pptFrames]);
+
+  // 处理背景图文件上传
+  const handleBackgroundUpload = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (!board || pptFrames.length === 0) return;
+
+      const file = e.target.files?.[0];
+      if (!file) return;
+
+      // 验证文件类型
+      if (!file.type.startsWith('image/')) {
+        MessagePlugin.error('请选择图片文件');
+        return;
+      }
+
+      // 转为 data URL 并设置给所有 PPT Frame
+      const reader = new FileReader();
+      reader.onload = () => {
+        const dataUrl = reader.result as string;
+
+        for (const frameInfo of pptFrames) {
+          Transforms.setNode(board, { backgroundUrl: dataUrl } as any, frameInfo.path);
+        }
+
+        MessagePlugin.success(`已为 ${pptFrames.length} 个 PPT 页面设置背景图`);
+      };
+      reader.readAsDataURL(file);
+
+      // 重置 input 以便重复选择同一文件
+      e.target.value = '';
+    },
+    [board, pptFrames]
+  );
+
+  // 清除所有 PPT Frame 的背景图
+  const handleClearBackground = useCallback(() => {
+    if (!board || pptFrames.length === 0) return;
+
+    for (const frameInfo of pptFrames) {
+      Transforms.setNode(board, { backgroundUrl: undefined } as any, frameInfo.path);
+    }
+
+    MessagePlugin.success('已清除所有 PPT 页面的背景图');
+  }, [board, pptFrames]);
 
   // 为单个 Frame 生成配图
   const handleGenerateImage = useCallback(
@@ -280,6 +448,10 @@ export const FramePanel: React.FC = () => {
       const frameId = frameInfo.frame.id;
       setGeneratingImageIds((prev) => new Set(prev).add(frameId));
 
+      insertPPTImagePlaceholder(board, frameInfo.frame, frameInfo.pptMeta.imagePrompt);
+      setPPTImagePlaceholderStatus(board, frameId, 'loading');
+      setFramePPTImageStatus(board, frameId, 'loading');
+
       try {
         // 调用图片生成
         const result = await generateImage({
@@ -287,22 +459,36 @@ export const FramePanel: React.FC = () => {
           size: '16x9', // PPT 页面使用 16:9 比例
         });
 
-        if (result.success && result.data?.imageUrl) {
-          // 插入图片到 Frame
+        if (result.success && result.data?.url) {
+          // 计算图片区域并插入
+          const frameRect = RectangleClient.getRectangleByPoints(frameInfo.frame.points);
+          const imgRegion = getImageRegion({
+            x: frameRect.x,
+            y: frameRect.y,
+            width: frameRect.width,
+            height: frameRect.height,
+          });
+          removePPTImagePlaceholder(board, frameId);
           await insertMediaIntoFrame(
             board,
-            result.data.imageUrl,
+            result.data.url,
             'image',
             frameId,
             { width: frameInfo.width, height: frameInfo.height },
-            { width: 800, height: 450 } // 16:9 默认尺寸
+            { width: 800, height: 450 }, // 16:9 默认尺寸
+            imgRegion
           );
+          setFramePPTImageStatus(board, frameId, 'generated');
           MessagePlugin.success(`已为「${frameInfo.frame.name}」生成配图`);
         } else {
+          setPPTImagePlaceholderStatus(board, frameId, 'placeholder');
+          setFramePPTImageStatus(board, frameId, 'placeholder');
           MessagePlugin.error(result.error || '图片生成失败');
         }
       } catch (error: any) {
         console.error('[FramePanel] Generate image failed:', error);
+        setPPTImagePlaceholderStatus(board, frameId, 'placeholder');
+        setFramePPTImageStatus(board, frameId, 'placeholder');
         MessagePlugin.error(error.message || '图片生成失败');
       } finally {
         setGeneratingImageIds((prev) => {
@@ -335,26 +521,44 @@ export const FramePanel: React.FC = () => {
         const frameId = frameInfo.frame.id;
         setGeneratingImageIds((prev) => new Set(prev).add(frameId));
 
+        insertPPTImagePlaceholder(board, frameInfo.frame, frameInfo.pptMeta!.imagePrompt!);
+        setPPTImagePlaceholderStatus(board, frameId, 'loading');
+        setFramePPTImageStatus(board, frameId, 'loading');
+
         try {
           const result = await generateImage({
             prompt: frameInfo.pptMeta!.imagePrompt!,
             size: '16x9',
           });
 
-          if (result.success && result.data?.imageUrl) {
+          if (result.success && result.data?.url) {
+            const frameRect = RectangleClient.getRectangleByPoints(frameInfo.frame.points);
+            const imgRegion = getImageRegion({
+              x: frameRect.x,
+              y: frameRect.y,
+              width: frameRect.width,
+              height: frameRect.height,
+            });
+            removePPTImagePlaceholder(board, frameId);
             await insertMediaIntoFrame(
               board,
-              result.data.imageUrl,
+              result.data.url,
               'image',
               frameId,
               { width: frameInfo.width, height: frameInfo.height },
-              { width: 800, height: 450 }
+              { width: 800, height: 450 },
+              imgRegion
             );
+            setFramePPTImageStatus(board, frameId, 'generated');
             successCount++;
           } else {
+            setPPTImagePlaceholderStatus(board, frameId, 'placeholder');
+            setFramePPTImageStatus(board, frameId, 'placeholder');
             failCount++;
           }
         } catch {
+          setPPTImagePlaceholderStatus(board, frameId, 'placeholder');
+          setFramePPTImageStatus(board, frameId, 'placeholder');
           failCount++;
         } finally {
           setGeneratingImageIds((prev) => {
@@ -400,42 +604,76 @@ export const FramePanel: React.FC = () => {
         />
       </div>
 
-      {/* 操作栏 */}
+      {/* 操作栏：icon + hover 文字 */}
       <div className="frame-panel__actions">
-        <Button
-          variant="outline"
-          size="small"
-          icon={<AddIcon />}
-          onClick={() => setAddDialogVisible(true)}
-        >
-          添加 Frame
-        </Button>
-        <Tooltip content={frames.length === 0 ? '没有 Frame 可播放' : '全屏播放所有 Frame'} theme="light">
+        <Tooltip content="添加 Frame" theme="light">
           <Button
             variant="outline"
             size="small"
+            shape="square"
+            icon={<AddIcon />}
+            onClick={() => setAddDialogVisible(true)}
+          />
+        </Tooltip>
+        <Tooltip content={frames.length === 0 ? '没有 Frame 可播放' : '幻灯片播放'} theme="light">
+          <Button
+            variant="outline"
+            size="small"
+            shape="square"
             icon={<PlayCircleIcon />}
             disabled={frames.length === 0}
             onClick={() => setSlideshowVisible(true)}
-          >
-            幻灯片播放
-          </Button>
+          />
         </Tooltip>
         {framesWithImagePrompt > 0 && (
           <Tooltip
-            content={isGeneratingAll ? '正在生成...' : `为 ${framesWithImagePrompt} 个页面生成配图`}
+            content={isGeneratingAll ? '正在生成...' : `全部配图 (${framesWithImagePrompt})`}
             theme="light"
           >
             <Button
               variant="outline"
               size="small"
+              shape="square"
               icon={isGeneratingAll ? <Loading size="small" /> : <ImageIcon />}
               disabled={isGeneratingAll}
               onClick={handleGenerateAllImages}
-            >
-              全部配图
-            </Button>
+            />
           </Tooltip>
+        )}
+        {pptFrames.length > 0 && (
+          <>
+            <Tooltip
+              content={currentBackgroundUrl ? '更换背景图' : '设置背景图'}
+              theme="light"
+            >
+              <Button
+                variant="outline"
+                size="small"
+                shape="square"
+                icon={<LayersIcon />}
+                onClick={() => bgFileInputRef.current?.click()}
+              />
+            </Tooltip>
+            {currentBackgroundUrl && (
+              <Tooltip content="清除背景图" theme="light">
+                <Button
+                  variant="outline"
+                  size="small"
+                  shape="square"
+                  theme="danger"
+                  icon={<DeleteIcon />}
+                  onClick={handleClearBackground}
+                />
+              </Tooltip>
+            )}
+            <input
+              ref={bgFileInputRef}
+              type="file"
+              accept="image/*"
+              style={{ display: 'none' }}
+              onChange={handleBackgroundUpload}
+            />
+          </>
         )}
       </div>
 
@@ -452,99 +690,96 @@ export const FramePanel: React.FC = () => {
         </div>
       ) : (
         <div className="frame-panel__list">
-          {filteredFrames.map((info) => (
-            (() => {
-              const index = frameIndexMap.get(info.frame.id) ?? 0;
-              const dragProps = getDragProps(info.frame.id, index);
-              return (
-            <div
-              key={info.frame.id}
-              className={classNames('frame-panel__item', {
-                'frame-panel__item--active': selectedFrameId === info.frame.id,
-                'frame-panel__item--dragging': dragProps['data-dragging'],
-                'frame-panel__item--drag-over': dragProps['data-drag-over'],
-                'frame-panel__item--drag-before': dragProps['data-drag-position'] === 'before',
-                'frame-panel__item--drag-after': dragProps['data-drag-position'] === 'after',
-              })}
-              onClick={() => handleFrameClick(info.frame)}
-              onContextMenu={(e) => handleContextMenu(e, info.frame)}
-              {...dragProps}
-            >
-              <div className="frame-panel__item-icon">
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                  <rect
-                    x="1.5"
-                    y="1.5"
-                    width="13"
-                    height="13"
-                    rx="2"
-                    stroke="currentColor"
-                    strokeWidth="1.2"
-                    strokeDasharray="3 2"
-                    fill="none"
-                  />
-                </svg>
-              </div>
-
-              <div className="frame-panel__item-content">
-                {editingId === info.frame.id ? (
-                  <Input
-                    value={editingName}
-                    onChange={setEditingName}
-                    size="small"
-                    autofocus
-                    onBlur={() => handleFinishRename(info.frame)}
-                    onEnter={() => handleFinishRename(info.frame)}
-                    onClick={(context: { e: React.MouseEvent }) => context.e.stopPropagation()}
-                  />
-                ) : (
-                  <>
-                    <span className="frame-panel__item-name">
-                      {info.frame.name}
-                    </span>
-                    <span className="frame-panel__item-meta">
-                      {info.width} × {info.height}
-                      {info.childCount > 0 && ` · ${info.childCount} 个元素`}
-                    </span>
-                  </>
-                )}
-              </div>
-
-              <div className="frame-panel__item-actions">
-                {info.pptMeta?.imagePrompt && (
-                  <Tooltip content={generatingImageIds.has(info.frame.id) ? '生成中...' : '生成配图'} theme="light">
-                    <Button
-                      variant="text"
-                      size="small"
-                      shape="square"
-                      icon={generatingImageIds.has(info.frame.id) ? <Loading size="small" /> : <ImageIcon />}
-                      onClick={(e) => handleGenerateImage(info, e as unknown as React.MouseEvent)}
-                      disabled={generatingImageIds.has(info.frame.id)}
+          {filteredFrames.map((info) => {
+            const dragProps = getFrameDragProps(info);
+            return (
+              <div
+                key={info.listKey}
+                className={classNames('frame-panel__item', {
+                  'frame-panel__item--active': selectedFrameKey === info.listKey,
+                  'frame-panel__item--dragging': dragProps['data-dragging'],
+                  'frame-panel__item--drag-over': dragProps['data-drag-over'],
+                  'frame-panel__item--drag-before': dragProps['data-drag-position'] === 'before',
+                  'frame-panel__item--drag-after': dragProps['data-drag-position'] === 'after',
+                })}
+                onClick={() => handleFrameClick(info)}
+                onContextMenu={(e) => handleContextMenu(e, info)}
+                {...dragProps}
+              >
+                <div className="frame-panel__item-icon">
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                    <rect
+                      x="1.5"
+                      y="1.5"
+                      width="13"
+                      height="13"
+                      rx="2"
+                      stroke="currentColor"
+                      strokeWidth="1.2"
+                      strokeDasharray="3 2"
+                      fill="none"
                     />
-                  </Tooltip>
-                )}
-                <Button
-                  variant="text"
-                  size="small"
-                  shape="square"
-                  icon={<EditIcon />}
-                  onClick={(e) => handleStartRename(info.frame, e as unknown as React.MouseEvent)}
-                  title="重命名"
-                />
-                <Button
-                  variant="text"
-                  size="small"
-                  shape="square"
-                  theme="danger"
-                  icon={<DeleteIcon />}
-                  onClick={(e) => handleDelete(info.frame, e as unknown as React.MouseEvent)}
-                  title="删除"
-                />
+                  </svg>
+                </div>
+
+                <div className="frame-panel__item-content">
+                  {editingKey === info.listKey ? (
+                    <Input
+                      value={editingName}
+                      onChange={setEditingName}
+                      size="small"
+                      autofocus
+                      onBlur={() => handleFinishRename(info)}
+                      onEnter={() => handleFinishRename(info)}
+                      onClick={(context: { e: React.MouseEvent }) => context.e.stopPropagation()}
+                    />
+                  ) : (
+                    <>
+                      <span className="frame-panel__item-name">
+                        {info.frame.name}
+                      </span>
+                      <span className="frame-panel__item-meta">
+                        {info.width} × {info.height}
+                        {info.childCount > 0 && ` · ${info.childCount} 个元素`}
+                      </span>
+                    </>
+                  )}
+                </div>
+
+                <div className="frame-panel__item-actions">
+                  {info.pptMeta?.imagePrompt && (
+                    <Tooltip content={generatingImageIds.has(info.frame.id) ? '生成中...' : '生成配图'} theme="light">
+                      <Button
+                        variant="text"
+                        size="small"
+                        shape="square"
+                        icon={generatingImageIds.has(info.frame.id) ? <Loading size="small" /> : <ImageIcon />}
+                        onClick={(e) => handleGenerateImage(info, e as unknown as React.MouseEvent)}
+                        disabled={generatingImageIds.has(info.frame.id)}
+                      />
+                    </Tooltip>
+                  )}
+                  <Button
+                    variant="text"
+                    size="small"
+                    shape="square"
+                    icon={<EditIcon />}
+                    onClick={(e) => handleStartRename(info, e as unknown as React.MouseEvent)}
+                    title="重命名"
+                  />
+                  <Button
+                    variant="text"
+                    size="small"
+                    shape="square"
+                    theme="danger"
+                    icon={<DeleteIcon />}
+                    onClick={(e) => handleDelete(info, e as unknown as React.MouseEvent)}
+                    title="删除"
+                  />
+                </div>
               </div>
-            </div>
-              );
-            })()
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -561,6 +796,10 @@ export const FramePanel: React.FC = () => {
           <div className="project-drawer-context-menu__item" onClick={() => handleContextMenuAction('rename')}>
             <EditIcon />
             <span>重命名</span>
+          </div>
+          <div className="project-drawer-context-menu__item" onClick={() => handleContextMenuAction('duplicate')}>
+            <FileCopyIcon />
+            <span>复制</span>
           </div>
           <div className="project-drawer-context-menu__divider" />
           <div className="project-drawer-context-menu__item project-drawer-context-menu__item--danger" onClick={() => handleContextMenuAction('delete')}>

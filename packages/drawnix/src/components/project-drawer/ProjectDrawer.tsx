@@ -1349,8 +1349,9 @@ export const ProjectDrawer: React.FC<ProjectDrawerProps> = ({
   // Handle board click
   const handleBoardClick = useCallback(
     async (board: Board) => {
-      console.log('[ProjectDrawer] handleBoardClick:', board.id, 'current:', currentBoard?.id);
-      if (board.id === currentBoard?.id) return;
+      if (board.id === currentBoard?.id) {
+        return;
+      }
 
       // Save current before switching
       if (onBeforeSwitch) {
@@ -1358,7 +1359,7 @@ export const ProjectDrawer: React.FC<ProjectDrawerProps> = ({
       }
 
       const switched = await switchBoard(board.id);
-      console.log('[ProjectDrawer] switched:', switched?.id, 'onBoardSwitch exists:', !!onBoardSwitch);
+
       if (switched && onBoardSwitch) {
         onBoardSwitch(switched);
       }
@@ -1411,6 +1412,7 @@ export const ProjectDrawer: React.FC<ProjectDrawerProps> = ({
   const tabSwitcher = (
     <div className="project-drawer-tabs">
       <button
+        type="button"
         className={`project-drawer-tabs__tab${activeTab === 'boards' ? ' project-drawer-tabs__tab--active' : ''}`}
         onClick={() => setActiveTab('boards')}
       >
@@ -1418,6 +1420,7 @@ export const ProjectDrawer: React.FC<ProjectDrawerProps> = ({
         画布管理
       </button>
       <button
+        type="button"
         className={`project-drawer-tabs__tab${activeTab === 'frames' ? ' project-drawer-tabs__tab--active' : ''}`}
         onClick={() => setActiveTab('frames')}
       >

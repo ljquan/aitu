@@ -3,11 +3,19 @@ import { useEffect, useRef, useCallback } from 'react';
 const TAB_SYNC_KEY = 'aitu-tab-sync-version';
 const POLL_INTERVAL = 500; // 500ms 轮询间隔（比 Excalidraw 的 50ms 更保守）
 
+// 生成当前标签页的唯一ID
+const TAB_ID = `tab-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
 interface UseTabSyncOptions {
   /** 当其他标签页修改数据后触发的回调 */
   onSyncNeeded: () => void;
   /** 是否启用 */
   enabled?: boolean;
+}
+
+interface TabSyncData {
+  version: number;
+  tabId: string;
 }
 
 /**
@@ -29,7 +37,17 @@ export function useTabSync({ onSyncNeeded, enabled = true }: UseTabSyncOptions) 
     if (!enabled) return;
 
     const stored = localStorage.getItem(TAB_SYNC_KEY);
-    localVersionRef.current = stored ? parseInt(stored, 10) : Date.now();
+    if (stored) {
+      try {
+        const data: TabSyncData = JSON.parse(stored);
+        localVersionRef.current = data.version;
+      } catch {
+        // 兼容旧格式（纯数字）
+        localVersionRef.current = parseInt(stored, 10) || Date.now();
+      }
+    } else {
+      localVersionRef.current = Date.now();
+    }
   }, [enabled]);
 
   // 轮询检测
@@ -40,10 +58,26 @@ export function useTabSync({ onSyncNeeded, enabled = true }: UseTabSyncOptions) 
       // 标签页不可见时不检测
       if (document.hidden) return;
 
-      const remote = parseInt(localStorage.getItem(TAB_SYNC_KEY) || '-1', 10);
-      if (remote > localVersionRef.current) {
-        localVersionRef.current = remote;
-        onSyncNeeded();
+      const stored = localStorage.getItem(TAB_SYNC_KEY);
+      if (!stored) return;
+
+      try {
+        const data: TabSyncData = JSON.parse(stored);
+        // 只有当版本号更新且不是当前标签页触发的更新时，才触发同步
+        if (data.version > localVersionRef.current && data.tabId !== TAB_ID) {
+          localVersionRef.current = data.version;
+          onSyncNeeded();
+        } else if (data.version > localVersionRef.current && data.tabId === TAB_ID) {
+          // 是自己触发的更新，只更新版本号，不触发同步
+          localVersionRef.current = data.version;
+        }
+      } catch {
+        // 兼容旧格式（纯数字）
+        const remote = parseInt(stored, 10);
+        if (remote > localVersionRef.current) {
+          localVersionRef.current = remote;
+          onSyncNeeded();
+        }
       }
     }, POLL_INTERVAL);
 
@@ -63,7 +97,8 @@ export function useTabSync({ onSyncNeeded, enabled = true }: UseTabSyncOptions) 
         // 离开标签页时，确保版本号已写入
         const v = Date.now();
         try {
-          localStorage.setItem(TAB_SYNC_KEY, String(v));
+          const data: TabSyncData = { version: v, tabId: TAB_ID };
+          localStorage.setItem(TAB_SYNC_KEY, JSON.stringify(data));
           localVersionRef.current = v;
         } catch {
           // 静默处理
@@ -85,7 +120,8 @@ export function useTabSync({ onSyncNeeded, enabled = true }: UseTabSyncOptions) 
 export function markTabSyncVersion() {
   try {
     const v = Date.now();
-    localStorage.setItem(TAB_SYNC_KEY, String(v));
+    const data: TabSyncData = { version: v, tabId: TAB_ID };
+    localStorage.setItem(TAB_SYNC_KEY, JSON.stringify(data));
   } catch {
     // 静默处理
   }

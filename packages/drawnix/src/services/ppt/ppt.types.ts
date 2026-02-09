@@ -52,12 +52,18 @@ export interface PPTGenerateOptions {
 export interface PPTFrameMeta {
   /** 配图提示词 */
   imagePrompt?: string;
+  /** 配图状态 */
+  imageStatus?: 'placeholder' | 'loading' | 'generated';
   /** 页面版式类型 */
   layout?: PPTLayoutType;
   /** 演讲者备注 */
   notes?: string;
   /** 页面索引（从 1 开始） */
   pageIndex?: number;
+  /** 背景图 URL（所有 PPT Frame 共享同一张） */
+  backgroundUrl?: string;
+  /** 背景图提示词（用于生成背景图） */
+  backgroundPrompt?: string;
 }
 
 /** 布局引擎输出：单个文本元素的位置和样式 */
@@ -92,4 +98,38 @@ export interface PPTGenerationParams {
   language?: string;
   /** 额外要求 */
   extraRequirements?: string;
+}
+
+// ============================================
+// 思维导图转 PPT 相关类型
+// ============================================
+
+/** 思维导图节点信息（用于转换） */
+export interface MindmapNodeInfo {
+  /** 节点文本内容 */
+  text: string;
+  /** 子节点列表 */
+  children: MindmapNodeInfo[];
+  /** 节点深度（根节点为 0） */
+  depth: number;
+}
+
+/** 思维导图转 PPT 选项 */
+export interface MindmapToPPTOptions {
+  /** 是否生成目录页，默认 true */
+  includeToc?: boolean;
+  /** 结尾页文案，默认"谢谢观看" */
+  endingTitle?: string;
+  /** 结尾页副标题 */
+  endingSubtitle?: string;
+}
+
+/** 思维导图转 PPT 结果 */
+export interface MindmapToPPTResult {
+  /** 是否成功 */
+  success: boolean;
+  /** 生成的页面数量 */
+  pageCount?: number;
+  /** 错误信息 */
+  error?: string;
 }
