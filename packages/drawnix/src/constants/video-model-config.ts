@@ -290,6 +290,96 @@ export const VIDEO_MODEL_CONFIGS: Record<VideoModel, VideoModelConfig> = {
       labels: ['首帧', '尾帧'],
     },
   },
+
+  // Seedance models
+  'seedance-1.5-pro': {
+    id: 'seedance-1.5-pro',
+    label: 'Seedance 1.5 Pro',
+    provider: 'seedance',
+    description: '即梦 1.5 Pro 有声视频，支持首尾帧',
+    durationOptions: [
+      { label: '5秒', value: '5' },
+      { label: '10秒', value: '10' },
+    ],
+    defaultDuration: '5',
+    sizeOptions: [
+      { label: '1080p', value: '1080p', aspectRatio: '16:9' },
+      { label: '720p', value: '720p', aspectRatio: '16:9' },
+      { label: '480p', value: '480p', aspectRatio: '16:9' },
+    ],
+    defaultSize: '720p',
+    imageUpload: {
+      maxCount: 2,
+      mode: 'frames',
+      labels: ['首帧', '尾帧'],
+    },
+  },
+  'seedance-1.0-pro': {
+    id: 'seedance-1.0-pro',
+    label: 'Seedance 1.0 Pro',
+    provider: 'seedance',
+    description: '即梦 1.0 Pro，支持首尾帧',
+    durationOptions: [
+      { label: '5秒', value: '5' },
+      { label: '10秒', value: '10' },
+    ],
+    defaultDuration: '5',
+    sizeOptions: [
+      { label: '1080p', value: '1080p', aspectRatio: '16:9' },
+      { label: '720p', value: '720p', aspectRatio: '16:9' },
+      { label: '480p', value: '480p', aspectRatio: '16:9' },
+    ],
+    defaultSize: '720p',
+    imageUpload: {
+      maxCount: 2,
+      mode: 'frames',
+      labels: ['首帧', '尾帧'],
+    },
+  },
+  'seedance-1.0-pro-fast': {
+    id: 'seedance-1.0-pro-fast',
+    label: 'Seedance 1.0 Fast',
+    provider: 'seedance',
+    description: '即梦 1.0 快速模式，仅首帧',
+    durationOptions: [
+      { label: '5秒', value: '5' },
+      { label: '10秒', value: '10' },
+    ],
+    defaultDuration: '5',
+    sizeOptions: [
+      { label: '1080p', value: '1080p', aspectRatio: '16:9' },
+      { label: '720p', value: '720p', aspectRatio: '16:9' },
+      { label: '480p', value: '480p', aspectRatio: '16:9' },
+    ],
+    defaultSize: '720p',
+    imageUpload: {
+      maxCount: 1,
+      mode: 'frames',
+      labels: ['首帧'],
+    },
+  },
+  'seedance-1.0-lite': {
+    id: 'seedance-1.0-lite',
+    label: 'Seedance 1.0 Lite',
+    provider: 'seedance',
+    description: '即梦 1.0 Lite，支持首尾帧和参考图',
+    durationOptions: [
+      { label: '5秒', value: '5' },
+      { label: '10秒', value: '10' },
+    ],
+    defaultDuration: '5',
+    sizeOptions: [
+      { label: '1080p', value: '1080p', aspectRatio: '16:9' },
+      { label: '720p', value: '720p', aspectRatio: '16:9' },
+      { label: '480p', value: '480p', aspectRatio: '16:9' },
+    ],
+    defaultSize: '720p',
+    imageUpload: {
+      maxCount: 4,
+      mode: 'reference',
+      labels: ['首帧', '尾帧', '参考图1', '参考图2'],
+    },
+  },
 };
 
 /**

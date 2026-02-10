@@ -19,10 +19,14 @@ export type VideoModel =
   | 'veo3.1-components'
   | 'veo3.1-4k'
   | 'veo3.1-components-4k'
-  | 'veo3.1-pro-4k';
+  | 'veo3.1-pro-4k'
+  | 'seedance-1.5-pro'
+  | 'seedance-1.0-pro'
+  | 'seedance-1.0-pro-fast'
+  | 'seedance-1.0-lite';
 
 // Video model provider
-export type VideoProvider = 'sora' | 'veo' | 'kling';
+export type VideoProvider = 'sora' | 'veo' | 'kling' | 'seedance';
 
 // Image upload mode
 export type ImageUploadMode = 'reference' | 'frames' | 'components';

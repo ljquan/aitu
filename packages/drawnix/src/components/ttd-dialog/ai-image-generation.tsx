@@ -31,6 +31,7 @@ import { DialogTaskList } from '../task-queue/DialogTaskList';
 import { geminiSettings } from '../../utils/settings-manager';
 import { promptForApiKey } from '../../utils/gemini-api';
 import { buildMJPromptSuffix } from '../../utils/mj-params';
+import { getCompatibleParams } from '../../constants/model-config';
 
 interface AIImageGenerationProps {
   initialPrompt?: string;
@@ -88,6 +89,10 @@ const AIImageGeneration = ({
   const { createTask } = useTaskQueue();
 
   const isMJModel = currentModel.startsWith('mj');
+  const hasCompatibleParams = React.useMemo(
+    () => getCompatibleParams(currentModel).length > 0,
+    [currentModel]
+  );
   const handleMJParamChange = useCallback((paramId: string, value: string) => {
     if (!value || value === 'default') {
       setMjSelectedParams((prev) => {
@@ -176,10 +181,10 @@ const AIImageGeneration = ({
   }, [currentModel]);
 
   useEffect(() => {
-    if (!isMJModel && Object.keys(mjSelectedParams).length > 0) {
+    if (!hasCompatibleParams && Object.keys(mjSelectedParams).length > 0) {
       setMjSelectedParams({});
     }
-  }, [isMJModel, mjSelectedParams]);
+  }, [hasCompatibleParams, mjSelectedParams]);
 
   // 清除错误状态当组件挂载时（对话框打开时）
   useEffect(() => {
@@ -339,13 +344,23 @@ const AIImageGeneration = ({
               .join(' ')
           : (prompt || '').trim();
 
+        // 非 MJ 模型的额外参数（如 seedream_quality）透传给 adapter
+        const extraParams = !currentImageModel.startsWith('mj') && Object.keys(mjSelectedParams).length > 0
+          ? mjSelectedParams
+          : undefined;
+
+        // 如果参数中有 size，优先使用参数中的 size
+        const finalSize = extraParams?.size
+          ? extraParams.size
+          : convertAspectRatioToSize(aspectRatio);
+
         for (let i = 0; i < count; i++) {
           const taskParams = {
             prompt: finalPrompt,
             width: finalWidth,
             height: finalHeight,
             aspectRatio,
-            size: convertAspectRatioToSize(aspectRatio),
+            size: finalSize,
             model: currentImageModel,
             uploadedImages: convertedImages,
             batchId,
@@ -354,6 +369,7 @@ const AIImageGeneration = ({
             autoInsertToCanvas: true,
             targetFrameId,
             targetFrameDimensions,
+            ...(extraParams ? { params: extraParams } : {}),
           };
 
           const task = createTask(taskParams, TaskType.IMAGE);
@@ -396,13 +412,23 @@ const AIImageGeneration = ({
             .join(' ')
         : (prompt || '').trim();
 
+      // 非 MJ 模型的额外参数（如 seedream_quality）透传给 adapter
+      const extraParams = !currentImageModel.startsWith('mj') && Object.keys(mjSelectedParams).length > 0
+        ? mjSelectedParams
+        : undefined;
+
+      // 如果参数中有 size，优先使用参数中的 size
+      const finalSize = extraParams?.size
+        ? extraParams.size
+        : convertAspectRatioToSize(aspectRatio);
+
       // 创建任务参数（单个任务也需要 batchId 以跳过 SW 重复检测）
       const taskParams = {
         prompt: finalPrompt,
         width: finalWidth,
         height: finalHeight,
         aspectRatio,
-        size: convertAspectRatioToSize(aspectRatio),
+        size: finalSize,
         model: currentImageModel,
         // 保存上传的图片（已转换为可序列化的格式）
         uploadedImages: convertedImages,
@@ -413,6 +439,7 @@ const AIImageGeneration = ({
         batchTotal: 1,
         targetFrameId,
         targetFrameDimensions,
+        ...(extraParams ? { params: extraParams } : {}),
       };
 
       // 创建任务并添加到队列
@@ -494,7 +521,7 @@ const AIImageGeneration = ({
                     disabled={isGenerating}
                   />
                 </div>
-                {isMJModel && (
+                {hasCompatibleParams && (
                   <div className="model-params-wrapper">
                     <ParametersDropdown
                       selectedParams={mjSelectedParams}

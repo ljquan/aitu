@@ -112,6 +112,8 @@ export interface ParsedGenerationParams {
   size?: string;
   /** 时长参数（视频） */
   duration?: string;
+  /** 额外参数（如 seedream_quality, aspect_ratio 等，透传给 adapter） */
+  extraParams?: Record<string, string>;
   /** 原始解析结果 */
   parseResult: ParseResult;
   /** 是否有额外内容（除模型/参数/数量外） */
@@ -319,11 +321,24 @@ export function parseAIInput(
   let duration: string | undefined;
 
   // 1. 优先从 options.params 中读取（新逻辑，支持多参数对象）
+  // 收集额外参数（非 size/duration 的自定义参数，如 seedream_quality, aspect_ratio）
+  let extraParams: Record<string, string> | undefined;
   if (options?.params) {
     if (!modelId.startsWith('mj') && options.params.size) {
       size = normalizeSize(options.params.size);
     }
     if (options.params.duration) duration = options.params.duration;
+
+    // 收集非 size/duration 的额外参数
+    const extra: Record<string, string> = {};
+    for (const [key, value] of Object.entries(options.params)) {
+      if (key !== 'size' && key !== 'duration' && value) {
+        extra[key] = value;
+      }
+    }
+    if (Object.keys(extra).length > 0) {
+      extraParams = extra;
+    }
   }
 
   // 2. 兼容旧逻辑：options.size（来自单独的 size 参数）
@@ -395,6 +410,7 @@ export function parseAIInput(
     count,
     size,
     duration,
+    extraParams,
     parseResult,
     hasExtraContent,
     selection,

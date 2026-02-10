@@ -20,6 +20,8 @@ import { registerModelAdapter } from './registry';
 import { registerKlingAdapter } from './kling-adapter';
 import { registerMJImageAdapter } from './mj-image-adapter';
 import { registerFluxAdapter } from './flux-adapter';
+import { registerSeedreamAdapter } from './seedream-adapter';
+import { registerSeedanceAdapter } from './seedance-adapter';
 
 const imageModelIds = [...IMAGE_MODEL_VIP_OPTIONS, ...IMAGE_MODEL_MORE_OPTIONS]
   .map((model) => model.id)
@@ -27,11 +29,12 @@ const imageModelIds = [...IMAGE_MODEL_VIP_OPTIONS, ...IMAGE_MODEL_MORE_OPTIONS]
     (modelId) =>
       !modelId.startsWith('mj-') &&
       !modelId.startsWith('bfl-flux-') &&
-      !modelId.startsWith('flux-kontext-')
+      !modelId.startsWith('flux-kontext-') &&
+      !modelId.startsWith('doubao-seedream-')
   );
 
 const videoModelIds = VIDEO_MODELS.map((model) => model.id).filter(
-  (modelId) => !modelId.startsWith('kling')
+  (modelId) => !modelId.startsWith('kling') && !modelId.startsWith('seedance')
 );
 
 const extractImageUrl = (
@@ -189,4 +192,6 @@ export function registerDefaultModelAdapters(): void {
   registerKlingAdapter();
   registerMJImageAdapter();
   registerFluxAdapter();
+  registerSeedreamAdapter();
+  registerSeedanceAdapter();
 }

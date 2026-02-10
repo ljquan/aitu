@@ -27,7 +27,8 @@ import { MessagePlugin } from 'tdesign-react';
 import { DialogTaskList } from '../task-queue/DialogTaskList';
 import type { VideoModel, UploadedVideoImage, StoryboardScene } from '../../types/video.types';
 import { ModelDropdown } from '../ai-input-bar/ModelDropdown';
-import { VIDEO_MODELS } from '../../constants/model-config';
+import { ParametersDropdown } from '../ai-input-bar/ParametersDropdown';
+import { VIDEO_MODELS, getCompatibleParams } from '../../constants/model-config';
 import {
   getVideoModelConfig,
   getDefaultModelParams,
@@ -89,6 +90,27 @@ const AIVideoGeneration = ({
   // Duration and size state
   const [duration, setDuration] = useState(initialDuration?.toString() || defaultParams.duration);
   const [size, setSize] = useState(initialSize || defaultParams.size);
+
+  // 额外参数（如 aspect_ratio）
+  const [videoSelectedParams, setVideoSelectedParams] = useState<Record<string, string>>({});
+  const hasCompatibleParams = React.useMemo(() => {
+    // 排除 size 和 duration（已有专用 UI），只看是否有额外参数
+    return getCompatibleParams(currentModel).some(p => p.id !== 'size' && p.id !== 'duration');
+  }, [currentModel]);
+  const handleVideoParamChange = useCallback((paramId: string, value: string) => {
+    if (!value || value === 'default') {
+      setVideoSelectedParams((prev) => {
+        const next = { ...prev };
+        delete next[paramId];
+        return next;
+      });
+      return;
+    }
+    setVideoSelectedParams((prev) => ({
+      ...prev,
+      [paramId]: value,
+    }));
+  }, []);
 
   // 保存所有原始选中的图片（不受模型切换影响）
   const [allSelectedImages, setAllSelectedImages] = useState<UploadedVideoImage[]>(() => {
@@ -327,6 +349,8 @@ const AIVideoGeneration = ({
     // Clear storyboard mode
     setStoryboardEnabled(false);
     setStoryboardScenes([]);
+    // Clear extra params
+    setVideoSelectedParams({});
     window.dispatchEvent(new CustomEvent('ai-video-clear'));
   };
 
@@ -517,6 +541,11 @@ const AIVideoGeneration = ({
       const batchId = `video_batch_${Date.now()}`;
 
       for (let i = 0; i < count; i++) {
+        // 额外参数（如 aspect_ratio）透传给 adapter
+        const extraParams = Object.keys(videoSelectedParams).length > 0
+          ? videoSelectedParams
+          : undefined;
+
         // 创建任务参数（包含新的 duration, size, uploadedImages）
         const taskParams = {
           prompt: finalPrompt,
@@ -538,6 +567,7 @@ const AIVideoGeneration = ({
           batchIndex: i + 1,
           batchTotal: count,
           autoInsertToCanvas: true,
+          ...(extraParams ? { params: extraParams } : {}),
         };
 
         // 创建任务并添加到队列
@@ -619,17 +649,30 @@ const AIVideoGeneration = ({
 
             {/* 模型选择器 */}
             {selectedModel !== undefined && onModelChange && (
-              <div className="model-selector-wrapper">
-                <ModelDropdown
-                  selectedModel={selectedModel}
-                  onSelect={(value) => onModelChange(value)}
-                  language={language}
-                  models={VIDEO_MODELS}
-                  placement="down"
-                  variant="form"
-                  placeholder={language === 'zh' ? '选择视频模型' : 'Select Video Model'}
-                  disabled={isGenerating}
-                />
+              <div className="form-header-row">
+                <div className="model-selector-wrapper">
+                  <ModelDropdown
+                    selectedModel={selectedModel}
+                    onSelect={(value) => onModelChange(value)}
+                    language={language}
+                    models={VIDEO_MODELS}
+                    placement="down"
+                    variant="form"
+                    placeholder={language === 'zh' ? '选择视频模型' : 'Select Video Model'}
+                    disabled={isGenerating}
+                  />
+                </div>
+                {hasCompatibleParams && (
+                  <div className="model-params-wrapper">
+                    <ParametersDropdown
+                      selectedParams={videoSelectedParams}
+                      onParamChange={handleVideoParamChange}
+                      modelId={currentModel}
+                      language={language}
+                      disabled={isGenerating}
+                    />
+                  </div>
+                )}
               </div>
             )}
 

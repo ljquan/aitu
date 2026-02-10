@@ -26,6 +26,7 @@ export enum ModelVendor {
   DEEPSEEK = 'DEEPSEEK',
   ANTHROPIC = 'ANTHROPIC',
   GOOGLE = 'GOOGLE',
+  DOUBAO = 'DOUBAO',
 }
 
 /**
@@ -42,6 +43,7 @@ export const VENDOR_NAMES: Record<ModelVendor, string> = {
   [ModelVendor.DEEPSEEK]: 'DeepSeek',
   [ModelVendor.ANTHROPIC]: 'Anthropic',
   [ModelVendor.GOOGLE]: 'Google',
+  [ModelVendor.DOUBAO]: '即梦',
 };
 
 /**
@@ -385,6 +387,28 @@ export const IMAGE_MODEL_MORE_OPTIONS: ModelConfig[] = [
     supportsTools: false,
     imageDefaults: IMAGE_4K_DEFAULT_PARAMS,
   },
+  {
+    id: 'doubao-seedream-4-0-250828',
+    label: 'Seedream 4.0',
+    shortLabel: 'Seedream 4.0',
+    shortCode: 'sd4',
+    description: '即梦 Seedream 4.0 图片生成，支持 2K/4K',
+    type: 'image',
+    vendor: ModelVendor.DOUBAO,
+    supportsTools: false,
+    imageDefaults: IMAGE_2K_DEFAULT_PARAMS,
+  },
+  {
+    id: 'doubao-seedream-4-5-251128',
+    label: 'Seedream 4.5',
+    shortLabel: 'Seedream 4.5',
+    shortCode: 'sd45',
+    description: '即梦 Seedream 4.5 图片生成，支持 2K/4K',
+    type: 'image',
+    vendor: ModelVendor.DOUBAO,
+    supportsTools: false,
+    imageDefaults: IMAGE_2K_DEFAULT_PARAMS,
+  },
 ];
 
 /** 异步图片模型 ID 列表 */
@@ -438,6 +462,13 @@ const SORA_DEFAULT_PARAMS: VideoModelDefaults = {
 const KLING_DEFAULT_PARAMS: VideoModelDefaults = {
   duration: '5',
   size: '1280x720',
+  aspectRatio: '16:9',
+};
+
+/** Seedance 模型默认参数（5秒，720p） */
+const SEEDANCE_DEFAULT_PARAMS: VideoModelDefaults = {
+  duration: '5',
+  size: '720p',
   aspectRatio: '16:9',
 };
 
@@ -601,6 +632,43 @@ export const VIDEO_MODELS: ModelConfig[] = [
     vendor: ModelVendor.SORA,
     supportsTools: true,
     videoDefaults: SORA_DEFAULT_PARAMS,
+  },
+  {
+    id: 'seedance-1.5-pro',
+    label: 'Seedance 1.5 Pro',
+    shortCode: 'sc15p',
+    description: '即梦 1.5 Pro 有声视频，支持首尾帧',
+    type: 'video',
+    vendor: ModelVendor.DOUBAO,
+    isVip: true,
+    videoDefaults: SEEDANCE_DEFAULT_PARAMS,
+  },
+  {
+    id: 'seedance-1.0-pro',
+    label: 'Seedance 1.0 Pro',
+    shortCode: 'sc10p',
+    description: '即梦 1.0 Pro，支持首尾帧',
+    type: 'video',
+    vendor: ModelVendor.DOUBAO,
+    videoDefaults: SEEDANCE_DEFAULT_PARAMS,
+  },
+  {
+    id: 'seedance-1.0-pro-fast',
+    label: 'Seedance 1.0 Fast',
+    shortCode: 'sc10f',
+    description: '即梦 1.0 快速模式，仅首帧',
+    type: 'video',
+    vendor: ModelVendor.DOUBAO,
+    videoDefaults: SEEDANCE_DEFAULT_PARAMS,
+  },
+  {
+    id: 'seedance-1.0-lite',
+    label: 'Seedance 1.0 Lite',
+    shortCode: 'sc10l',
+    description: '即梦 1.0 Lite，支持首尾帧和参考图',
+    type: 'video',
+    vendor: ModelVendor.DOUBAO,
+    videoDefaults: SEEDANCE_DEFAULT_PARAMS,
   },
 ];
 
@@ -906,12 +974,26 @@ const SORA_2_PRO_MODEL_IDS = ['sora-2-pro'];
 /** Sora 2 固定时长模型（模型名已包含时长，不传 seconds） */
 const SORA_2_FIXED_MODEL_IDS = ['sora-2-4s', 'sora-2-8s', 'sora-2-12s'];
 
+/** Seedance 视频模型 ID */
+const SEEDANCE_MODEL_IDS = [
+  'seedance-1.5-pro',
+  'seedance-1.0-pro',
+  'seedance-1.0-pro-fast',
+  'seedance-1.0-lite',
+];
+
+/** Seedream 图片模型 ID */
+const SEEDREAM_IMAGE_MODEL_IDS = [
+  'doubao-seedream-4-0-250828',
+  'doubao-seedream-4-5-251128',
+];
+
 /** GPT 图片模型 ID（仅支持有限尺寸） */
 const GPT_IMAGE_MODEL_IDS = ['gpt-image-1.5'];
 
 /** Gemini 图片模型 ID（支持完整尺寸） */
 const GEMINI_IMAGE_MODEL_IDS = IMAGE_MODELS.filter(
-  (m) => !GPT_IMAGE_MODEL_IDS.includes(m.id)
+  (m) => !GPT_IMAGE_MODEL_IDS.includes(m.id) && !SEEDREAM_IMAGE_MODEL_IDS.includes(m.id)
 ).map((m) => m.id);
 const MJ_IMAGE_MODEL_IDS = ['mj-imagine'];
 
@@ -1013,6 +1095,56 @@ export const VIDEO_PARAMS: ParamConfig[] = [
     compatibleModels: SORA_2_PRO_MODEL_IDS,
     modelType: 'video',
   },
+  // Seedance 时长参数（5/10 秒）
+  {
+    id: 'duration',
+    label: '视频时长',
+    shortLabel: '时长',
+    description: '生成视频的时长（秒）',
+    valueType: 'enum',
+    options: [
+      { value: '5', label: '5秒' },
+      { value: '10', label: '10秒' },
+    ],
+    defaultValue: '5',
+    compatibleModels: SEEDANCE_MODEL_IDS,
+    modelType: 'video',
+  },
+  // Seedance 分辨率参数（480p/720p/1080p）
+  {
+    id: 'size',
+    label: '视频分辨率',
+    shortLabel: '分辨率',
+    description: '生成视频的分辨率',
+    valueType: 'enum',
+    options: [
+      { value: '1080p', label: '1080p' },
+      { value: '720p', label: '720p' },
+      { value: '480p', label: '480p' },
+    ],
+    defaultValue: '720p',
+    compatibleModels: SEEDANCE_MODEL_IDS,
+    modelType: 'video',
+  },
+  // Seedance 宽高比参数
+  {
+    id: 'aspect_ratio',
+    label: '视频比例',
+    shortLabel: '比例',
+    description: '生成视频的宽高比',
+    valueType: 'enum',
+    options: [
+      { value: '16:9', label: '16:9 横屏' },
+      { value: '9:16', label: '9:16 竖屏' },
+      { value: '1:1', label: '1:1 方形' },
+      { value: '4:3', label: '4:3 横屏' },
+      { value: '3:4', label: '3:4 竖屏' },
+      { value: '21:9', label: '21:9 超宽' },
+    ],
+    defaultValue: '16:9',
+    compatibleModels: SEEDANCE_MODEL_IDS,
+    modelType: 'video',
+  },
 ];
 
 /**
@@ -1060,6 +1192,43 @@ export const IMAGE_PARAMS: ParamConfig[] = [
     ],
     defaultValue: 'auto',
     compatibleModels: GEMINI_IMAGE_MODEL_IDS,
+    modelType: 'image',
+  },
+  // Seedream 图片模型尺寸（支持 8 种宽高比，label 显示具体像素）
+  // 实际像素由 adapter 根据 quality(2K/4K) + 宽高比 计算
+  {
+    id: 'size',
+    label: '图片尺寸',
+    shortLabel: '尺寸',
+    description: '生成图片的尺寸比例',
+    valueType: 'enum',
+    options: [
+      { value: '1x1', label: '1:1 方形 (2048×2048)' },
+      { value: '16x9', label: '16:9 横版 (2720×1536)' },
+      { value: '9x16', label: '9:16 竖版 (1536×2720)' },
+      { value: '3x2', label: '3:2 横版 (2496×1664)' },
+      { value: '2x3', label: '2:3 竖版 (1664×2496)' },
+      { value: '4x3', label: '4:3 横版 (2368×1776)' },
+      { value: '3x4', label: '3:4 竖版 (1776×2368)' },
+      { value: '21x9', label: '21:9 超宽 (2688×1152)' },
+    ],
+    defaultValue: '1x1',
+    compatibleModels: SEEDREAM_IMAGE_MODEL_IDS,
+    modelType: 'image',
+  },
+  // Seedream 图片质量（2K/4K）
+  {
+    id: 'seedream_quality',
+    label: '图片质量',
+    shortLabel: '质量',
+    description: '2K 或 4K 分辨率',
+    valueType: 'enum',
+    options: [
+      { value: '2k', label: '2K' },
+      { value: '4k', label: '4K' },
+    ],
+    defaultValue: '2k',
+    compatibleModels: SEEDREAM_IMAGE_MODEL_IDS,
     modelType: 'image',
   },
   {
