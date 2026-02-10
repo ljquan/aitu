@@ -295,16 +295,15 @@ async function executePPTGeneration(
       ]);
     }
 
-    // 3. 逆序创建 Frame（因为 insertFrame 总是插入到 [0]，逆序创建可保持正确排列）
+    // 3. 按顺序创建 Frame（insertFrame 追加到末尾，故正序创建即可）
     const createdFrames: PlaitFrame[] = new Array(outline.pages.length);
     let createdCount = 0;
 
-    for (let i = outline.pages.length - 1; i >= 0; i--) {
+    for (let i = 0; i < outline.pages.length; i++) {
       const pageSpec = outline.pages[i];
       const pageIndex = i + 1;
       const framePosition = framePositions[i];
 
-      // 创建页面
       const frame = createPPTPage(board, pageSpec, pageIndex, framePosition);
       createdFrames[i] = frame;
 
