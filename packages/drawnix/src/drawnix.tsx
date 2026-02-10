@@ -95,6 +95,7 @@ import { withGradientFill } from './plugins/with-gradient-fill';
 import { withFrameResize } from './plugins/with-frame-resize';
 import { withLassoSelection } from './plugins/with-lasso-selection';
 import { withGeometryMinSize } from './plugins/with-geometry-min-size';
+import { withMoveCursor } from './plugins/with-move-cursor';
 import { API_AUTH_ERROR_EVENT, ApiAuthErrorDetail } from './utils/api-auth-error-event';
 import { MessagePlugin } from 'tdesign-react';
 import { calculateEditedImagePoints } from './utils/image';
@@ -577,6 +578,7 @@ export const Drawnix: React.FC<DrawnixProps> = ({
     withGradientFill, // 渐变填充 - 支持渐变和图片填充渲染
     withLassoSelection, // 套索选择 - 自由路径框选元素
     withGeometryMinSize, // 几何元素最小尺寸 - 防止文本溢出
+    withMoveCursor, // 移动光标 - 悬停可移动元素时显示 move 光标
     withTracking,
   ];
 

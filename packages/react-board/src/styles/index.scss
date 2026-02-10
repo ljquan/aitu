@@ -75,6 +75,10 @@
         cursor: default;
     }
 
+    &.pointer-selection.element-hover:not(.ns-resize):not(.ew-resize):not(.nwse-resize):not(.nesw-resize):not(.element-moving) {
+        cursor: move;
+    }
+
     &.ns-resize {
         cursor: ns-resize;
     }
