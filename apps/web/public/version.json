@@ -1,6 +1,6 @@
 {
   "version": "0.5.94",
-  "buildTime": "2026-02-09T13:41:21.496Z",
+  "buildTime": "2026-02-09T13:41:21.787Z",
   "gitCommit": "unknown",
   "changelog": [
     "unify Service Worker availability checks and enforce main thread executor in fallback scenarios",
