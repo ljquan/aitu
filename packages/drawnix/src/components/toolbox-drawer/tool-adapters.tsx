@@ -11,6 +11,7 @@ import React, { lazy, Suspense, CSSProperties } from 'react';
 const AIImageGenerationOriginal = lazy(() => import('../ttd-dialog/ai-image-generation'));
 const AIVideoGenerationOriginal = lazy(() => import('../ttd-dialog/ai-video-generation'));
 const BatchImageGenerationOriginal = lazy(() => import('../ttd-dialog/batch-image-generation'));
+const KnowledgeBaseContent = lazy(() => import('../knowledge-base/KnowledgeBaseContent'));
 
 /**
  * 加载中占位组件
@@ -156,8 +157,23 @@ export const BatchImageGenerationAdapter: React.FC<any> = (props) => {
   );
 };
 
+/**
+ * 知识库适配器
+ * 用于 WinBox 和画布场景
+ */
+export const KnowledgeBaseAdapter: React.FC<any> = () => {
+  return (
+    <div className="tool-adapter-container" style={containerStyle}>
+      <Suspense fallback={<LoadingFallback message="加载知识库..." />}>
+        <KnowledgeBaseContent />
+      </Suspense>
+    </div>
+  );
+};
+
 export default {
   AIImageGenerationAdapter,
   AIVideoGenerationAdapter,
   BatchImageGenerationAdapter,
+  KnowledgeBaseAdapter,
 };

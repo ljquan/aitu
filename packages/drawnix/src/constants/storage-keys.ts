@@ -41,6 +41,10 @@ export const LS_KEYS = {
   TASK_QUEUE_DRAWER_WIDTH: 'task-queue-drawer-width',
   /** 媒体库视图模式 */
   MEDIA_LIBRARY_VIEW_MODE: 'media-library-view-mode',
+  /** 知识库排序偏好 */
+  KB_SORT_PREFERENCE: 'aitu:kb:sort-preference',
+  /** 知识库抽屉宽度 */
+  KB_DRAWER_WIDTH: 'aitu:kb:drawer-width',
 
   // ---- 迁移标记 ----
   /** 数据库清理完成标记 */
@@ -195,6 +199,18 @@ export const IDB_DATABASES = {
     STORES: {
       /** 通用键值存储 */
       DATA: 'data',
+    },
+  },
+
+  /** 知识库（目录、笔记、标签） */
+  KNOWLEDGE_BASE: {
+    NAME: 'aitu-knowledge-base',
+    VERSION: 1,
+    STORES: {
+      DIRECTORIES: 'directories',
+      NOTES: 'notes',
+      TAGS: 'tags',
+      NOTE_TAGS: 'noteTags',
     },
   },
 } as const;

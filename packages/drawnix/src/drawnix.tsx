@@ -750,6 +750,7 @@ interface DrawnixContentProps {
   onTabSyncNeeded?: () => void;
   handleProjectDrawerToggle: () => void;
   handleToolboxDrawerToggle: () => void;
+  handleKnowledgeBaseToggle: () => void;
   handleTaskPanelToggle: () => void;
   setProjectDrawerOpen: React.Dispatch<React.SetStateAction<boolean>>;
   setToolboxDrawerOpen: React.Dispatch<React.SetStateAction<boolean>>;

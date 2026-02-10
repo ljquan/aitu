@@ -6,7 +6,7 @@
 
 import React from 'react';
 import { ToolDefinition, ToolCategory } from '../types/toolbox.types';
-import { AIImageIcon, AIVideoIcon, PromptIcon, PoseIcon, MessageIcon, BatchIcon } from '../components/icons';
+import { PromptIcon, PoseIcon, MessageIcon, BatchIcon, BookOpenIcon } from '../components/icons';
 
 /**
  * 内置工具列表
@@ -75,26 +75,18 @@ export const BUILT_IN_TOOLS: ToolDefinition[] = [
     defaultWidth: 1200,
     defaultHeight: 800,
   } as ToolDefinition,
+
   {
-    id: 'ai-image',
-    name: 'AI 图片生成（单图）',
-    description: '专业 AI 图片创作工具，支持参考图、历史记录和多模型切换',
-    icon: React.createElement(AIImageIcon),
-    category: ToolCategory.AI_TOOLS,
-    component: 'ai-image',
-    defaultWidth: 1000,
+    id: 'knowledge-base',
+    name: '知识库',
+    description: '个人知识管理工具，支持目录分类、标签管理和 Markdown 编辑',
+    icon: React.createElement(BookOpenIcon),
+    category: ToolCategory.CONTENT_TOOLS,
+    component: 'knowledge-base',
+    defaultWidth: 900,
     defaultHeight: 700,
   } as ToolDefinition,
-  {
-    id: 'ai-video',
-    name: 'AI 视频生成',
-    description: 'AI 驱动的短视频创作，支持分镜描述、参考图和多种视频模型',
-    icon: React.createElement(AIVideoIcon),
-    category: ToolCategory.AI_TOOLS,
-    component: 'ai-video',
-    defaultWidth: 1100,
-    defaultHeight: 800,
-  } as ToolDefinition,
+
 ];
 
 /**

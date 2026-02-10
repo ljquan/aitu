@@ -303,21 +303,12 @@ importers:
       '@floating-ui/react':
         specifier: ^0.26.24
         version: 0.26.28(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@milkdown/crepe':
+        specifier: ^7.18.0
+        version: 7.18.0(prosemirror-model@1.25.4)(prosemirror-state@1.4.4)(prosemirror-view@1.41.6)(typescript@5.8.2)
       '@milkdown/kit':
         specifier: ^7.18.0
         version: 7.18.0(@codemirror/language@6.12.1)(@codemirror/state@6.5.3)(@codemirror/view@6.39.10)(typescript@5.8.2)
-      '@milkdown/plugin-clipboard':
-        specifier: ^7.18.0
-        version: 7.18.0
-      '@milkdown/plugin-cursor':
-        specifier: ^7.18.0
-        version: 7.18.0
-      '@milkdown/plugin-indent':
-        specifier: ^7.18.0
-        version: 7.18.0
-      '@milkdown/plugin-prism':
-        specifier: ^7.18.0
-        version: 7.18.0
       '@milkdown/react':
         specifier: ^7.18.0
         version: 7.18.0(@codemirror/language@6.12.1)(@codemirror/state@6.5.3)(@codemirror/view@6.39.10)(prosemirror-model@1.25.4)(prosemirror-state@1.4.4)(prosemirror-view@1.41.6)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(typescript@5.8.2)
@@ -333,6 +324,9 @@ importers:
       is-hotkey:
         specifier: ^0.2.0
         version: 0.2.0
+      katex:
+        specifier: ^0.16.27
+        version: 0.16.27
       mobile-detect:
         specifier: ^1.4.5
         version: 1.4.5
@@ -413,7 +407,7 @@ importers:
         version: 6.4.1(@types/node@18.16.9)(jiti@2.6.1)(lightningcss@1.30.2)(sass@1.97.2)(terser@5.46.0)
       vite-plugin-dts:
         specifier: ^4.3.0
-        version: 4.5.4(@types/node@18.16.9)(rollup@4.55.1)(typescript@5.4.5)(vite@6.4.1(@types/node@18.16.9)(jiti@2.6.1)(lightningcss@1.30.2)(sass@1.97.2)(terser@5.46.0))
+        version: 4.5.4(@types/node@18.16.9)(rollup@4.55.1)(typescript@5.8.2)(vite@6.4.1(@types/node@18.16.9)(jiti@2.6.1)(lightningcss@1.30.2)(sass@1.97.2)(terser@5.46.0))
 
 packages:
 
@@ -1641,9 +1635,6 @@ packages:
 
   '@milkdown/plugin-listener@7.18.0':
     resolution: {integrity: sha512-F2iPKdWYGJX5kMnmIeZeybQ5gZUwT/smNBbt/itPBn5cD4YRF1qmY/MxDs0+nvoN2NSxtEx5pHOtd5/E4mCf2A==}
-
-  '@milkdown/plugin-prism@7.18.0':
-    resolution: {integrity: sha512-uF/6UW67wCIbkK6V+StT9ETlGFwSO3VEiLsW2JzBdU3XMwPGr4q3ldPoG9pojXD8jE/yYjDd033wY3ICvPP1gA==}
 
   '@milkdown/plugin-slash@7.18.0':
     resolution: {integrity: sha512-jBcaLswX1yKG97s0V1qFqk/0aR+LpWnTCHIrryNVRIRFYm7B6tITekkqwALlV2bqE1eykeN2j8yEyRQ63Wv05Q==}
@@ -3320,9 +3311,6 @@ packages:
 
   '@types/parse-json@4.0.2':
     resolution: {integrity: sha512-dISoDXWWQwUquiKsyZ4Ng+HX2KsPL7LyHKHQwgGFEA3IaKac4Obd+h2a/a6waisAoepJlBcx9paWqjA8/HVjCw==}
-
-  '@types/prismjs@1.26.5':
-    resolution: {integrity: sha512-AUZTa7hQ2KY5L7AmtSiqxlhWxb4ina0yd8hNbl4TWuqnv/pFP0nDMb3YrfSBf4hJVGLh2YEIBfKaBW/9UEl6IQ==}
 
   '@types/prop-types@15.7.15':
     resolution: {integrity: sha512-F6bEyamV9jKGAFBEmlQnesRPGOQqS2+Uwi0Em15xenOxHaf2hv6L8YCVn3rPdPJOiJfPiCnLIRyvwVaqMY3MIw==}
@@ -7019,9 +7007,6 @@ packages:
     resolution: {integrity: sha512-00o4I+DVrefhv+nX0ulyi3biSHCPDe+yLv5o/p6d/UVlirijB8E16FtfwSAi4g3tcqrQ4lRAqQSoFEZJehYEcw==}
     engines: {node: '>= 0.4'}
 
-  refractor@5.0.0:
-    resolution: {integrity: sha512-QXOrHQF5jOpjjLfiNk5GFnWhRXvxjUVnlFxkeDmewR5sXkr3iM46Zo+CnRR8B+MDVqkULW4EcLVcRBNOPXHosw==}
-
   regenerate-unicode-properties@10.2.2:
     resolution: {integrity: sha512-m03P+zhBeQd1RGnYxrGyDAPpWX/epKirLrp8e3qevZdVkKtnCrjjWczIbYc8+xd6vcTStVlqfycTx1KR4LOr0g==}
     engines: {node: '>=4'}
@@ -10190,16 +10175,6 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@milkdown/plugin-prism@7.18.0':
-    dependencies:
-      '@milkdown/ctx': 7.18.0
-      '@milkdown/prose': 7.18.0
-      '@milkdown/utils': 7.18.0
-      '@types/hast': 3.0.4
-      refractor: 5.0.0
-    transitivePeerDependencies:
-      - supports-color
-
   '@milkdown/plugin-slash@7.18.0':
     dependencies:
       '@floating-ui/dom': 1.7.4
@@ -12165,8 +12140,6 @@ snapshots:
 
   '@types/parse-json@4.0.2': {}
 
-  '@types/prismjs@1.26.5': {}
-
   '@types/prop-types@15.7.15': {}
 
   '@types/react-dom@18.3.0':
@@ -12455,6 +12428,19 @@ snapshots:
       path-browserify: 1.0.1
     optionalDependencies:
       typescript: 5.4.5
+
+  '@vue/language-core@2.2.0(typescript@5.8.2)':
+    dependencies:
+      '@volar/language-core': 2.4.27
+      '@vue/compiler-dom': 3.5.26
+      '@vue/compiler-vue2': 2.7.16
+      '@vue/shared': 3.5.26
+      alien-signals: 0.4.14
+      minimatch: 9.0.5
+      muggle-string: 0.4.1
+      path-browserify: 1.0.1
+    optionalDependencies:
+      typescript: 5.8.2
 
   '@vue/reactivity@3.5.27':
     dependencies:
@@ -16954,13 +16940,6 @@ snapshots:
       get-proto: 1.0.1
       which-builtin-type: 1.2.1
 
-  refractor@5.0.0:
-    dependencies:
-      '@types/hast': 3.0.4
-      '@types/prismjs': 1.26.5
-      hastscript: 9.0.1
-      parse-entities: 4.0.2
-
   regenerate-unicode-properties@10.2.2:
     dependencies:
       regenerate: 1.4.2
@@ -18176,6 +18155,25 @@ snapshots:
       local-pkg: 1.1.2
       magic-string: 0.30.21
       typescript: 5.4.5
+    optionalDependencies:
+      vite: 6.4.1(@types/node@18.16.9)(jiti@2.6.1)(lightningcss@1.30.2)(sass@1.97.2)(terser@5.46.0)
+    transitivePeerDependencies:
+      - '@types/node'
+      - rollup
+      - supports-color
+
+  vite-plugin-dts@4.5.4(@types/node@18.16.9)(rollup@4.55.1)(typescript@5.8.2)(vite@6.4.1(@types/node@18.16.9)(jiti@2.6.1)(lightningcss@1.30.2)(sass@1.97.2)(terser@5.46.0)):
+    dependencies:
+      '@microsoft/api-extractor': 7.55.2(@types/node@18.16.9)
+      '@rollup/pluginutils': 5.3.0(rollup@4.55.1)
+      '@volar/typescript': 2.4.27
+      '@vue/language-core': 2.2.0(typescript@5.8.2)
+      compare-versions: 6.1.1
+      debug: 4.4.3
+      kolorist: 1.8.0
+      local-pkg: 1.1.2
+      magic-string: 0.30.21
+      typescript: 5.8.2
     optionalDependencies:
       vite: 6.4.1(@types/node@18.16.9)(jiti@2.6.1)(lightningcss@1.30.2)(sass@1.97.2)(terser@5.46.0)
     transitivePeerDependencies:

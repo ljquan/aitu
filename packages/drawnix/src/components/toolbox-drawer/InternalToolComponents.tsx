@@ -2,6 +2,7 @@ import {
   AIImageGenerationAdapter, 
   AIVideoGenerationAdapter,
   BatchImageGenerationAdapter,
+  KnowledgeBaseAdapter,
 } from './tool-adapters';
 
 /**
@@ -16,4 +17,5 @@ export const InternalToolComponents: Record<string, React.ComponentType<any>> = 
   'batch-image': BatchImageGenerationAdapter,
   'ai-image': AIImageGenerationAdapter,
   'ai-video': AIVideoGenerationAdapter,
+  'knowledge-base': KnowledgeBaseAdapter,
 };

@@ -1,19 +1,13 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useCallback, memo, useState } from 'react';
-import { Editor, rootCtx, defaultValueCtx, editorViewCtx, remarkStringifyOptionsCtx } from '@milkdown/kit/core';
-import { commonmark } from '@milkdown/kit/preset/commonmark';
-import { gfm } from '@milkdown/kit/preset/gfm';
-import { history } from '@milkdown/kit/plugin/history';
+import { editorViewCtx } from '@milkdown/kit/core';
 import { listener, listenerCtx } from '@milkdown/kit/plugin/listener';
-import { prism } from '@milkdown/plugin-prism';
-import { clipboard } from '@milkdown/plugin-clipboard';
-import { indent } from '@milkdown/plugin-indent';
-import { cursor } from '@milkdown/plugin-cursor';
-// import { math } from '@milkdown/plugin-math';
-// import 'katex/dist/katex.min.css';
 import { Milkdown, MilkdownProvider, useEditor, useInstance } from '@milkdown/react';
 import { replaceAll, getMarkdown } from '@milkdown/kit/utils';
+import { Crepe, CrepeFeature } from '@milkdown/crepe';
+import '@milkdown/crepe/theme/common/style.css';
+import '@milkdown/crepe/theme/frame.css';
+import 'katex/dist/katex.min.css';
 import { useImageViewer } from './useImageViewer';
-import { imageViewPlugin } from './imagePlugin';
 import { linkClickPlugin } from './linkPlugin';
 import { Eye, Code2 } from 'lucide-react';
 import './MarkdownEditor.css';
@@ -77,6 +71,7 @@ function MilkdownEditorInner({
   editorRef,
 }: MilkdownEditorInnerProps) {
   const [loading, getInstance] = useInstance();
+  const getCrepe = useCallback(() => getInstance() as unknown as Crepe | null, [getInstance]);
 
   // 使用 ref 存储最新的 onChange 回调，避免闭包陷阱
   const onChangeRef = useRef(onChange);
@@ -91,95 +86,118 @@ function MilkdownEditorInner({
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // 创建编辑器
-  useEditor((root) => {
-    return Editor.make()
-      .config((ctx) => {
-        ctx.set(rootCtx, root);
-        ctx.set(defaultValueCtx, markdown);
-        
-        // 配置 remark-stringify 选项：使用 --- 作为分割线（而不是默认的 ***）
-        ctx.update(remarkStringifyOptionsCtx, (options) => ({
-          ...options,
-          rule: '-' as const, // thematicBreak 使用 - 字符
-        }));
-        
-        // 设置监听器
-        const listenerManager = ctx.get(listenerCtx);
-        listenerManager.markdownUpdated((_, md) => {
-          // 清除之前的防抖 timer
-          if (debounceTimerRef.current) {
-            clearTimeout(debounceTimerRef.current);
-          }
-
-          // 只有内容真正改变时才触发 onChange（防止死循环）
-          if (md !== lastMarkdownRef.current) {
-            lastMarkdownRef.current = md;
-
-            // 使用防抖避免频繁更新
-            debounceTimerRef.current = setTimeout(() => {
-              onChangeRef.current?.(md);
-            }, 50);
-          }
-        });
-      })
-      .use(commonmark)
-      .use(gfm)
-      .use(history)
-      .use(listener)
-      .use(prism)           // 代码语法高亮
-      .use(clipboard)       // 剪贴板增强
-      .use(cursor)          // 增强光标
-      .use(indent)          // 智能缩进
-      .use(imageViewPlugin) // 自定义图片/视频渲染
-      .use(linkClickPlugin); // Ctrl/Cmd + 点击链接打开
-      // .use(math);        // LaTeX 数学公式 - 暂时禁用，版本不兼容
+  const handleUpload = useCallback((file: File) => {
+    return new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '');
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(file);
+    });
   }, []);
+
+  useEditor((root) => {
+    const crepe = new Crepe({
+      root,
+      defaultValue: markdown,
+      features: {
+        [CrepeFeature.CodeMirror]: true,
+        [CrepeFeature.ListItem]: true,
+        [CrepeFeature.LinkTooltip]: true,
+        [CrepeFeature.Cursor]: true,
+        [CrepeFeature.ImageBlock]: true,
+        [CrepeFeature.BlockEdit]: true,
+        [CrepeFeature.Toolbar]: true,
+        [CrepeFeature.Placeholder]: true,
+        [CrepeFeature.Table]: true,
+        [CrepeFeature.Latex]: true,
+      },
+      featureConfigs: {
+        [CrepeFeature.Placeholder]: {
+          text: placeholder || '开始编辑...',
+        },
+        [CrepeFeature.ImageBlock]: {
+          onUpload: handleUpload,
+          inlineOnUpload: handleUpload,
+          blockOnUpload: handleUpload,
+        },
+      },
+    });
+    crepe.editor.use(listener);
+    crepe.editor.use(linkClickPlugin);
+    crepe.editor.config((ctx: any) => {
+      const listenerManager = ctx.get(listenerCtx);
+      listenerManager.markdownUpdated((_: unknown, md: string) => {
+        if (debounceTimerRef.current) {
+          clearTimeout(debounceTimerRef.current);
+        }
+
+        if (md !== lastMarkdownRef.current) {
+          lastMarkdownRef.current = md;
+          debounceTimerRef.current = setTimeout(() => {
+            onChangeRef.current?.(md);
+          }, 50);
+        }
+      });
+    });
+    return crepe;
+  }, [handleUpload, placeholder]);
 
   // 暴露方法给父组件
   useEffect(() => {
     if (!loading && getInstance()) {
       editorRef.current = {
         getMarkdown: () => {
-          const editor = getInstance();
-          if (editor) {
-            return editor.action(getMarkdown());
+          const crepe = getCrepe();
+          if (crepe?.getMarkdown) {
+            return crepe.getMarkdown();
+          }
+          if (crepe?.editor) {
+            return crepe.editor.action(getMarkdown());
           }
           return '';
         },
         setMarkdown: (newMarkdown: string) => {
-          const editor = getInstance();
-          if (editor) {
-            // 更新 ref，防止触发 onChange
+          const crepe = getCrepe();
+          if (crepe) {
             lastMarkdownRef.current = newMarkdown;
-            editor.action(replaceAll(newMarkdown));
+            if (crepe.editor) {
+              crepe.editor.action(replaceAll(newMarkdown));
+            }
           }
         },
         focus: () => {
-          const editor = getInstance();
-          if (editor) {
-            const view = editor.ctx.get(editorViewCtx);
+          const crepe = getCrepe();
+          if (crepe?.editor) {
+            const view = crepe.editor.ctx.get(editorViewCtx);
             view.focus();
           }
         },
       };
     }
-  }, [loading, getInstance, editorRef]);
+  }, [loading, getInstance, editorRef, getCrepe]);
+
+  useEffect(() => {
+    const crepe = getCrepe();
+    if (crepe?.setReadonly) {
+      crepe.setReadonly(!!readOnly);
+    }
+  }, [readOnly, getCrepe]);
 
   // 当外部 markdown prop 变化时，同步更新编辑器
   useEffect(() => {
     if (!loading) {
-      const editor = getInstance();
-      if (editor) {
-        const currentMarkdown = editor.action(getMarkdown());
-
-        // 只有当外部 prop 和编辑器内容都不同时才同步（防止死循环）
-        if (markdown !== currentMarkdown && markdown !== lastMarkdownRef.current) {
+      const crepe = getCrepe();
+      if (crepe) {
+        const currentMarkdown = crepe.getMarkdown ? crepe.getMarkdown() : crepe.editor?.action(getMarkdown());
+        if (currentMarkdown !== undefined && markdown !== currentMarkdown && markdown !== lastMarkdownRef.current) {
           lastMarkdownRef.current = markdown;
-          editor.action(replaceAll(markdown));
+          if (crepe.editor) {
+            crepe.editor.action(replaceAll(markdown));
+          }
         }
       }
     }
-  }, [markdown, loading, getInstance]);
+  }, [markdown, loading, getInstance, getCrepe]);
 
   // 清理防抖 timer
   useEffect(() => {
