@@ -91,6 +91,7 @@ export async function executeImageViaAdapter(
 
     await taskStorageWriter.completeTask(taskId, {
       url: result.url,
+      urls: result.urls,
       format: result.format || 'png',
       size: 0,
     });

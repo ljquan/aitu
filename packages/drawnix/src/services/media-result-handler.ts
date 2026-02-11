@@ -260,9 +260,11 @@ export async function handleMediaResult(
   params: TaskParams,
   config: InsertConfig = {}
 ): Promise<{ success: boolean; count: number; error?: string }> {
-  if (!result.url) {
+  const primaryUrl = result.url || result.urls?.[0];
+  if (!primaryUrl) {
     return { success: false, count: 0, error: 'No result URL' };
   }
+  const resultUrls = result.urls?.length ? result.urls : [primaryUrl];
 
   // 检查是否需要自动插入
   if (!params.autoInsertToCanvas) {
@@ -271,16 +273,37 @@ export async function handleMediaResult(
 
   // 灵感图任务（优先检查）
   if (isInspirationBoardTask(params)) {
-    return handleSplitAndInsertTask(taskId, result.url, params, config);
+    return handleSplitAndInsertTask(taskId, primaryUrl, params, config);
   }
 
   // 宫格图任务
   if (isGridImageTask(params)) {
-    return handleSplitAndInsertTask(taskId, result.url, params, config);
+    return handleSplitAndInsertTask(taskId, primaryUrl, params, config);
+  }
+
+  // 多图直接插入（仅图片）
+  if (type === 'image' && resultUrls.length > 1) {
+    const board = getCanvasBoard();
+    if (!board) {
+      return { success: false, count: 0, error: 'Board not available' };
+    }
+    workflowCompletionService.registerTask(taskId, params.batchId);
+    workflowCompletionService.startPostProcessing(taskId, 'direct_insert');
+    try {
+      const insertionPoint = config.insertionPoint || getDefaultInsertionPoint();
+      const dimensions = parseSizeToPixels(params.size);
+      await insertImageGroup(resultUrls, insertionPoint, dimensions);
+      workflowCompletionService.completePostProcessing(taskId, resultUrls.length, insertionPoint);
+      return { success: true, count: resultUrls.length };
+    } catch (error) {
+      const errorMsg = String(error);
+      workflowCompletionService.failPostProcessing(taskId, errorMsg);
+      return { success: false, count: 0, error: errorMsg };
+    }
   }
 
   // 普通单个媒体任务
-  const insertResult = await handleSingleMediaInsert(taskId, type, result.url, params, config);
+  const insertResult = await handleSingleMediaInsert(taskId, type, primaryUrl, params, config);
   return {
     success: insertResult.success,
     count: insertResult.success ? 1 : 0,

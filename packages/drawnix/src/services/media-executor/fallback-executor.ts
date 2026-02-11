@@ -195,6 +195,7 @@ export class FallbackMediaExecutor implements IMediaExecutor {
       // 完成任务
       await taskStorageWriter.completeTask(taskId, {
         url: result.url,
+        urls: result.urls,
         format: 'png',
         size: 0,
       });

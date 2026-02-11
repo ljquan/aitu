@@ -30,6 +30,8 @@ interface SWTask {
   completedAt?: number;
   result?: {
     url: string;
+    urls?: string[];
+    thumbnailUrls?: string[];
     format: string;
     size: number;
     width?: number;

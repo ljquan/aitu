@@ -33,6 +33,8 @@ export interface ImageGenerationRequest {
 
 export interface ImageGenerationResult {
   url: string;
+  urls?: string[];
+  thumbnails?: string[];
   format?: string;
   width?: number;
   height?: number;

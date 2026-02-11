@@ -141,6 +141,10 @@ export interface GenerationParams {
 export interface TaskResult {
   /** URL to the generated content */
   url: string;
+  /** Multiple URLs when API returns more than one asset */
+  urls?: string[];
+  /** Optional thumbnail URLs corresponding to urls */
+  thumbnailUrls?: string[];
   /** File format (e.g., 'png', 'jpg', 'mp4') */
   format: string;
   /** File size in bytes */
@@ -289,4 +293,3 @@ export function isRetryableStatus(status: TaskStatus): boolean {
 export function isActiveStatus(status: TaskStatus): boolean {
   return ACTIVE_STATUSES.includes(status);
 }
-

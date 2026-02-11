@@ -151,18 +151,19 @@ export const seedreamImageAdapter: ImageModelAdapter = {
 
     const result = await response.json();
 
-    // 提取图片 URL
+    // 提取图片 URL（支持多图）
     if (result?.data && Array.isArray(result.data) && result.data.length > 0) {
-      const imageData = result.data[0];
-      if (imageData.url) {
-        return { url: imageData.url, format: 'png', raw: result };
-      }
-      if (imageData.b64_json) {
-        return {
-          url: `data:image/png;base64,${imageData.b64_json}`,
-          format: 'png',
-          raw: result,
-        };
+      const urls = result.data
+        .map((item: any) => {
+          if (item.url) return item.url;
+          if (item.b64_json) return `data:image/png;base64,${item.b64_json}`;
+          return undefined;
+        })
+        .filter(Boolean) as string[];
+
+      const first = urls[0];
+      if (first) {
+        return { url: first, urls, format: 'png', raw: result };
       }
     }
 

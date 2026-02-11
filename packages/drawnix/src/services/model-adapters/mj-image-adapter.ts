@@ -14,6 +14,7 @@ type MJSubmitResponse = {
 type MJQueryResponse = {
   status?: string;
   imageUrl?: string;
+  imageUrls?: Array<{ url: string }>;
   failReason?: string;
   progress?: string;
 };
@@ -131,8 +132,12 @@ export const mjImageAdapter: ImageModelAdapter = {
       const statusResponse = await queryMJTask(context, taskId);
 
       if (isSuccessStatus(statusResponse.status) && statusResponse.imageUrl) {
+        const urls = statusResponse.imageUrls
+          ?.map(item => item.url)
+          .filter(Boolean);
         return {
           url: statusResponse.imageUrl,
+          urls: urls?.length ? urls : undefined,
           format: 'jpg',
           raw: statusResponse,
         };

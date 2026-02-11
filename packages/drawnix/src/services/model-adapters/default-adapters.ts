@@ -41,19 +41,23 @@ const videoModelIds = VIDEO_MODELS.map((model) => model.id).filter(
 const extractImageUrl = (
   response: any,
   prompt: string
-): { url: string; format: string; raw?: unknown } => {
+): { url: string; urls?: string[]; format: string; raw?: unknown } => {
   if (
     response?.data &&
     Array.isArray(response.data) &&
     response.data.length > 0
   ) {
     const imageData = response.data[0];
+    const urls = response.data
+      .map((item: any) => item?.url || (item?.b64_json ? `data:image/png;base64,${item.b64_json}` : undefined))
+      .filter(Boolean) as string[];
     if (imageData.url) {
-      return { url: imageData.url, format: 'png', raw: response };
+      return { url: imageData.url, urls, format: 'png', raw: response };
     }
     if (imageData.b64_json) {
       return {
         url: `data:image/png;base64,${imageData.b64_json}`,
+        urls,
         format: 'png',
         raw: response,
       };
