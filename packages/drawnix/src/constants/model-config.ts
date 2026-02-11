@@ -1009,12 +1009,15 @@ const SEEDREAM_IMAGE_MODEL_IDS = [
 
 /** GPT 图片模型 ID（仅支持有限尺寸） */
 const GPT_IMAGE_MODEL_IDS = ['gpt-image-1.5'];
+const MJ_IMAGE_MODEL_IDS = ['mj-imagine'];
 
 /** Gemini 图片模型 ID（支持完整尺寸） */
 const GEMINI_IMAGE_MODEL_IDS = IMAGE_MODELS.filter(
-  (m) => !GPT_IMAGE_MODEL_IDS.includes(m.id) && !SEEDREAM_IMAGE_MODEL_IDS.includes(m.id)
+  (m) =>
+    !GPT_IMAGE_MODEL_IDS.includes(m.id) &&
+    !SEEDREAM_IMAGE_MODEL_IDS.includes(m.id) &&
+    !MJ_IMAGE_MODEL_IDS.includes(m.id)
 ).map((m) => m.id);
-const MJ_IMAGE_MODEL_IDS = ['mj-imagine'];
 
 /** 所有图片模型 ID */
 const ALL_IMAGE_MODEL_IDS = IMAGE_MODELS.map((m) => m.id);

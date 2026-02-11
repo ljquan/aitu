@@ -215,6 +215,11 @@ export const ParametersDropdown: React.FC<ParametersDropdownProps> = ({
                 zIndex: Z_INDEX.DROPDOWN_PORTAL,
                 left: portalPosition.left,
                 bottom: window.innerHeight - portalPosition.top + 8,
+                maxHeight: Math.max(
+                  240,
+                  Math.min(420, portalPosition.top - 12)
+                ),
+                overflowY: 'auto',
               }}
               onMouseDown={(e) => e.stopPropagation()}
               onClick={(e) => e.stopPropagation()}
