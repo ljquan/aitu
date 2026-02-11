@@ -40,7 +40,7 @@ export async function ensureBase64ForAI(
     return blobToBase64Under1MB(blob);
   }
   if (value.startsWith('http://') || value.startsWith('https://')) {
-    const res = await fetch(value, { signal });
+    const res = await fetch(value, { signal, referrerPolicy: 'no-referrer' });
     if (!res.ok) throw new Error(`Failed to fetch reference image: ${res.status}`);
     const blob = await res.blob();
     return blobToBase64Under1MB(blob);
@@ -204,11 +204,21 @@ export async function cacheRemoteUrl(
   const localUrl = `/__aitu_cache__/${mediaType}/${taskId}${suffix}.${format}`;
 
   try {
-    const response = await fetch(remoteUrl, { referrerPolicy: 'no-referrer' });
-    if (!response.ok) {
+    // 先尝试 cors 模式
+    let response: Response;
+    try {
+      response = await fetch(remoteUrl, { referrerPolicy: 'no-referrer' });
+    } catch {
+      // CORS 失败，降级到 no-cors（opaque response，无法读取状态码但 blob 可用）
+      response = await fetch(remoteUrl, { mode: 'no-cors', referrerPolicy: 'no-referrer' });
+    }
+
+    // cors 模式下检查状态码；no-cors 模式下 response.type === 'opaque'，status 为 0
+    if (response.type !== 'opaque' && !response.ok) {
       console.warn(`[cacheRemoteUrl] Failed to fetch ${remoteUrl}: ${response.status}, using original URL`);
       return remoteUrl;
     }
+
     const blob = await response.blob();
     if (blob.size === 0) {
       console.warn('[cacheRemoteUrl] Empty blob, using original URL');

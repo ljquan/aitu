@@ -16,6 +16,7 @@ import { getElementOfFocusedImage } from '@plait/common';
 import { getInsertionPointForSelectedElements, getInsertionPointBelowBottommostElement, scrollToPointIfNeeded } from '../utils/selection-utils';
 import { assetStorageService } from '../services/asset-storage-service';
 import { analytics } from '../utils/posthog-analytics';
+import { cacheRemoteUrl } from '../services/media-executor/fallback-utils';
 
 /**
  * 从保存的选中元素IDs计算插入点
@@ -120,6 +121,9 @@ export const loadHTMLImageElementWithRetry = (
   maxRetries = 3,
   bypassSWAfterRetries = 1
 ): Promise<HTMLImageElement> => {
+  // 外部 URL 不设置 crossOrigin（避免 CORS），不追加参数（避免破坏签名）
+  const isExternalUrl = dataURL.startsWith('http://') || dataURL.startsWith('https://');
+
   return new Promise((resolve, reject) => {
     let retryCount = 0;
     let currentUrl = dataURL;
@@ -127,7 +131,7 @@ export const loadHTMLImageElementWithRetry = (
 
     const tryLoad = () => {
       const image = new Image();
-      if (crossOrigin) {
+      if (crossOrigin && !isExternalUrl) {
         image.crossOrigin = 'anonymous';
       }
       image.referrerPolicy = 'no-referrer';
@@ -138,26 +142,27 @@ export const loadHTMLImageElementWithRetry = (
 
       image.onerror = (error) => {
         retryCount++;
-        
+
         if (retryCount <= maxRetries) {
-          // 检查是否应该绕过 SW
-          if (retryCount >= bypassSWAfterRetries && !bypassSW) {
-            bypassSW = true;
-            currentUrl = addBypassSWParam(dataURL) as DataURL;
-            // console.log(`[loadHTMLImageElement] 重试 ${retryCount} 次后绕过 SW:`, dataURL);
+          if (isExternalUrl) {
+            // 外部 URL 不追加任何参数，直接重试原始 URL
+            const delay = Math.min(1000 * Math.pow(2, retryCount - 1), 5000);
+            setTimeout(() => {
+              image.src = dataURL;
+            }, delay);
+          } else {
+            // 本地 URL：可以追加 bypass_sw 和 _retry 参数
+            if (retryCount >= bypassSWAfterRetries && !bypassSW) {
+              bypassSW = true;
+              currentUrl = addBypassSWParam(dataURL) as DataURL;
+            }
+            const separator = currentUrl.includes('?') ? '&' : '?';
+            const retryUrl = `${currentUrl}${separator}_retry=${Date.now()}`;
+            const delay = Math.min(1000 * Math.pow(2, retryCount - 1), 5000);
+            setTimeout(() => {
+              image.src = retryUrl;
+            }, delay);
           }
-          
-          // 添加时间戳强制刷新
-          const separator = currentUrl.includes('?') ? '&' : '?';
-          const retryUrl = `${currentUrl}${separator}_retry=${Date.now()}`;
-          
-          // 延迟重试（指数退避）
-          const delay = Math.min(1000 * Math.pow(2, retryCount - 1), 5000);
-          // console.log(`[loadHTMLImageElement] 重试 ${retryCount}/${maxRetries}，延迟 ${delay}ms:`, dataURL);
-          
-          setTimeout(() => {
-            image.src = retryUrl;
-          }, delay);
         } else {
           console.error(`[loadHTMLImageElement] 加载失败，已重试 ${maxRetries} 次:`, dataURL);
           reject(error);
@@ -337,6 +342,14 @@ export const insertImageFromUrl = async (
   skipScroll?: boolean,
   skipImageLoad?: boolean // 如果为 true 且提供了 referenceDimensions，则跳过图片加载直接使用提供的尺寸
 ) => {
+  // 外部 URL 先缓存到本地，避免 CORS/Referer 问题
+  let resolvedUrl = imageUrl;
+  if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
+    const cachedUrl = await cacheRemoteUrl(imageUrl, `insert-${Date.now()}`, 'image', 'png');
+    if (cachedUrl !== imageUrl) {
+      resolvedUrl = cachedUrl;
+    }
+  }
   // console.log(`[insertImageFromUrl] Called with:`, {
   //   imageUrl: imageUrl?.substring(0, 80),
   //   startPoint,
@@ -362,7 +375,7 @@ export const insertImageFromUrl = async (
   // 这样可以立即插入图片到画布，不需要等待图片下载完成
   if (skipImageLoad && referenceDimensions) {
     imageItem = {
-      url: imageUrl as DataURL,
+      url: resolvedUrl as DataURL,
       width: referenceDimensions.width,
       height: referenceDimensions.height,
     };
@@ -371,10 +384,10 @@ export const insertImageFromUrl = async (
   } else {
     // 使用带重试的图片加载函数，支持自动绕过 SW
     // console.log(`[insertImageFromUrl] Loading image with retry...`);
-    const image = await loadHTMLImageElementWithRetry(imageUrl as DataURL, true); // 使用 crossOrigin 以支持外部 URL
+    const image = await loadHTMLImageElementWithRetry(resolvedUrl as DataURL, true); // 使用 crossOrigin 以支持外部 URL
     imageItem = buildImage(
       image,
-      imageUrl as DataURL,
+      resolvedUrl as DataURL,
       defaultImageWidth,
       true,
       referenceDimensions
@@ -435,7 +448,7 @@ export const insertImageFromUrl = async (
     if (elementId) {
       updateImageSizeAfterLoad(
         board,
-        imageUrl,
+        resolvedUrl,
         elementId,
         referenceDimensions
       );
