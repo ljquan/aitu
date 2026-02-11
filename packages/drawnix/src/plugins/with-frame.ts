@@ -87,7 +87,7 @@ function isElementInFrame(board: PlaitBoard, element: PlaitElement, frame: Plait
  */
 export const FrameTransforms = {
   /**
-   * 插入一个新 Frame
+   * 插入一个新 Frame（始终追加到已有 Frame 列表末尾）
    */
   insertFrame(board: PlaitBoard, points: [Point, Point], name?: string): PlaitFrame {
     frameCounter++;
@@ -99,8 +99,14 @@ export const FrameTransforms = {
       children: [],
     };
 
-    // Frame 应该在最底层渲染（在其他元素之下）
-    Transforms.insertNode(board, frame, [0]);
+    let lastFrameIndex = -1;
+    for (let i = 0; i < board.children.length; i++) {
+      if (isFrameElement(board.children[i])) {
+        lastFrameIndex = i;
+      }
+    }
+    const insertIndex = lastFrameIndex + 1;
+    Transforms.insertNode(board, frame, [insertIndex]);
 
     return frame;
   },
@@ -191,7 +197,7 @@ export const withFrame: PlaitPlugin = (board: PlaitBoard) => {
   // 跟踪 Frame 移动
   let movingFrameId: string | null = null;
   let lastFramePoints: [Point, Point] | null = null;
-  let movingElementIds: Set<string> = new Set(); // 记录拖动开始时与 Frame 相交的元素 ID
+  const movingElementIds: Set<string> = new Set(); // 记录拖动开始时与 Frame 相交的元素 ID
 
   // 跟踪 Frame 创建
   let isCreatingFrame = false;
