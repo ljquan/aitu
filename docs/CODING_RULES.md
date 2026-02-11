@@ -8650,3 +8650,150 @@ const MenuItem = ({ onClick, children }) => (
 - 菜单打开时自动聚焦第一项
 - 添加 `role="menu"` 和 `role="menuitem"` 支持无障碍
 
+
+### Frame 拖动元素检测时机
+
+**场景**: Frame 移动时会"吸附"路过的元素，导致不相关元素被一起移动
+
+❌ **错误示例**:
+```typescript
+// 每次移动都重新检测相交元素
+board.afterChange = () => {
+  if (movingFrameId) {
+    const frameRectBefore = RectangleClient.getRectangleByPoints(lastFramePoints);
+    const intersectingElements = board.children.filter((el) => {
+      return isElementIntersectingRect(el, frameRectBefore);
+    });
+    // 移动所有相交的元素
+    // 问题：Frame 移动过程中会不断"吸附"路过的元素
+  }
+};
+```
+
+✅ **正确示例**:
+```typescript
+// 只在拖动开始时检测一次
+let movingElementIds: Set<string> = new Set();
+
+board.pointerDown = (event: PointerEvent) => {
+  const selected = getSelectedElements(board);
+  if (selected.length === 1 && isFrameElement(selected[0])) {
+    movingFrameId = selected[0].id;
+    lastFramePoints = [...(selected[0] as PlaitFrame).points];
+    
+    // 记录拖动开始时与 Frame 相交的元素 ID
+    movingElementIds.clear();
+    const frameRect = RectangleClient.getRectangleByPoints(lastFramePoints);
+    board.children.forEach((el) => {
+      if (el.id === movingFrameId) return;
+      if (isFrameElement(el)) return;
+      if (isElementIntersectingRect(el, frameRect)) {
+        movingElementIds.add(el.id);
+      }
+    });
+  }
+};
+
+board.afterChange = () => {
+  if (movingFrameId) {
+    // 只移动预先记录的元素
+    const elementsToMove = board.children.filter((el) => {
+      return movingElementIds.has(el.id);
+    });
+    // 移动这些元素...
+  }
+};
+
+board.globalPointerUp = (event: PointerEvent) => {
+  if (movingFrameId) {
+    movingFrameId = null;
+    lastFramePoints = null;
+    movingElementIds.clear(); // 清理记录
+  }
+};
+```
+
+**原因**: 
+- 如果每次移动都重新检测相交元素，Frame 移动路径上的所有元素都会被"吸附"进来
+- 正确的做法是只在拖动开始时检测一次，记录初始相交的元素 ID
+- 移动过程中只移动这些预先记录的元素，不再重新检测
+- 拖动结束时清理记录，为下次拖动做准备
+
+**适用场景**:
+- Frame 拖动同步移动内部元素
+- 任何需要"容器+内容"联动移动的场景
+- 避免移动过程中的意外元素吸附
+
+
+### Plait Selection 类型结构
+
+**场景**: 使用 Plait 的 Selection 类型进行框选检测时
+
+❌ **错误示例**:
+```typescript
+// 错误：Selection 没有 ranges 属性
+board.isRectangleHit = (element: PlaitElement, selection: Selection) => {
+  const rect = RectangleClient.getRectangleByPoints(element.points);
+  const selectionRect = RectangleClient.getRectangleByPoints(selection.ranges[0]);
+  // 类型错误：类型"Selection"上不存在属性"ranges"
+  return isRectIntersect(rect, selectionRect);
+};
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：使用 anchor 和 focus 属性
+board.isRectangleHit = (element: PlaitElement, selection: Selection) => {
+  const rect = RectangleClient.getRectangleByPoints(element.points);
+  const selectionRect = RectangleClient.getRectangleByPoints([
+    selection.anchor,
+    selection.focus
+  ]);
+  return isRectIntersect(rect, selectionRect);
+};
+```
+
+**原因**: 
+- Plait 的 Selection 类型使用 `anchor` 和 `focus` 两个点来表示选区
+- `anchor` 是选区的起点，`focus` 是选区的终点
+- 不存在 `ranges` 属性，使用会导致类型错误
+
+**相关类型**:
+- `Selection.anchor: Point` - 选区起点
+- `Selection.focus: Point` - 选区终点
+- 用于框选、文本选择等场景
+
+
+### Plait 事件处理器类型匹配
+
+**场景**: 重写 Plait board 的事件处理器时
+
+❌ **错误示例**:
+```typescript
+// 错误：dblClick 期望 MouseEvent，但提供了 PointerEvent
+board.dblClick = (event: PointerEvent) => {
+  const point = toViewBoxPoint(board, toHostPoint(board, event.x, event.y));
+  // 类型错误：不能将类型"(event: PointerEvent) => void"分配给类型"(event: MouseEvent) => void"
+};
+```
+
+✅ **正确示例**:
+```typescript
+// 正确：使用 MouseEvent 类型
+board.dblClick = (event: MouseEvent) => {
+  const point = toViewBoxPoint(board, toHostPoint(board, event.x, event.y));
+  // 类型匹配，编译通过
+};
+```
+
+**原因**: 
+- Plait 的不同事件处理器期望不同的事件类型
+- `dblClick` 期望 `MouseEvent`，而 `pointerDown/pointerMove/pointerUp` 期望 `PointerEvent`
+- 必须使用正确的事件类型，否则会导致类型错误
+
+**常见事件类型**:
+- `board.dblClick: (event: MouseEvent) => void`
+- `board.pointerDown: (event: PointerEvent) => void`
+- `board.pointerMove: (event: PointerEvent) => void`
+- `board.pointerUp: (event: PointerEvent) => void`
+

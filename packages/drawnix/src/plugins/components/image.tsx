@@ -1,7 +1,17 @@
 import type { ImageProps } from '@plait/common';
+import { RectangleClient } from '@plait/core';
+import { Loading, MessagePlugin } from 'tdesign-react';
 import classNames from 'classnames';
-import { Video } from './video';
 import { useCallback } from 'react';
+import { Video } from './video';
+import { generateImage } from '../../mcp/tools/image-generation';
+import { getImageRegion } from '../../services/ppt';
+import {
+  insertMediaIntoFrame,
+  removePPTImagePlaceholder,
+  setFramePPTImageStatus,
+  setPPTImagePlaceholderStatus,
+} from '../../utils/frame-insertion-utils';
 import { handleVirtualUrlImageError } from '../../utils/asset-cleanup';
 
 // 检查是否为视频元素（通过URL标识、扩展名或元数据）
@@ -29,6 +39,92 @@ export const Image: React.FC<ImageProps> = (props: ImageProps) => {
   const handleImageError = useCallback(() => {
     handleVirtualUrlImageError(props.board, props.element, props.imageItem.url);
   }, [props.board, props.element, props.imageItem.url]);
+
+  const elementData = props.element as any;
+  const pptStatus = elementData?.pptImageStatus as
+    | 'placeholder'
+    | 'loading'
+    | 'generated'
+    | undefined;
+  const pptPrompt = elementData?.pptImagePrompt as string | undefined;
+  const pptFrameId = elementData?.frameId as string | undefined;
+
+  const handlePPTImageGenerate = useCallback(async () => {
+    if (!props.board || !pptFrameId || !pptPrompt || pptStatus === 'loading') return;
+
+    setPPTImagePlaceholderStatus(props.board, pptFrameId, 'loading');
+    setFramePPTImageStatus(props.board, pptFrameId, 'loading');
+
+    try {
+      const result = await generateImage({
+        prompt: pptPrompt,
+        size: '16x9',
+      });
+
+      if (result.success && result.data?.url) {
+        removePPTImagePlaceholder(props.board, pptFrameId);
+
+        const frame = props.board.children.find((el: any) => el.id === pptFrameId);
+        if (frame) {
+          const frameRect = RectangleClient.getRectangleByPoints(frame.points);
+          const imgRegion = getImageRegion({
+            x: frameRect.x,
+            y: frameRect.y,
+            width: frameRect.width,
+            height: frameRect.height,
+          });
+          await insertMediaIntoFrame(
+            props.board,
+            result.data.url,
+            'image',
+            pptFrameId,
+            { width: frameRect.width, height: frameRect.height },
+            { width: 800, height: 450 },
+            imgRegion
+          );
+        }
+        setFramePPTImageStatus(props.board, pptFrameId, 'generated');
+      } else {
+        setPPTImagePlaceholderStatus(props.board, pptFrameId, 'placeholder');
+        setFramePPTImageStatus(props.board, pptFrameId, 'placeholder');
+        MessagePlugin.error(result.error || '图片生成失败');
+      }
+    } catch (error: any) {
+      setPPTImagePlaceholderStatus(props.board, pptFrameId, 'placeholder');
+      setFramePPTImageStatus(props.board, pptFrameId, 'placeholder');
+      MessagePlugin.error(error?.message || '图片生成失败');
+    }
+  }, [props.board, pptFrameId, pptPrompt, pptStatus]);
+
+  if (elementData?.pptImagePlaceholder) {
+    const isLoading = pptStatus === 'loading';
+
+    return (
+      <div
+        className="ppt-image-placeholder"
+        onClick={isLoading ? undefined : handlePPTImageGenerate}
+        style={{
+          width: '100%',
+          height: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          flexDirection: 'column',
+          gap: '8px',
+          borderRadius: '8px',
+          border: '1px dashed #d9d9d9',
+          backgroundColor: 'rgba(245,245,245,0.85)',
+          color: '#999',
+          fontSize: '13px',
+          cursor: isLoading ? 'default' : 'pointer',
+          userSelect: 'none',
+        }}
+      >
+        {isLoading ? <Loading size="small" /> : null}
+        <span>{isLoading ? '生成配图中…' : '点击生成配图'}</span>
+      </div>
+    );
+  }
 
   // 如果是视频元素，使用视频组件渲染
   if (isVideoElement(props.imageItem)) {

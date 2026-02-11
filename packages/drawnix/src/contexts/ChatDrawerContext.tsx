@@ -19,7 +19,7 @@ export interface SelectedContentItem {
 }
 
 /** 重试处理器类型 */
-export type RetryHandler = (workflow: WorkflowMessageData, startStepIndex: number) => Promise<void>;
+export type RetryHandler = (workflow: WorkflowMessageData, startStepIndex: number, workZoneId?: string) => Promise<void>;
 
 interface ChatDrawerContextValue {
   chatDrawerRef: MutableRefObject<ChatDrawerRef | null>;

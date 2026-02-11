@@ -170,7 +170,7 @@ export const Wrapper: React.FC<WrapperProps> = ({
       selectedElements.forEach((element) => {
         const elementRef =
           PlaitElement.getElementRef<PlaitCommonElementRef>(element);
-        elementRef.updateActiveSection();
+        elementRef?.updateActiveSection();
       });
     });
 

@@ -287,18 +287,37 @@ export const WorkflowMessageBubble: React.FC<WorkflowMessageBubbleProps> = ({
   onRetry,
   isRetrying = false,
 }) => {
+  const normalizedSteps = useMemo(() => {
+    return workflow.steps.map((step) => {
+      const stepResult = step.result as { taskId?: string } | undefined;
+      const hasPendingTask = Boolean(stepResult?.taskId);
+      const hasCompletedResult = step.result !== undefined && step.result !== null;
+      const hasDuration = step.duration !== undefined;
+
+      if ((step.status === 'running' || step.status === 'pending') && !hasPendingTask) {
+        if (step.error) {
+          return { ...step, status: 'failed' as const };
+        }
+        if (hasCompletedResult || hasDuration) {
+          return { ...step, status: 'completed' as const };
+        }
+      }
+      return step;
+    });
+  }, [workflow.steps]);
+
   // 检查是否需要后处理（图片生成类任务需要拆分和插入画布）
   const needsPostProcessing = useMemo(() => {
-    return workflow.generationType === 'image' && workflow.steps.some(s =>
+    return workflow.generationType === 'image' && normalizedSteps.some(s =>
       s.mcp === 'generate_image' ||
       s.mcp === 'generate_grid_image' ||
       s.mcp === 'generate_inspiration_board'
     );
-  }, [workflow.generationType, workflow.steps]);
+  }, [workflow.generationType, normalizedSteps]);
 
   // 计算工作流状态（考虑后处理）
   const workflowStatus = useMemo(() => {
-    const steps = workflow.steps;
+    const steps = normalizedSteps;
     const totalSteps = steps.length;
     const completedSteps = steps.filter(s => s.status === 'completed').length;
     const failedSteps = steps.filter(s => s.status === 'failed').length;
@@ -329,7 +348,7 @@ export const WorkflowMessageBubble: React.FC<WorkflowMessageBubbleProps> = ({
     }
 
     return { status, totalSteps, completedSteps };
-  }, [workflow.steps, workflow.postProcessingStatus, needsPostProcessing]);
+  }, [normalizedSteps, workflow.postProcessingStatus, needsPostProcessing]);
 
   // 计算进度
   const progress = workflowStatus.totalSteps > 0 
@@ -346,7 +365,7 @@ export const WorkflowMessageBubble: React.FC<WorkflowMessageBubbleProps> = ({
     };
 
     // 如果所有步骤完成但正在后处理，显示特定状态
-    const allStepsCompleted = workflow.steps.every(s => s.status === 'completed');
+    const allStepsCompleted = normalizedSteps.every(s => s.status === 'completed');
     if (allStepsCompleted && needsPostProcessing && workflow.postProcessingStatus === 'processing') {
       return '正在插入画布';
     }
@@ -355,7 +374,7 @@ export const WorkflowMessageBubble: React.FC<WorkflowMessageBubbleProps> = ({
     }
 
     return baseLabels[workflowStatus.status];
-  }, [workflowStatus.status, workflow.steps, workflow.postProcessingStatus, needsPostProcessing]);
+  }, [workflowStatus.status, normalizedSteps, workflow.postProcessingStatus, needsPostProcessing]);
 
   const isCompleted = workflowStatus.status === 'completed';
   const isFailed = workflowStatus.status === 'failed';
@@ -369,8 +388,8 @@ export const WorkflowMessageBubble: React.FC<WorkflowMessageBubbleProps> = ({
     if (!isCompleted) return '';
 
     // 从后往前遍历步骤，找到最后一个有 content 的结果
-    for (let i = workflow.steps.length - 1; i >= 0; i -= 1) {
-      const result = workflow.steps[i]?.result;
+    for (let i = normalizedSteps.length - 1; i >= 0; i -= 1) {
+      const result = normalizedSteps[i]?.result;
       if (!result) continue;
 
       // 字符串直接返回
@@ -398,7 +417,7 @@ export const WorkflowMessageBubble: React.FC<WorkflowMessageBubbleProps> = ({
 
     // 没有步骤返回 content，使用 workflow.aiAnalysis
     return workflow.aiAnalysis || '';
-  }, [isCompleted, workflow.steps, workflow.aiAnalysis]);
+  }, [isCompleted, normalizedSteps, workflow.aiAnalysis]);
 
   // 检查是否有媒体生成步骤（图片/视频）
   const hasMediaGeneration = useMemo(() => {
@@ -409,8 +428,8 @@ export const WorkflowMessageBubble: React.FC<WorkflowMessageBubbleProps> = ({
       'generate_inspiration_board',
       'generate_long_video',
     ];
-    return workflow.steps.some(step => mediaGenerationMcps.includes(step.mcp || ''));
-  }, [workflow.steps]);
+    return normalizedSteps.some(step => mediaGenerationMcps.includes(step.mcp || ''));
+  }, [normalizedSteps]);
 
   const summaryView = useMemo(() => {
     if (!isCompleted && !isFailed) return null;
@@ -445,13 +464,13 @@ export const WorkflowMessageBubble: React.FC<WorkflowMessageBubbleProps> = ({
 
   // 获取当前执行步骤的索引
   const currentStepIndex = useMemo(() => {
-    return workflow.steps.findIndex(s => s.status === 'running');
-  }, [workflow.steps]);
+    return normalizedSteps.findIndex(s => s.status === 'running');
+  }, [normalizedSteps]);
 
   // 获取第一个失败步骤的索引
   const firstFailedStepIndex = useMemo(() => {
-    return workflow.steps.findIndex(s => s.status === 'failed');
-  }, [workflow.steps]);
+    return normalizedSteps.findIndex(s => s.status === 'failed');
+  }, [normalizedSteps]);
 
   // 当前执行步骤的 ref，用于自动滚动
   const currentStepRef = useRef<HTMLDivElement>(null);
@@ -472,7 +491,7 @@ export const WorkflowMessageBubble: React.FC<WorkflowMessageBubbleProps> = ({
         });
       }
     });
-  }, [currentStepIndex, isRunning, workflow.steps.length]);
+  }, [currentStepIndex, isRunning, normalizedSteps.length]);
 
   // 检查是否可以重试（有重试上下文且有失败步骤）
   const canRetry = isFailed && workflow.retryContext && firstFailedStepIndex >= 0;
@@ -525,7 +544,7 @@ export const WorkflowMessageBubble: React.FC<WorkflowMessageBubbleProps> = ({
 
         {/* 步骤列表 */}
         <div className="workflow-bubble__steps">
-          {workflow.steps.map((step, index) => (
+          {normalizedSteps.map((step, index) => (
             <StepItem
               key={step.id}
               step={step}

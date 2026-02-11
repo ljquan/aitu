@@ -60,7 +60,7 @@ import { PopupDistributeButton } from './distribute-button';
 import { PopupBooleanButton } from './boolean-button';
 import { TextPropertyPanel } from './text-property-panel';
 import { AIImageIcon, AIVideoIcon, VideoFrameIcon, DuplicateIcon, TrashIcon, SplitImageIcon, DownloadIcon, MergeIcon, VideoMergeIcon } from '../../icons';
-import { Pencil } from 'lucide-react';
+import { Pencil, Presentation } from 'lucide-react';
 import { useDrawnix, DialogType } from '../../../hooks/use-drawnix';
 import { useI18n } from '../../../i18n';
 import { ToolButton } from '../../tool-button';
@@ -80,6 +80,9 @@ import { mergeVideos } from '../../../services/video-merge-webcodecs';
 import { ImageEditor } from '../../image-editor';
 import { insertImageFromUrl } from '../../../data/image';
 import { calculateEditedImagePoints } from '../../../utils/image';
+import { isFrameElement } from '../../../types/frame.types';
+import { duplicateFrame, focusFrame } from '../../../utils/frame-duplicate';
+import { isPlaitMind, findMindRootFromSelection } from '../../../services/ppt';
 
 export const PopupToolbar = () => {
   const board = useBoard();
@@ -156,6 +159,7 @@ export const PopupToolbar = () => {
     hasAlignment?: boolean; // 是否显示对齐按钮（多选时显示）
     hasDistribute?: boolean; // 是否显示间距按钮（多选时显示）
     hasBoolean?: boolean; // 是否显示布尔组合按钮（多选时显示）
+    hasMindmapToPPT?: boolean; // 是否显示思维导图转PPT按钮
   } = {
     fill: 'red',
   };
@@ -306,14 +310,19 @@ export const PopupToolbar = () => {
       !hasToolSelected &&
       !PlaitBoard.hasBeenTextEditing(board);
 
-    // 对齐按钮：选中多个元素时显示
+    const isAllMindmap = selectedElements.length > 0 &&
+      selectedElements.every(element => MindElement.isMindElement(board, element));
+
+    // 对齐按钮：选中多个元素时显示（思维导图场景不显示）
     const hasAlignment =
       selectedElements.length > 1 &&
+      !isAllMindmap &&
       !PlaitBoard.hasBeenTextEditing(board);
 
-    // 间距按钮：选中多个元素时显示（等间距分布需要至少3个元素，但自动排列只需2个）
+    // 间距按钮：选中多个元素时显示（思维导图场景不显示）
     const hasDistribute =
       selectedElements.length > 1 &&
+      !isAllMindmap &&
       !PlaitBoard.hasBeenTextEditing(board);
 
     // 布尔组合按钮：选中多个闭合图形时显示（所有元素都必须支持布尔运算）
@@ -323,6 +332,12 @@ export const PopupToolbar = () => {
       selectedElements.every((element) =>
         supportsBooleanOperation(board, element)
       );
+
+    // 思维导图转PPT按钮：选中思维导图根元素或任意思维导图节点时显示
+    const hasMindmapToPPT =
+      selectedElements.length > 0 &&
+      !PlaitBoard.hasBeenTextEditing(board) &&
+      !!findMindRootFromSelection(board, selectedElements);
 
     state = {
       ...getElementState(board),
@@ -349,6 +364,7 @@ export const PopupToolbar = () => {
       hasAlignment,
       hasDistribute,
       hasBoolean,
+      hasMindmapToPPT,
     };
   }
   useEffect(() => {
@@ -632,6 +648,48 @@ export const PopupToolbar = () => {
                 board={board}
                 key={'boolean'}
                 title={t('toolbar.boolean')}
+              />
+            )}
+            {/* 思维导图转PPT按钮 - 选中思维导图时显示 */}
+            {state.hasMindmapToPPT && (
+              <ToolButton
+                className="mindmap-to-ppt"
+                key="mindmap-to-ppt"
+                type="icon"
+                icon={<Presentation size={15} />}
+                visible={true}
+                title={language === 'zh' ? '转换为PPT' : 'Convert to PPT'}
+                aria-label={language === 'zh' ? '转换为PPT' : 'Convert to PPT'}
+                data-track="toolbar_click_mindmap_to_ppt"
+                onPointerUp={async () => {
+                  const mindRoot = findMindRootFromSelection(board, selectedElements);
+                  if (!mindRoot) return;
+
+                  const loadingInstance = MessagePlugin.loading(
+                    language === 'zh' ? '正在转换为PPT...' : 'Converting to PPT...',
+                    0
+                  );
+
+                  try {
+                    const { generatePPTFromMindmap } = await import('../../../services/ppt');
+                    const result = await generatePPTFromMindmap(board, mindRoot as any);
+
+                    MessagePlugin.close(loadingInstance);
+
+                    if (result.success) {
+                      MessagePlugin.success(
+                        language === 'zh'
+                          ? `已生成 ${result.pageCount} 页PPT`
+                          : `Generated ${result.pageCount} PPT slides`
+                      );
+                    } else {
+                      MessagePlugin.error(result.error || (language === 'zh' ? '转换失败' : 'Conversion failed'));
+                    }
+                  } catch (error: any) {
+                    MessagePlugin.close(loadingInstance);
+                    MessagePlugin.error(error.message || (language === 'zh' ? '转换失败' : 'Conversion failed'));
+                  }
+                }}
               />
             )}
             {state.hasAIImage && (
@@ -1149,7 +1207,23 @@ export const PopupToolbar = () => {
               aria-label={t('general.duplicate')}
               data-track="toolbar_click_duplicate"
               onPointerUp={() => {
-                duplicateElements(board);
+                // 检查是否只选中了 Frame
+                const isOnlyFrameSelected =
+                  selectedElements.length === 1 &&
+                  isFrameElement(selectedElements[0]);
+
+                if (isOnlyFrameSelected) {
+                  // 使用 Frame 专用的复制逻辑
+                  const clonedFrame = duplicateFrame(board, selectedElements[0] as any, language as 'zh' | 'en');
+
+                  // 如果复制成功，自动聚焦到新 Frame
+                  if (clonedFrame) {
+                    focusFrame(board, clonedFrame);
+                  }
+                } else {
+                  // 使用默认的复制逻辑
+                  duplicateElements(board);
+                }
               }}
             />
             <ToolButton

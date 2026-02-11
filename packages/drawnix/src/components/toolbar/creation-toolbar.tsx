@@ -51,6 +51,7 @@ import { FreehandShape } from '../../plugins/freehand/type';
 import { PenShape } from '../../plugins/pen/type';
 import { LassoPointerType } from '../../plugins/with-lasso-selection';
 import { finishPenOnToolSwitch } from '../../plugins/pen/with-pen-create';
+import { fitFrame } from '../../utils/fit-frame';
 import {
   DrawnixPointerType,
   DialogType,
@@ -672,6 +673,13 @@ export const CreationToolbar: React.FC<ToolbarSectionProps> = ({
                   aria-label={t('zoom.fit')}
                   shortcut={`Cmd+Shift+=`}
                 >{t('zoom.fit')}</MenuItem>
+                <MenuItem
+                  data-track="toolbar_click_zoom_fit_frame"
+                  onSelect={() => {
+                    fitFrame(board);
+                  }}
+                  aria-label={t('zoom.fitFrame')}
+                >{t('zoom.fitFrame')}</MenuItem>
                 <MenuItem
                   data-track="toolbar_click_zoom_100"
                   onSelect={() => {

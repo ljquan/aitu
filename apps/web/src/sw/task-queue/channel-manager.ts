@@ -1137,6 +1137,46 @@ export class SWChannelManager {
   // ============================================================================
 
   /**
+   * 请求主线程生成视频缩略图
+   * @param url 视频 URL
+   * @param timeoutMs 超时时间（毫秒）
+   * @returns 缩略图 Data URL，失败返回 null
+   */
+  async requestVideoThumbnail(url: string, timeoutMs: number = 30000): Promise<string | null> {
+    // 获取第一个可用的客户端通道
+    const clientChannel = Array.from(this.channels.values())[0];
+    if (!clientChannel) {
+      console.warn('[ChannelManager] No client channel available for video thumbnail request');
+      return null;
+    }
+
+    try {
+      // 使用 call() 发起 RPC 请求到主线程
+      const response = await withTimeout(
+        clientChannel.channel.call('thumbnail:generate', { url }),
+        timeoutMs,
+        'Video thumbnail generation timeout'
+      );
+
+      if (response.ret !== 0) {
+        console.warn('[ChannelManager] Video thumbnail generation failed:', response.msg);
+        return null;
+      }
+
+      const data = response.data as { thumbnailUrl?: string; error?: string } | undefined;
+      if (data?.error) {
+        console.warn('[ChannelManager] Video thumbnail generation error:', data.error);
+        return null;
+      }
+
+      return data?.thumbnailUrl || null;
+    } catch (error) {
+      console.warn('[ChannelManager] Video thumbnail request failed:', error);
+      return null;
+    }
+  }
+
+  /**
    * 获取连接的客户端列表
    */
   getConnectedClients(): string[] {

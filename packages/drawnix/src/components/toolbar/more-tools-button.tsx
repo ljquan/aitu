@@ -44,6 +44,7 @@ import { MindPointerType } from '@plait/mind';
 import { ArrowLineShape, BasicShapes, DrawPointerType } from '@plait/draw';
 import { BoardCreationMode, setCreationMode } from '@plait/common';
 import { FreehandShape } from '../../plugins/freehand/type';
+import { fitFrame } from '../../utils/fit-frame';
 import { PenShape } from '../../plugins/pen/type';
 import { LassoPointerType } from '../../plugins/with-lasso-selection';
 import { finishPenOnToolSwitch } from '../../plugins/pen/with-pen-create';
@@ -601,6 +602,13 @@ const MoreToolsPanel: React.FC<MoreToolsPanelProps> = ({
                   aria-label={t('zoom.fit')}
                   shortcut={`Cmd+Shift+=`}
                 >{t('zoom.fit')}</MenuItem>
+                <MenuItem
+                  data-track="toolbar_click_zoom_fit_frame"
+                  onSelect={() => {
+                    fitFrame(board);
+                  }}
+                  aria-label={t('zoom.fitFrame')}
+                >{t('zoom.fitFrame')}</MenuItem>
                 <MenuItem
                   data-track="toolbar_click_zoom_100"
                   onSelect={() => {

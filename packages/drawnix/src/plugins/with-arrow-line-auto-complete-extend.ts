@@ -21,6 +21,7 @@ import {
   getHitIndexOfAutoCompletePoint,
   getSelectedDrawElements,
   PlaitDrawElement,
+  ArrowLineAutoCompleteGenerator,
   insertElement,
   createArrowLineElement,
   ArrowLineShape,
@@ -435,7 +436,25 @@ export const withArrowLineAutoCompleteExtend = (board: PlaitBoard) => {
         setAutoCompleteState(board, { ...initialState });
       }
       lastHitIndex = -1;
+      // 下层 withArrowLineAutoCompleteReaction 对 isShapeElement 的元素（含 Text）
+      // 会不安全地调用 ref.getGenerator()。如果选中的 ShapeElement 还未渲染
+      //（ref 为 undefined），直接跳过本帧，避免 TypeError。
+      if (originElement && PlaitDrawElement.isShapeElement(originElement)) {
+        const ref = PlaitElement.getElementRef(originElement);
+        if (!ref) {
+          return;
+        }
+      }
       pointerMove(event);
+      return;
+    }
+
+    // 检查选中元素是否已有 elementRef（新插入的元素可能还未渲染）
+    // @plait/draw 的 withAutoComplete 内部会不安全地调用 ref.getGenerator()，
+    // 如果 ref 为 undefined 会抛出 TypeError，所以此处直接跳过本帧 pointerMove
+    const selectedRef = PlaitElement.getElementRef(originElement);
+    if (!selectedRef) {
+      lastHitIndex = -1;
       return;
     }
 
@@ -484,6 +503,12 @@ export const withArrowLineAutoCompleteExtend = (board: PlaitBoard) => {
           }
         }, 300);
       }
+    }
+
+    const elementRef = PlaitElement.getElementRef(originElement);
+    const generator = elementRef?.getGenerator?.(ArrowLineAutoCompleteGenerator.key);
+    if (!generator) {
+      return;
     }
 
     pointerMove(event);

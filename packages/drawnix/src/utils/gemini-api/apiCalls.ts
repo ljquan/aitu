@@ -238,6 +238,7 @@ async function callApiStreamDirect(
     const decoder = new TextDecoder();
     let fullContent = '';
     let streamDone = false;
+    let lineBuffer = ''; // 缓冲跨 chunk 的不完整行
 
     try {
       while (!streamDone) {
@@ -249,11 +250,16 @@ async function callApiStreamDirect(
         }
 
         const chunk = decoder.decode(value, { stream: true });
-        const lines = chunk.split('\n');
+        // 将缓冲区内容与新 chunk 拼接后再按行分割
+        const combined = lineBuffer + chunk;
+        const lines = combined.split('\n');
+        // 最后一行可能不完整，暂存到 buffer
+        lineBuffer = lines.pop() || '';
 
         for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const data = line.slice(6).trim();
+          const trimmedLine = line.trim();
+          if (trimmedLine.startsWith('data: ')) {
+            const data = trimmedLine.slice(6).trim();
             if (data === '[DONE]') {
               // console.log('[StreamAPI] Received [DONE] signal');
               break;
@@ -270,8 +276,8 @@ async function callApiStreamDirect(
                 }
               }
             } catch (e) {
-              // 忽略解析错误的数据块
-              console.warn('解析流式数据块失败:', e);
+              // 忽略解析错误的数据块（极端情况下单行内的 JSON 仍可能不完整）
+              // console.warn('解析流式数据块失败:', e);
             }
           }
         }

@@ -1,6 +1,19 @@
 {
-  "version": "0.5.93",
-  "buildTime": "2026-02-08T14:20:58.490Z",
+  "version": "0.5.94",
+  "buildTime": "2026-02-09T13:41:21.787Z",
   "gitCommit": "unknown",
-  "changelog": []
+  "changelog": [
+    "unify Service Worker availability checks and enforce main thread executor in fallback scenarios",
+    "fixed:本次修改解决了ai生成图片中点击提示的下拉框手机端溢出问题&agent生成长方形图片容器溢出问题",
+    "enhance logging and error handling in WorkflowEngine",
+    "enhance session replay management and error handling",
+    "降级模式图片/视频带参考图与 1MB 限制",
+    "添加套索选择工具及工具栏/命令面板集成",
+    "添加 Frame 和幻灯片播放功能",
+    "修复视频 API 请求格式错误",
+    "fix：任务状态不同步",
+    "修复tab 同步问题",
+    "优化PPT相关能力",
+    "视频任务状态"
+  ]
 }

@@ -24,6 +24,7 @@ import { createRoot, Root } from 'react-dom/client';
 import React from 'react';
 import type { PlaitWorkZone, WorkZoneCreateOptions } from '../types/workzone.types';
 import { DEFAULT_WORKZONE_SIZE } from '../types/workzone.types';
+import type { WorkflowMessageData } from '../types/chat.types';
 import { WorkZoneContent } from '../components/workzone-element/WorkZoneContent';
 import { ToolProviderWrapper } from '../components/toolbox-drawer/ToolProviderWrapper';
 import { workflowStatusSyncService } from '../services/workflow-status-sync';
@@ -160,6 +161,19 @@ export class WorkZoneComponent extends CommonElementFlavour<PlaitWorkZone, Plait
   };
 
   /**
+   * 处理工作流重试（从失败步骤开始）
+   */
+  private handleRetry = async (workflow: WorkflowMessageData, stepIndex: number): Promise<void> => {
+    const executeRetry = (this.board as any).__executeWorkflowRetry;
+    if (executeRetry) {
+      // 传入当前 WorkZone 的 element ID，以便重试时同步更新
+      await executeRetry(workflow, stepIndex, this.element.id);
+    } else {
+      console.warn('[WorkZone] No retry handler registered on board');
+    }
+  };
+
+  /**
    * 使用 React 渲染内容
    */
   private renderContent(): void {
@@ -173,6 +187,7 @@ export class WorkZoneComponent extends CommonElementFlavour<PlaitWorkZone, Plait
           workflow: this.element.workflow,
           onDelete: this.handleDelete,
           onWorkflowStateChange: this.handleWorkflowStateChange,
+          onRetry: this.handleRetry,
         })
       )
     );
@@ -210,6 +225,7 @@ export class WorkZoneComponent extends CommonElementFlavour<PlaitWorkZone, Plait
               workflow: value.element.workflow,
               onDelete: this.handleDelete,
               onWorkflowStateChange: this.handleWorkflowStateChange,
+              onRetry: this.handleRetry,
             })
           )
         );

@@ -1534,9 +1534,11 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
   }, [prompt, allContent, isSubmitting, selectedModel, workflowControl, submitWorkflowToSW, addPromptHistory, selectedParams, generationType, selectedCount]);
 
   // 处理工作流重试（从指定步骤开始）
+  // workZoneId: 从 WorkZone 按钮发起重试时传入的 WorkZone 元素 ID
   const handleWorkflowRetry = useCallback(async (
     workflowMessageData: WorkflowMessageData,
-    startStepIndex: number
+    startStepIndex: number,
+    workZoneId?: string
   ) => {
     const retryContext = workflowMessageData.retryContext;
     if (!retryContext) {
@@ -1544,7 +1546,12 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
       return;
     }
 
-    // console.log(`[AIInputBar] Retrying workflow from step ${startStepIndex}`, workflowMessageData);
+    // 关联 WorkZone ID（从 WorkZone 按钮发起的重试需要设置）
+    if (workZoneId) {
+      currentWorkZoneIdRef.current = workZoneId;
+    }
+
+    // console.log(`[AIInputBar] Retrying workflow from step ${startStepIndex}, workZoneId:`, currentWorkZoneIdRef.current);
 
     // 将 WorkflowMessageData 转换为 WorkflowDefinition（用于内部状态管理）
     const workflowDefinition: WorkflowDefinition = {
@@ -1594,10 +1601,23 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
       attempt: 1,
     });
 
-    // 更新 ChatDrawer 显示
-    updateWorkflowMessageRef.current(toWorkflowMessageData(workflowDefinition, retryContext));
-
     const board = SelectionWatcherBoardRef.current;
+
+    // 辅助函数：同步更新 ChatDrawer 和 WorkZone
+    const syncRetryUpdates = () => {
+      const workflowData = toWorkflowMessageData(workflowControl.getWorkflow()!, retryContext);
+      updateWorkflowMessageRef.current(workflowData);
+      if (currentWorkZoneIdRef.current && board) {
+        WorkZoneTransforms.updateWorkflow(board, currentWorkZoneIdRef.current, workflowData);
+      }
+    };
+
+    // 初次更新 ChatDrawer + WorkZone 显示
+    const initialWorkflowData = toWorkflowMessageData(workflowDefinition, retryContext);
+    updateWorkflowMessageRef.current(initialWorkflowData);
+    if (currentWorkZoneIdRef.current && board) {
+      WorkZoneTransforms.updateWorkflow(board, currentWorkZoneIdRef.current, initialWorkflowData);
+    }
 
     // 创建标准回调
     const createStepCallbacks = (currentStep: typeof workflowDefinition.steps[0], stepStartTime: number) => ({
@@ -1627,7 +1647,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
             args: s.args,
           });
         });
-        updateWorkflowMessageRef.current(toWorkflowMessageData(workflowControl.getWorkflow()!, retryContext));
+        syncRetryUpdates();
       },
       onUpdateStep: (stepId: string, status: string, result?: unknown, error?: string) => {
         workflowControl.updateStep(stepId, status as 'pending' | 'running' | 'completed' | 'failed' | 'skipped', result, error);
@@ -1639,7 +1659,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
           data: result,
           error,
         });
-        updateWorkflowMessageRef.current(toWorkflowMessageData(workflowControl.getWorkflow()!, retryContext));
+        syncRetryUpdates();
       },
     });
 
@@ -1667,7 +1687,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
     const executeStep = async (step: typeof workflowDefinition.steps[0]) => {
       const stepStartTime = Date.now();
       workflowControl.updateStep(step.id, 'running');
-      updateWorkflowMessageRef.current(toWorkflowMessageData(workflowControl.getWorkflow()!, retryContext));
+      syncRetryUpdates();
 
       try {
         // 获取原始步骤的任务 ID（如果有的话，用于重试时复用任务）
@@ -1699,7 +1719,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
         workflowControl.updateStep(step.id, 'failed', undefined, String(stepError));
         return false;
       } finally {
-        updateWorkflowMessageRef.current(toWorkflowMessageData(workflowControl.getWorkflow()!, retryContext));
+        syncRetryUpdates();
       }
     };
 
@@ -1708,7 +1728,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
     for (const step of stepsToExecute) {
       if (workflowFailed) {
         workflowControl.updateStep(step.id, 'skipped');
-        updateWorkflowMessageRef.current(toWorkflowMessageData(workflowControl.getWorkflow()!, retryContext));
+        syncRetryUpdates();
         continue;
       }
       const success = await executeStep(step);
@@ -1723,7 +1743,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
       for (const newStep of pendingNewStepsForRetry) {
         if (workflowFailed) {
           workflowControl.updateStep(newStep.id, 'skipped');
-          updateWorkflowMessageRef.current(toWorkflowMessageData(workflowControl.getWorkflow()!, retryContext));
+          syncRetryUpdates();
           continue;
         }
         const fullStep = workflowControl.getWorkflow()?.steps.find(s => s.id === newStep.id);
@@ -1755,26 +1775,23 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
 
     if (allStepsFinished && !hasCreatedTasks) {
       // 所有步骤都已完成且没有创建任务，立即删除 WorkZone
-      const workZoneId = currentWorkZoneIdRef.current;
-      const board = SelectionWatcherBoardRef.current;
-      if (workZoneId && board) {
+      const retryWorkZoneId = currentWorkZoneIdRef.current;
+      const retryBoard = SelectionWatcherBoardRef.current;
+      if (retryWorkZoneId && retryBoard) {
         // 检查是否所有后处理都已完成
         const allPostProcessingFinished = finalWorkflow?.steps.every(step => {
           const stepResult = step.result as { taskId?: string } | undefined;
           if (stepResult?.taskId) {
             const isCompleted = workflowCompletionService.isPostProcessingCompleted(stepResult.taskId);
-            // console.log(`[AIInputBar] Retry task ${stepResult.taskId} post-processing finished:`, isCompleted);
             return isCompleted;
           }
           return true;
         });
 
-        // console.log(`[AIInputBar] Retry WorkZone ${workZoneId} allStepsFinished: ${allStepsFinished}, hasCreatedTasks: ${hasCreatedTasks}, allPostProcessingFinished: ${allPostProcessingFinished}`);
-
         if (allPostProcessingFinished) {
           // 延迟删除，让用户看到完成状态
           setTimeout(() => {
-            WorkZoneTransforms.removeWorkZone(board, workZoneId);
+            WorkZoneTransforms.removeWorkZone(retryBoard, retryWorkZoneId);
             currentWorkZoneIdRef.current = null;
           }, 1500);
         }
@@ -1786,6 +1803,11 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
 
   useEffect(() => {
     registerRetryHandlerRef.current(handleWorkflowRetry);
+    // 同时挂载到 board 上，供 WorkZoneComponent 使用
+    const board = SelectionWatcherBoardRef.current;
+    if (board) {
+      (board as any).__executeWorkflowRetry = handleWorkflowRetry;
+    }
   }, [handleWorkflowRetry]);
 
   // Handle key press

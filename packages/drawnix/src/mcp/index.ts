@@ -34,6 +34,8 @@ export { svgTool, insertSvg } from './tools/svg-tool';
 export type { SvgToolParams } from './tools/svg-tool';
 export { longVideoGenerationTool, createLongVideoTask } from './tools/long-video-generation';
 export type { LongVideoGenerationParams } from './tools/long-video-generation';
+export { pptGenerationTool, generatePPT } from './tools/ppt-generation';
+export type { PPTGenerationParams } from '../services/ppt';
 
 // 共享模块导出
 export { setBoard, getBoard } from './tools/shared';
@@ -51,6 +53,7 @@ import { inspirationBoardTool } from './tools/creative-photo-wall-tool';
 import { splitImageTool } from './tools/split-image-tool';
 import { svgTool } from './tools/svg-tool';
 import { longVideoGenerationTool } from './tools/long-video-generation';
+import { pptGenerationTool } from './tools/ppt-generation';
 
 /** 标记 MCP 是否已初始化 */
 let mcpInitialized = false;
@@ -77,6 +80,7 @@ export function initializeMCP(): void {
     inspirationBoardTool,
     splitImageTool,
     svgTool,
+    pptGenerationTool,
   ]);
   // console.log('[MCP] Initialized with built-in tools');
 }

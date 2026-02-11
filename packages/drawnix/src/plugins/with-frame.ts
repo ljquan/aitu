@@ -37,11 +37,17 @@ import {
   isPointInRect,
   createFrameTitleEditor,
 } from '../utils/frame-title-utils';
+import { isElementIntersectingRect } from '../utils/frame-duplicate';
 /** Frame 指针类型 */
 export const FramePointerType = 'frame' as const;
 
 /** Frame 计数器（用于默认命名） */
 let frameCounter = 0;
+
+/** 生成唯一的 Frame ID（避免同毫秒批量创建冲突） */
+const generateFrameId = () => {
+  return `frame-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 9)}`;
+};
 
 /**
  * 判断两个矩形是否相交
@@ -86,7 +92,7 @@ export const FrameTransforms = {
   insertFrame(board: PlaitBoard, points: [Point, Point], name?: string): PlaitFrame {
     frameCounter++;
     const frame: PlaitFrame = {
-      id: `frame-${Date.now()}`,
+      id: generateFrameId(),
       type: 'frame',
       name: name || `Frame ${frameCounter}`,
       points,
@@ -179,16 +185,34 @@ export const withFrame: PlaitPlugin = (board: PlaitBoard) => {
     pointerMove,
     pointerUp,
     dblClick,
+    getDeletedFragment,
   } = board;
 
   // 跟踪 Frame 移动
   let movingFrameId: string | null = null;
   let lastFramePoints: [Point, Point] | null = null;
+  let movingElementIds: Set<string> = new Set(); // 记录拖动开始时与 Frame 相交的元素 ID
 
   // 跟踪 Frame 创建
   let isCreatingFrame = false;
   let createStartPoint: Point | null = null;
   let previewG: SVGGElement | null = null;
+
+  // 注册 getDeletedFragment：将选中的 Frame 加入删除列表，并先解绑子元素
+  board.getDeletedFragment = (data: PlaitElement[]) => {
+    const selectedElements = getSelectedElements(board);
+    const selectedFrames = selectedElements.filter(isFrameElement) as PlaitFrame[];
+    if (selectedFrames.length) {
+      for (const frame of selectedFrames) {
+        const children = FrameTransforms.getFrameChildren(board, frame);
+        for (const child of children) {
+          FrameTransforms.unbindFromFrame(board, child);
+        }
+      }
+      data.push(...selectedFrames);
+    }
+    return getDeletedFragment(data);
+  };
 
   // 注册 Frame 元素渲染组件
   board.drawElement = (context: PlaitPluginElementContext) => {
@@ -245,7 +269,10 @@ export const withFrame: PlaitPlugin = (board: PlaitBoard) => {
   board.isRectangleHit = (element: PlaitElement, selection: Selection) => {
     if (isFrameElement(element)) {
       const rect = RectangleClient.getRectangleByPoints(element.points);
-      const selectionRect = RectangleClient.getRectangleByPoints(selection.ranges[0]);
+      const selectionRect = RectangleClient.getRectangleByPoints([
+        selection.anchor,
+        selection.focus
+      ]);
       return isRectIntersect(rect, selectionRect);
     }
     return isRectangleHit(element, selection);
@@ -268,7 +295,7 @@ export const withFrame: PlaitPlugin = (board: PlaitBoard) => {
   };
 
   // 双击 Frame 或标题：进入标题编辑模式
-  board.dblClick = (event: PointerEvent) => {
+  board.dblClick = (event: MouseEvent) => {
     const viewBoxPoint = toViewBoxPoint(
       board,
       toHostPoint(board, event.x, event.y)
@@ -329,6 +356,17 @@ export const withFrame: PlaitPlugin = (board: PlaitBoard) => {
     if (selected.length === 1 && isFrameElement(selected[0])) {
       movingFrameId = selected[0].id;
       lastFramePoints = [...(selected[0] as PlaitFrame).points] as [Point, Point];
+
+      // 记录拖动开始时与 Frame 相交的元素 ID
+      movingElementIds.clear();
+      const frameRect = RectangleClient.getRectangleByPoints(lastFramePoints);
+      board.children.forEach((el) => {
+        if (el.id === movingFrameId) return;
+        if (isFrameElement(el)) return;
+        if (isElementIntersectingRect(el, frameRect)) {
+          movingElementIds.add(el.id);
+        }
+      });
     }
 
     pointerDown(event);
@@ -428,7 +466,7 @@ export const withFrame: PlaitPlugin = (board: PlaitBoard) => {
     pointerUp(event);
   };
 
-  // 监听变化：Frame 移动时同步移动子元素
+  // 监听变化：Frame 移动时同步移动相交的元素
   board.afterChange = () => {
     if (movingFrameId) {
       const frame = board.children.find((el) => el.id === movingFrameId) as PlaitFrame | undefined;
@@ -438,16 +476,33 @@ export const withFrame: PlaitPlugin = (board: PlaitBoard) => {
         const deltaY = currentPoints[0][1] - lastFramePoints[0][1];
 
         if (deltaX !== 0 || deltaY !== 0) {
-          // 移动所有子元素
-          const children = FrameTransforms.getFrameChildren(board, frame);
-          for (const child of children) {
-            const childIndex = board.children.findIndex((el) => el.id === child.id);
-            if (childIndex !== -1 && child.points) {
-              const newPoints = child.points.map((p: Point) => [
-                p[0] + deltaX,
-                p[1] + deltaY,
-              ] as Point);
-              Transforms.setNode(board, { points: newPoints } as any, [childIndex]);
+          // 只移动拖动开始时就与 Frame 相交的元素（避免移动过程中"吸附"路过的元素）
+          const elementsToMove = board.children.filter((el) => {
+            return movingElementIds.has(el.id);
+          });
+
+          // 移动预先记录的元素
+          for (const element of elementsToMove) {
+            const elementIndex = board.children.findIndex((el) => el.id === element.id);
+            if (elementIndex !== -1) {
+              if ((element as any).points) {
+                // 有 points 属性的元素
+                const newPoints = (element as any).points.map((p: Point) => [
+                  p[0] + deltaX,
+                  p[1] + deltaY,
+                ] as Point);
+                Transforms.setNode(board, { points: newPoints } as any, [elementIndex]);
+              } else if ((element as any).x !== undefined && (element as any).y !== undefined) {
+                // 有 x, y 属性的元素
+                Transforms.setNode(
+                  board,
+                  {
+                    x: (element as any).x + deltaX,
+                    y: (element as any).y + deltaY,
+                  } as any,
+                  [elementIndex]
+                );
+              }
             }
           }
 
@@ -470,6 +525,7 @@ export const withFrame: PlaitPlugin = (board: PlaitBoard) => {
       }
       movingFrameId = null;
       lastFramePoints = null;
+      movingElementIds.clear(); // 清理记录的元素 ID
     }
 
     globalPointerUp(event);

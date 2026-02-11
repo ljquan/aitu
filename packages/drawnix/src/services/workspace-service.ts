@@ -111,6 +111,16 @@ class WorkspaceService {
       this.boards = new Map(boardMetadata.map((b) => [b.id, { ...b, elements: [] } as Board]));
       this.state = state;
 
+      // 从 sessionStorage 加载 currentBoardId（标签页隔离）
+      try {
+        const sessionBoardId = sessionStorage.getItem('workspace-current-board-id');
+        if (sessionBoardId && this.boardMetadata.has(sessionBoardId)) {
+          this.state.currentBoardId = sessionBoardId;
+        }
+      } catch (error) {
+        console.warn('[WorkspaceService] Failed to load currentBoardId from sessionStorage:', error);
+      }
+
       this.initialized = true;
       // console.log('[WorkspaceService] Initialized with', {
       //   folders: this.folders.size,
@@ -867,7 +877,12 @@ class WorkspaceService {
     }
 
     this.state.currentBoardId = boardId;
-    this.saveState();
+    // 持久化到 sessionStorage（标签页隔离，不影响其他标签页）
+    try {
+      sessionStorage.setItem('workspace-current-board-id', boardId);
+    } catch {
+      // 静默处理
+    }
 
     this.emit('boardSwitched', board);
     return board;
@@ -964,9 +979,18 @@ class WorkspaceService {
 
   getCurrentBoard(): Board | null {
     if (!this.state.currentBoardId) return null;
-    // 优先从已加载的画板获取
-    return this.loadedBoards.get(this.state.currentBoardId) || 
-           this.boards.get(this.state.currentBoardId) || null;
+
+    // 只从已加载的画板获取，避免返回 elements 为空数组的元数据
+    // 如果画板未加载，调用方应该先使用 switchBoard() 加载
+    const board = this.loadedBoards.get(this.state.currentBoardId);
+
+    if (!board) {
+      logDebug('[WorkspaceService]', 'getCurrentBoard: board not fully loaded, use switchBoard() first', {
+        currentBoardId: this.state.currentBoardId
+      });
+    }
+
+    return board || null;
   }
 
   /**
@@ -1033,6 +1057,19 @@ class WorkspaceService {
     return { ...this.state };
   }
 
+  /**
+   * 持久化 currentBoardId 到 sessionStorage（标签页隔离）
+   * 在用户主动切换画板时由 app 层调用
+   */
+  persistCurrentBoardId(boardId: string): void {
+    this.state.currentBoardId = boardId;
+    try {
+      sessionStorage.setItem('workspace-current-board-id', boardId);
+    } catch (error) {
+      console.warn('[WorkspaceService] Failed to persist currentBoardId to sessionStorage:', error);
+    }
+  }
+
   private getFolderChildren(parentId: string | null): Folder[] {
     return Array.from(this.folders.values())
       .filter((f) => f.parentId === parentId)
@@ -1097,7 +1134,21 @@ class WorkspaceService {
   }
 
   private async saveState(): Promise<void> {
-    await workspaceStorageService.saveState(this.state);
+    // 保存 state 到 IndexedDB，但排除 currentBoardId（使用 sessionStorage 隔离）
+    const { currentBoardId, ...stateWithoutCurrentBoard } = this.state;
+    await workspaceStorageService.saveState({
+      ...stateWithoutCurrentBoard,
+      currentBoardId: null, // 不保存到 IndexedDB
+    });
+
+    // 将 currentBoardId 保存到 sessionStorage（标签页隔离）
+    if (currentBoardId) {
+      try {
+        sessionStorage.setItem('workspace-current-board-id', currentBoardId);
+      } catch (error) {
+        console.warn('[WorkspaceService] Failed to save currentBoardId to sessionStorage:', error);
+      }
+    }
   }
 
   // ========== Events ==========
