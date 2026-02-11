@@ -89,10 +89,18 @@ const AIImageGeneration = ({
   const { createTask } = useTaskQueue();
 
   const isMJModel = currentModel.startsWith('mj');
-  const hasCompatibleParams = React.useMemo(
-    () => getCompatibleParams(currentModel).length > 0,
-    [currentModel]
-  );
+  const hasCompatibleParams = React.useMemo(() => {
+    const params = getCompatibleParams(currentModel);
+    // MJ 模型所有参数都走 dropdown；非 MJ 模型排除 size（已有 AspectRatioSelector）
+    if (isMJModel) return params.length > 0;
+    return params.some(p => p.id !== 'size');
+  }, [currentModel, isMJModel]);
+
+  // 模型切换时清空已选参数，避免跨模型残留不兼容配置
+  useEffect(() => {
+    setMjSelectedParams({});
+  }, [currentModel]);
+
   const handleMJParamChange = useCallback((paramId: string, value: string) => {
     if (!value || value === 'default') {
       setMjSelectedParams((prev) => {
@@ -179,6 +187,13 @@ const AIImageGeneration = ({
     geminiSettings.addListener(handleSettingsChange);
     return () => geminiSettings.removeListener(handleSettingsChange);
   }, [currentModel]);
+
+  // Keep local模型状态与头部下拉（受控 selectedModel）同步，避免展示过期的参数列表
+  useEffect(() => {
+    if (selectedModel && selectedModel !== currentModel) {
+      setCurrentModel(selectedModel);
+    }
+  }, [selectedModel, currentModel]);
 
   useEffect(() => {
     if (!hasCompatibleParams && Object.keys(mjSelectedParams).length > 0) {
@@ -521,17 +536,20 @@ const AIImageGeneration = ({
                     disabled={isGenerating}
                   />
                 </div>
-                {hasCompatibleParams && (
-                  <div className="model-params-wrapper">
-                    <ParametersDropdown
-                      selectedParams={mjSelectedParams}
-                      onParamChange={handleMJParamChange}
-                      modelId={currentModel}
-                      language={language}
-                      disabled={isGenerating}
-                    />
-                  </div>
-                )}
+              </div>
+            )}
+
+            {/* 模型参数（排除 size，已有 AspectRatioSelector） */}
+            {hasCompatibleParams && (
+              <div className="model-params-row">
+                <ParametersDropdown
+                  selectedParams={mjSelectedParams}
+                  onParamChange={handleMJParamChange}
+                  modelId={currentModel}
+                  language={language}
+                  disabled={isGenerating}
+                  excludeParamIds={isMJModel ? undefined : ['size']}
+                />
               </div>
             )}
 

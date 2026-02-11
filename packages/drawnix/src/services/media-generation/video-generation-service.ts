@@ -49,6 +49,7 @@ export async function generateVideo(
     model: options.model || 'veo3',
     duration: typeof options.duration === 'string' ? parseInt(options.duration, 10) : options.duration,
     size: options.size,
+    params: options.params,
   });
 
   // 构建 executor 参数
@@ -61,6 +62,7 @@ export async function generateVideo(
     inputReference: options.inputReference,
     inputReferences: options.inputReferences,
     referenceImages: options.referenceImages,
+    params: options.params,
   };
 
   // 调用 executor 执行

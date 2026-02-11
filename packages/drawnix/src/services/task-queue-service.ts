@@ -127,6 +127,7 @@ class TaskQueueService {
             referenceImages: task.params.referenceImages as string[] | undefined,
             count: task.params.count as number | undefined,
             uploadedImages: task.params.uploadedImages as Array<{ url?: string }> | undefined,
+            params: (task.params as any).params,
           }, executionOptions);
           break;
         case TaskType.VIDEO: {
@@ -153,6 +154,7 @@ class TaskQueueService {
             duration: (task.params.duration ?? task.params.seconds)?.toString(),
             size: task.params.size,
             referenceImages: finalRefs,
+            params: (task.params as any).params,
           }, executionOptions);
           break;
         }

@@ -97,7 +97,7 @@ export class FallbackMediaExecutor implements IMediaExecutor {
     // 专用 adapter 路由（mj-imagine 等非 gemini 模型）
     const imageAdapter = resolveAdapterForModel(modelName, 'image');
     if (imageAdapter && imageAdapter.kind === 'image' && imageAdapter.id !== 'gemini-image-adapter') {
-      return executeImageViaAdapter(taskId, imageAdapter, { prompt, model: modelName, size, quality, count, referenceImages }, options, startTime);
+      return executeImageViaAdapter(taskId, imageAdapter, { prompt, model: modelName, size, quality, count, referenceImages, params: params.params }, options, startTime);
     }
 
     // 异步图片模型：使用 /v1/videos 接口（与 SW 模式一致）
@@ -347,7 +347,7 @@ export class FallbackMediaExecutor implements IMediaExecutor {
     // 专用 adapter 路由（kling 等非 gemini 模型）
     const videoAdapter = resolveAdapterForModel(model, 'video');
     if (videoAdapter && videoAdapter.kind === 'video' && videoAdapter.id !== 'gemini-video-adapter') {
-      return executeVideoViaAdapter(taskId, videoAdapter, { prompt, model, size, duration, referenceImages: params.referenceImages, inputReference: params.inputReference }, options, startTime);
+      return executeVideoViaAdapter(taskId, videoAdapter, { prompt, model, size, duration, referenceImages: params.referenceImages, inputReference: params.inputReference, params: params.params }, options, startTime);
     }
 
     // 收集参考图原始 URL（用于日志记录）

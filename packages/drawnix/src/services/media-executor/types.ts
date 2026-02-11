@@ -26,6 +26,8 @@ export interface ImageGenerationParams {
   quality?: '1k' | '2k' | '4k';
   /** 生成数量 (1-10) */
   count?: number;
+  /** 额外参数（如 seedream_quality），透传给 adapter */
+  params?: Record<string, unknown>;
 }
 
 // ============================================================================
@@ -52,6 +54,8 @@ export interface VideoGenerationParams {
   }>;
   /** 参考图片（兼容旧接口） */
   referenceImages?: string[];
+  /** 额外参数（如 aspect_ratio），透传给 adapter */
+  params?: Record<string, unknown>;
 }
 
 // ============================================================================

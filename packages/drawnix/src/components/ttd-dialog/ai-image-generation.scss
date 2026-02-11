@@ -168,6 +168,11 @@
   }
 }
 
+// 模型参数行 - 独立一行显示在模型选择器下方
+.model-params-row {
+  margin-bottom: 8px;
+}
+
 // 批量出图切换按钮 - 文字链接样式
 .batch-mode-btn {
   padding: 6px 12px;

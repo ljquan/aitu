@@ -345,6 +345,7 @@ export class WorkflowEngine {
             size: step.args.size as string | undefined,
             referenceImages: step.args.referenceImages as string[] | undefined,
             count: step.args.count as number | undefined,
+            params: step.args.params as Record<string, unknown> | undefined,
             forceMainThread: this.options.forceFallbackExecutor,
             signal,
           }
@@ -364,9 +365,13 @@ export class WorkflowEngine {
           step.args.prompt as string,
           {
             model: step.args.model as string | undefined,
-            duration: step.args.duration as string | number | undefined,
+            duration: (step.args.seconds ?? step.args.duration) as
+              | string
+              | number
+              | undefined,
             size: step.args.size as string | undefined,
             referenceImages: step.args.referenceImages as string[] | undefined,
+            params: step.args.params as Record<string, unknown> | undefined,
             forceMainThread: this.options.forceFallbackExecutor,
             signal,
           }

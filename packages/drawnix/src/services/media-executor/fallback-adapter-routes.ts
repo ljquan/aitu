@@ -33,6 +33,7 @@ export async function executeImageViaAdapter(
     quality?: string;
     count?: number;
     referenceImages?: string[];
+    params?: Record<string, unknown>;
   },
   options?: ExecutionOptions,
   startTime?: number
@@ -72,7 +73,7 @@ export async function executeImageViaAdapter(
         model: params.model,
         size: params.size,
         referenceImages: processedImages,
-        params: { quality: params.quality, n: params.count },
+        params: { quality: params.quality, n: params.count, ...params.params },
       }
     );
 
@@ -127,6 +128,7 @@ export async function executeVideoViaAdapter(
     duration?: string;
     referenceImages?: string[];
     inputReference?: string;
+    params?: Record<string, unknown>;
   },
   options?: ExecutionOptions,
   startTime?: number
@@ -180,6 +182,7 @@ export async function executeVideoViaAdapter(
         size: params.size,
         duration: durationNum,
         referenceImages: processedImages,
+        params: params.params,
       }
     );
 

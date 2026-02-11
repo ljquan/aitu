@@ -13,7 +13,7 @@ $text-dark: #1F2937;
 
 .vendor-tab-panel {
   display: flex;
-  min-height: 0;
+  min-height: 280px;
   flex: 1;
 
   // 左侧厂商标签栏
@@ -99,7 +99,7 @@ $text-dark: #1F2937;
 
   // compact 模式
   &--compact &__tabs {
-    width: 80px;
+    width: 96px;
   }
 
   &--compact &__tab {

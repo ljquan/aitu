@@ -1140,6 +1140,8 @@ export const VIDEO_PARAMS: ParamConfig[] = [
       { value: '4:3', label: '4:3 横屏' },
       { value: '3:4', label: '3:4 竖屏' },
       { value: '21:9', label: '21:9 超宽' },
+      { value: 'keep_ratio', label: '保持上传比例' },
+      { value: 'adaptive', label: '自适应' },
     ],
     defaultValue: '16:9',
     compatibleModels: SEEDANCE_MODEL_IDS,

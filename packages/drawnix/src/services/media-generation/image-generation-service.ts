@@ -60,6 +60,7 @@ export async function generateImage(
     referenceImages: options.referenceImages,
     uploadedImages: options.uploadedImages,
     count: options.count,
+    params: options.params,
   };
 
   // 调用 executor 执行

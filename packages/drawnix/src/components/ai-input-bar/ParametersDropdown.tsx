@@ -23,6 +23,8 @@ export interface ParametersDropdownProps {
   selectedParams: Record<string, string>;
   /** 参数变更回调 */
   onParamChange: (paramId: string, value: string) => void;
+  /** 预先计算好的兼容参数列表（可选，传入则跳过内部计算） */
+  compatibleParams?: ParamConfig[];
   /** 当前选中的模型 ID */
   modelId: string;
   /** 语言 */
@@ -33,6 +35,8 @@ export interface ParametersDropdownProps {
   isOpen?: boolean;
   /** 打开状态变化回调 */
   onOpenChange?: (open: boolean) => void;
+  /** 排除的参数 ID 列表（已有专用 UI 的参数，如 size、duration） */
+  excludeParamIds?: string[];
 }
 
 /**
@@ -41,11 +45,13 @@ export interface ParametersDropdownProps {
 export const ParametersDropdown: React.FC<ParametersDropdownProps> = ({
   selectedParams,
   onParamChange,
+  compatibleParams: compatibleParamsProp,
   modelId,
   language = 'zh',
   disabled = false,
   isOpen: controlledIsOpen,
   onOpenChange,
+  excludeParamIds,
 }) => {
   const { value: isOpen, setValue: setIsOpen } = useControllableState({
     controlledValue: controlledIsOpen,
@@ -57,10 +63,14 @@ export const ParametersDropdown: React.FC<ParametersDropdownProps> = ({
   const [highlightedParamIndex, setHighlightedParamIndex] = useState(0);
   const [highlightedOptionIndex, setHighlightedOptionIndex] = useState(0);
 
-  // 获取当前模型兼容的所有参数
+  // 获取当前模型兼容的所有参数（排除已有专用 UI 的参数）
   const compatibleParams = useMemo(() => {
-    return getCompatibleParams(modelId);
-  }, [modelId]);
+    const params = compatibleParamsProp ?? getCompatibleParams(modelId);
+    if (excludeParamIds && excludeParamIds.length > 0) {
+      return params.filter(p => !excludeParamIds.includes(p.id));
+    }
+    return params;
+  }, [compatibleParamsProp, modelId, excludeParamIds]);
 
   // 打开时重置高亮索引
   useEffect(() => {

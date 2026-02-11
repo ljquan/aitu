@@ -192,6 +192,7 @@ const AIVideoGeneration = ({
       const newModel = newSettings.videoModelName || 'veo3';
       if (newModel !== currentModel) {
         setCurrentModel(newModel as VideoModel);
+        setVideoSelectedParams({});
       }
     };
     geminiSettings.addListener(handleSettingsChange);
@@ -254,7 +255,8 @@ const AIVideoGeneration = ({
       setStoryboardEnabled(false);
       setStoryboardScenes([]);
     }
-  }, [currentModel, defaultParams, isEditMode, allSelectedImages, modelConfig.imageUpload]);
+  // 仅在模型或默认参数变化时重置，避免上传图片触发重置
+  }, [currentModel, defaultParams, isEditMode, modelConfig.imageUpload]);
 
   // Handle initial props - use ref to track if we've processed these props before
   const processedPropsRef = React.useRef<string>('');
@@ -662,17 +664,20 @@ const AIVideoGeneration = ({
                     disabled={isGenerating}
                   />
                 </div>
-                {hasCompatibleParams && (
-                  <div className="model-params-wrapper">
-                    <ParametersDropdown
-                      selectedParams={videoSelectedParams}
-                      onParamChange={handleVideoParamChange}
-                      modelId={currentModel}
-                      language={language}
-                      disabled={isGenerating}
-                    />
-                  </div>
-                )}
+              </div>
+            )}
+
+            {/* 模型额外参数（排除 size 和 duration，已有 VideoModelOptions） */}
+            {hasCompatibleParams && (
+              <div className="model-params-row">
+                <ParametersDropdown
+                  selectedParams={videoSelectedParams}
+                  onParamChange={handleVideoParamChange}
+                  modelId={currentModel}
+                  language={language}
+                  disabled={isGenerating}
+                  excludeParamIds={['size', 'duration']}
+                />
               </div>
             )}
 
