@@ -6,7 +6,7 @@
 
 ## 项目概述
 
-**Opentu (开图)** 是一个基于 Plait 框架构建的开源白板应用。支持思维导图、流程图、自由绘画、图片插入，以及 AI 驱动的内容生成（通过 Gemini 生成图片，通过 Veo3/Sora-2 生成视频）。
+**Opentu (开图)** 是一个基于 Plait 框架构建的开源白板应用。支持思维导图、流程图、自由绘画、图片插入，以及 AI 驱动的内容生成（支持 Gemini、Midjourney、Flux、Seedream、Kling 等多种图片/视频生成模型）。
 
 | 属性 | 值 |
 |------|-----|
@@ -87,7 +87,7 @@ aitu/
 | 构建工具 | Nx 19.3, pnpm, SWC |
 | UI 框架 | TDesign React, Tailwind CSS, Lucide React |
 | 绘图框架 | Plait ^0.84, Slate.js, RoughJS, Mermaid |
-| AI/API | Gemini API, Veo3, Sora-2 |
+| AI/API | Gemini API, Midjourney, Flux, Seedream, Kling, Veo3, Sora-2 |
 | 状态管理 | React Context, RxJS, LocalForage |
 | 测试 | Vitest, Playwright |
 
@@ -108,6 +108,52 @@ Service Worker (后台执行)
 ```
 
 **核心特性**：页面刷新不影响任务执行，通过 `remoteId` 恢复视频轮询。
+
+### 模型适配器架构
+
+支持多种 AI 图片/视频生成模型，通过统一的适配器接口集成：
+
+**已集成模型**：
+- **图片生成**：Gemini (Imagen 3)、Midjourney、Flux、Seedream 5.0
+- **视频生成**：Veo 3、Sora 2、Kling、Seedance
+
+**适配器注册与路由**：
+```typescript
+// 1. 定义适配器（实现 ImageModelAdapter 或 VideoModelAdapter）
+export const mjImageAdapter: ImageModelAdapter = {
+  id: 'mj-image-adapter',
+  matchTags: ['mj'],  // 模型标签匹配
+  supportedModels: ['mj-imagine'],
+  async generateImage(context, request) { /* ... */ }
+};
+
+// 2. 注册到全局 registry
+registerModelAdapter(mjImageAdapter);
+
+// 3. 运行时路由（generation-api-service.ts）
+const adapter = resolveAdapterForModel(model);
+if (adapter) {
+  await executeImageViaAdapter(taskId, adapter, params);
+}
+```
+
+**关键文件**：
+- `services/model-adapters/registry.ts` - 适配器注册表
+- `services/model-adapters/types.ts` - 适配器接口定义
+- `services/model-adapters/default-adapters.ts` - 默认适配器注册
+- `services/media-executor/fallback-adapter-routes.ts` - 适配器执行路由
+
+**多图结果处理**：
+- 适配器返回 `{ url, urls?, format }` 结构
+- `urls` 数组包含所有生成的图片 URL
+- 任务完成前自动缓存远程 URL 到本地 `/__aitu_cache__/`
+- UI 层展开多图为独立预览项，支持水平排列插入
+
+**签名 URL 处理**：
+- TOS/Volces 等签名 URL 会校验 Referer 导致 403
+- 所有 `<img>`/`<video>`/`new Image()` 使用 `referrerPolicy="no-referrer"`
+- `fetch` 下载时传 `{ referrerPolicy: 'no-referrer' }`
+- 任务完成时通过 `cacheRemoteUrl()` 将远程 URL 缓存到本地
 
 ### 素材库数据来源
 
