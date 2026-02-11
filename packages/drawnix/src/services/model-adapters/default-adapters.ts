@@ -8,6 +8,7 @@ import {
   IMAGE_MODEL_VIP_OPTIONS,
   VIDEO_MODELS,
   isAsyncImageModel,
+  ModelVendor,
 } from '../../constants/model-config';
 import type { UploadedVideoImage } from '../../types/video.types';
 import type {
@@ -30,7 +31,7 @@ const imageModelIds = [...IMAGE_MODEL_VIP_OPTIONS, ...IMAGE_MODEL_MORE_OPTIONS]
       !modelId.startsWith('mj-') &&
       !modelId.startsWith('bfl-flux-') &&
       !modelId.startsWith('flux-kontext-') &&
-      !modelId.startsWith('doubao-seedream-')
+      !modelId.includes('seedream') // 所有 Seedream 统一由 seedream-adapter 处理
   );
 
 const videoModelIds = VIDEO_MODELS.map((model) => model.id).filter(
@@ -88,6 +89,7 @@ export const geminiImageAdapter: ImageModelAdapter = {
   label: 'Gemini Image',
   kind: 'image',
   docsUrl: 'https://tuzi-api.apifox.cn',
+  matchVendors: [ModelVendor.GEMINI],
   supportedModels: imageModelIds,
   defaultModel: DEFAULT_IMAGE_MODEL_ID,
   async generateImage(_context, request: ImageGenerationRequest) {

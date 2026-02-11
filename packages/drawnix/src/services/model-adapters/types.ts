@@ -13,6 +13,14 @@ export interface AdapterMetadata {
   docsUrl?: string;
   supportedModels?: string[];
   defaultModel?: string;
+  /** 精确匹配的模型 ID 列表（优先级最高） */
+  matchModels?: string[];
+  /** 按厂商匹配（如 GEMINI/MIDJOURNEY/FLUX/DOUBAO 等） */
+  matchVendors?: ModelVendor[];
+  /** 按标签匹配（与 ModelConfig.tags 交集） */
+  matchTags?: string[];
+  /** 自定义匹配函数（接收 modelConfig） */
+  matchPredicate?: (model: ModelConfig) => boolean;
 }
 
 export interface ImageGenerationRequest {
@@ -66,3 +74,4 @@ export interface VideoModelAdapter extends AdapterMetadata {
 }
 
 export type ModelAdapter = ImageModelAdapter | VideoModelAdapter;
+import type { ModelConfig, ModelVendor } from '../../constants/model-config';

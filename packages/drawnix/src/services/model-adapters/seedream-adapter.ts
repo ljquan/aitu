@@ -5,9 +5,11 @@ import type {
 } from './types';
 import { registerModelAdapter } from './registry';
 
+const DEFAULT_SEEDREAM_MODEL = 'seedream-5.0';
 const SEEDREAM_MODELS = [
   'doubao-seedream-4-0-250828',
   'doubao-seedream-4-5-251128',
+  DEFAULT_SEEDREAM_MODEL,
 ];
 
 /**
@@ -96,11 +98,12 @@ export const seedreamImageAdapter: ImageModelAdapter = {
   label: 'Seedream Image',
   kind: 'image',
   docsUrl: 'https://tuzi-api.apifox.cn',
+  matchTags: ['seedream'],
   supportedModels: SEEDREAM_MODELS,
-  defaultModel: 'doubao-seedream-4-0-250828',
+  defaultModel: DEFAULT_SEEDREAM_MODEL,
 
   async generateImage(context, request: ImageGenerationRequest) {
-    const model = request.model || 'doubao-seedream-4-0-250828';
+    const model = request.model || DEFAULT_SEEDREAM_MODEL;
     const quality = (request.params?.seedream_quality as string) || '2k';
     const size = resolveSeedreamSize(request.size, quality);
 

@@ -371,6 +371,10 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
       ? {}
       : { size: getDefaultSizeForModel(getDefaultImageModel()) })
   }));
+  const selectedParamsRef = useRef<Record<string, string>>(selectedParams);
+  useEffect(() => {
+    selectedParamsRef.current = selectedParams;
+  }, [selectedParams]);
   // 当前选中的生成数量
   const [selectedCount, setSelectedCount] = useState(1);
 
@@ -952,6 +956,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
 
   // 当 selectedModel 被外部逻辑更新时（如生成类型切换、设置变更），重新对齐参数
   // 避免无限循环：只有在参数实际变化时才更新 state
+  // 当模型或可用参数变化时同步默认参数，保留用户已选值
   useEffect(() => {
     const isSameParams = (a: Record<string, string>, b: Record<string, string>) => {
       const aKeys = Object.keys(a);
@@ -963,13 +968,14 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
     const nextParams: Record<string, string> = {};
 
     const sizeParam = compatibleParams.find(p => p.id === 'size');
+    const prevSize = selectedParamsRef.current?.size;
     if (!selectedModel.startsWith('mj') && sizeParam) {
-      nextParams.size = getDefaultSizeForModel(selectedModel);
+      nextParams.size = prevSize || getDefaultSizeForModel(selectedModel);
     }
 
     compatibleParams.forEach(p => {
       if (p.id === 'size') return;
-      const prevVal = selectedParams[p.id];
+      const prevVal = selectedParamsRef.current?.[p.id];
       if (prevVal) {
         nextParams[p.id] = prevVal;
       } else if (p.defaultValue) {
@@ -977,10 +983,13 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
       }
     });
 
-    if (!isSameParams(selectedParams, nextParams)) {
+    if (!isSameParams(selectedParamsRef.current || {}, nextParams)) {
       setSelectedParams(nextParams);
+      selectedParamsRef.current = nextParams;
     }
-  }, [selectedModel, compatibleParams, selectedParams]);
+  // 仅在模型或兼容参数变动时运行，避免用户选择被覆盖
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedModel, compatibleParams]);
 
   // 处理参数选择
   const handleParamSelect = useCallback((paramId: string, value?: string) => {

@@ -105,6 +105,7 @@ export const mjImageAdapter: ImageModelAdapter = {
   label: 'Midjourney Image',
   kind: 'image',
   docsUrl: 'https://tuzi-api.apifox.cn',
+  matchTags: ['mj'],
   supportedModels: ['mj-imagine'],
   defaultModel: 'mj-imagine',
   async generateImage(context, request: ImageGenerationRequest) {

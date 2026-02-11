@@ -4,6 +4,7 @@ import type {
   ImageModelAdapter,
 } from './types';
 import { registerModelAdapter } from './registry';
+import { ModelVendor } from '../../constants/model-config';
 
 type FluxSubmitResponse = {
   id: string;
@@ -167,6 +168,7 @@ export const fluxImageAdapter: ImageModelAdapter = {
   label: 'Flux Image',
   kind: 'image',
   docsUrl: 'https://tuzi-api.apifox.cn',
+  matchVendors: [ModelVendor.FLUX],
   supportedModels: FLUX_MODELS,
   defaultModel: 'bfl-flux-2-flex',
 

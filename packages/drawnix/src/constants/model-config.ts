@@ -71,6 +71,8 @@ export interface ParamConfig {
   defaultValue?: string;
   /** 兼容的模型 ID 列表（空数组表示所有模型都兼容） */
   compatibleModels: string[];
+  /** 兼容的模型标签列表（任一命中则视为兼容，用于减少硬编码模型 ID） */
+  compatibleTags?: string[];
   /** 适用的模型类型 */
   modelType: ModelType;
 }
@@ -125,6 +127,8 @@ export interface ModelConfig {
   imageDefaults?: ImageModelDefaults;
   /** 视频模型默认参数 */
   videoDefaults?: VideoModelDefaults;
+  /** 模型标签（用于参数兼容匹配的非硬编码方式） */
+  tags?: string[];
 }
 
 // ============================================
@@ -397,6 +401,7 @@ export const IMAGE_MODEL_MORE_OPTIONS: ModelConfig[] = [
     vendor: ModelVendor.DOUBAO,
     supportsTools: false,
     imageDefaults: IMAGE_2K_DEFAULT_PARAMS,
+    tags: ['seedream'],
   },
   {
     id: 'doubao-seedream-4-5-251128',
@@ -408,6 +413,19 @@ export const IMAGE_MODEL_MORE_OPTIONS: ModelConfig[] = [
     vendor: ModelVendor.DOUBAO,
     supportsTools: false,
     imageDefaults: IMAGE_2K_DEFAULT_PARAMS,
+    tags: ['seedream'],
+  },
+  {
+    id: 'seedream-5.0',
+    label: 'Seedream 5.0',
+    shortLabel: 'Seedream 5.0',
+    shortCode: 'sd5',
+    description: '即梦 Seedream 5.0 图片生成，支持 2K/4K',
+    type: 'image',
+    vendor: ModelVendor.DOUBAO,
+    supportsTools: false,
+    imageDefaults: IMAGE_2K_DEFAULT_PARAMS,
+    tags: ['seedream'],
   },
 ];
 
@@ -986,6 +1004,7 @@ const SEEDANCE_MODEL_IDS = [
 const SEEDREAM_IMAGE_MODEL_IDS = [
   'doubao-seedream-4-0-250828',
   'doubao-seedream-4-5-251128',
+  'seedream-5.0',
 ];
 
 /** GPT 图片模型 ID（仅支持有限尺寸） */
@@ -1216,6 +1235,7 @@ export const IMAGE_PARAMS: ParamConfig[] = [
     ],
     defaultValue: '1x1',
     compatibleModels: SEEDREAM_IMAGE_MODEL_IDS,
+    compatibleTags: ['seedream'],
     modelType: 'image',
   },
   // Seedream 图片质量（2K/4K）
@@ -1231,6 +1251,7 @@ export const IMAGE_PARAMS: ParamConfig[] = [
     ],
     defaultValue: '2k',
     compatibleModels: SEEDREAM_IMAGE_MODEL_IDS,
+    compatibleTags: ['seedream'],
     modelType: 'image',
   },
   {
@@ -1359,12 +1380,34 @@ export function getCompatibleParams(modelId: string): ParamConfig[] {
   const modelConfig = getModelConfig(modelId);
   if (!modelConfig) return [];
 
+  // 构建模型标签集合：显式标签 + 类型 + 厂商 + 基于 ID 的启发式
+  const modelTags = new Set<string>();
+  (modelConfig.tags || []).forEach((t) => modelTags.add(t.toLowerCase()));
+  if (modelConfig.type) modelTags.add(modelConfig.type.toLowerCase());
+  if (modelConfig.vendor) modelTags.add(modelConfig.vendor.toLowerCase());
+  const idLower = modelConfig.id.toLowerCase();
+  if (idLower.includes('seedream')) modelTags.add('seedream');
+  if (idLower.startsWith('mj') || idLower.includes('midjourney')) modelTags.add('mj');
+  if (idLower.includes('gemini')) modelTags.add('gemini');
+  if (idLower.includes('gpt')) modelTags.add('gpt');
+  if (idLower.includes('flux')) modelTags.add('flux');
+  if (idLower.includes('veo')) modelTags.add('veo');
+  if (idLower.includes('sora')) modelTags.add('sora');
+  if (idLower.includes('seedance')) modelTags.add('seedance');
+  // 这里不再自动按 doubao 分类，避免与 seedream 重复；若需要可通过 tags 显式声明
+
   return ALL_PARAMS.filter((param) => {
     // 检查模型类型是否匹配
     if (param.modelType !== modelConfig.type) return false;
-    // 检查是否在兼容列表中（空数组表示所有模型都兼容）
-    if (param.compatibleModels.length === 0) return true;
-    return param.compatibleModels.includes(modelId);
+    // 检查是否在兼容 ID 列表（空数组表示所有模型都兼容）
+    const idMatched =
+      param.compatibleModels.length === 0 ||
+      param.compatibleModels.includes(modelId);
+    // 检查标签兼容（可选）
+    const tagMatched = param.compatibleTags
+      ? param.compatibleTags.some((tag) => modelTags.has(tag.toLowerCase()))
+      : false;
+    return idMatched || tagMatched;
   });
 }
 
