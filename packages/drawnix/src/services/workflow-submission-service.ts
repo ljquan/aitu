@@ -398,6 +398,7 @@ class WorkflowSubmissionService {
     if (parsedInput.count && parsedInput.count > 1) args.count = parsedInput.count;
     if (parsedInput.duration) args.seconds = parsedInput.duration;
     if (referenceImages.length > 0) args.referenceImages = referenceImages;
+    if (parsedInput.extraParams) args.params = parsedInput.extraParams;
 
     // Create steps based on count
     const steps: WorkflowStep[] = [];

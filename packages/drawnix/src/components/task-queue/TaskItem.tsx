@@ -152,7 +152,8 @@ export const TaskItem: React.FC<TaskItemProps> = React.memo(({
   );
 
   // Use original URL or cached URL (Service Worker handles caching automatically)
-  const mediaUrl = task.result?.url;
+  const mediaUrl = task.result?.urls?.[0] || task.result?.url;
+  const mediaCount = task.result?.urls?.length || (task.result?.url ? 1 : 0);
   
   // 获取预览图URL（任务列表使用小尺寸）
   const thumbnailUrl = useThumbnailUrl(
@@ -273,16 +274,21 @@ export const TaskItem: React.FC<TaskItemProps> = React.memo(({
               <>
                 {/* 已完成状态：显示实际内容 */}
                 {task.type === TaskType.IMAGE && mediaUrl ? (
-                  <RetryImage
-                    src={thumbnailUrl || mediaUrl}
-                    alt="Generated"
-                    maxRetries={5}
-                    fallback={
-                      <div className="task-item__preview-placeholder">
-                        <span>图片加载失败</span>
-                      </div>
-                    }
-                  />
+                  <>
+                    <RetryImage
+                      src={thumbnailUrl || mediaUrl}
+                      alt="Generated"
+                      maxRetries={5}
+                      fallback={
+                        <div className="task-item__preview-placeholder">
+                          <span>图片加载失败</span>
+                        </div>
+                      }
+                    />
+                    {mediaCount > 1 && (
+                      <span className="task-item__multi-badge">{mediaCount}张</span>
+                    )}
+                  </>
                 ) : isCharacterTask && task.result?.characterProfileUrl ? (
                   <div className="task-item__character-preview">
                     <RetryImage

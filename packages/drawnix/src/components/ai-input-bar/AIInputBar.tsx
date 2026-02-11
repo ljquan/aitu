@@ -48,6 +48,7 @@ import {
   getDefaultSizeForModel,
   getDefaultVideoModel,
   DEFAULT_TEXT_MODEL,
+  getCompatibleParams,
 } from '../../constants/model-config';
 import { BUILT_IN_TOOLS } from '../../constants/built-in-tools';
 import { initializeMCP, mcpRegistry } from '../../mcp';
@@ -366,8 +367,14 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
   const [selectedModel, setSelectedModel] = useState(getDefaultImageModel);
   // 当前选中的参数映射 (id -> value)
   const [selectedParams, setSelectedParams] = useState<Record<string, string>>(() => ({
-    size: getDefaultSizeForModel(getDefaultImageModel())
+    ...(getDefaultImageModel().startsWith('mj')
+      ? {}
+      : { size: getDefaultSizeForModel(getDefaultImageModel()) })
   }));
+  const selectedParamsRef = useRef<Record<string, string>>(selectedParams);
+  useEffect(() => {
+    selectedParamsRef.current = selectedParams;
+  }, [selectedParams]);
   // 当前选中的生成数量
   const [selectedCount, setSelectedCount] = useState(1);
 
@@ -412,9 +419,13 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
     }
     
     setSelectedModel(defaultModelId);
-    setSelectedParams({
-      size: getDefaultSizeForModel(defaultModelId)
-    });
+    if (defaultModelId.startsWith('mj')) {
+      setSelectedParams({});
+    } else {
+      setSelectedParams({
+        size: getDefaultSizeForModel(defaultModelId)
+      });
+    }
     // Agent 模式通常只需要 1 个结果
     if (generationType === 'text') {
       setSelectedCount(1);
@@ -427,6 +438,12 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
     if (generationType === 'text') return TEXT_MODELS;
     return IMAGE_MODELS;
   }, [generationType]);
+
+  // 预计算当前模型的可用参数，避免子组件内部 stale 计算
+  const compatibleParams = useMemo(() => {
+    if (generationType === 'text') return [];
+    return getCompatibleParams(selectedModel);
+  }, [generationType, selectedModel]);
 
   // 点击外部关闭输入框的展开状态
   useEffect(() => {
@@ -909,14 +926,70 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
     // 更新状态（反显到下方下拉框）
     setGenerationType(model.type as GenerationType);
     setSelectedModel(modelId);
-    setSelectedParams({
-      size: getDefaultSizeForModel(modelId)
+    // 仅保留新模型兼容的参数，并设置默认值
+    const compatibleParams = getCompatibleParams(modelId);
+    const nextParams: Record<string, string> = {};
+
+    // 默认 size
+    const sizeParam = compatibleParams.find(p => p.id === 'size');
+    if (!modelId.startsWith('mj') && sizeParam) {
+      nextParams.size = getDefaultSizeForModel(modelId);
+    }
+
+    // 其他参数：沿用同 id 已选值，否则用默认值
+    compatibleParams.forEach(p => {
+      if (p.id === 'size') return;
+      const prevVal = (selectedParams as any)[p.id];
+      if (prevVal) {
+        nextParams[p.id] = prevVal;
+      } else if (p.defaultValue) {
+        nextParams[p.id] = p.defaultValue;
+      }
     });
+
+    setSelectedParams(nextParams);
 
     // 关闭下拉菜单并保持焦点
     setModelDropdownOpen(false);
     setTimeout(() => inputRef.current?.focus(), 0);
   }, [clearTriggerSymbol]);
+
+  // 当 selectedModel 被外部逻辑更新时（如生成类型切换、设置变更），重新对齐参数
+  // 避免无限循环：只有在参数实际变化时才更新 state
+  // 当模型或可用参数变化时同步默认参数，保留用户已选值
+  useEffect(() => {
+    const isSameParams = (a: Record<string, string>, b: Record<string, string>) => {
+      const aKeys = Object.keys(a);
+      const bKeys = Object.keys(b);
+      if (aKeys.length !== bKeys.length) return false;
+      return aKeys.every((k) => a[k] === b[k]);
+    };
+
+    const nextParams: Record<string, string> = {};
+
+    const sizeParam = compatibleParams.find(p => p.id === 'size');
+    const prevSize = selectedParamsRef.current?.size;
+    if (!selectedModel.startsWith('mj') && sizeParam) {
+      nextParams.size = prevSize || getDefaultSizeForModel(selectedModel);
+    }
+
+    compatibleParams.forEach(p => {
+      if (p.id === 'size') return;
+      const prevVal = selectedParamsRef.current?.[p.id];
+      if (prevVal) {
+        nextParams[p.id] = prevVal;
+      } else if (p.defaultValue) {
+        nextParams[p.id] = p.defaultValue;
+      }
+    });
+
+    if (!isSameParams(selectedParamsRef.current || {}, nextParams)) {
+      setSelectedParams(nextParams);
+      selectedParamsRef.current = nextParams;
+    }
+  // 仅在模型或兼容参数变动时运行，避免用户选择被覆盖
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedModel, compatibleParams]);
 
   // 处理参数选择
   const handleParamSelect = useCallback((paramId: string, value?: string) => {
@@ -1889,10 +1962,12 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
           />
 
           {/* Parameters dropdown selector - Hidden for Agent mode */}
-          {generationType !== 'text' && (
+          {generationType !== 'text' && compatibleParams.length > 0 && (
             <ParametersDropdown
+              key={selectedModel} // 强制在模型切换时重新挂载以刷新可配置参数
               selectedParams={selectedParams}
               onParamChange={handleParamSelect}
+              compatibleParams={compatibleParams}
               modelId={selectedModel}
               language={language}
               isOpen={paramsDropdownOpen}

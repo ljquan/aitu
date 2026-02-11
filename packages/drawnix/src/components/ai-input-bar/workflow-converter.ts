@@ -145,6 +145,7 @@ export function convertDirectGenerationToWorkflow(
     count,
     size,
     duration,
+    extraParams,
     selection,
   } = params;
 
@@ -187,6 +188,10 @@ export function convertDirectGenerationToWorkflow(
       if (referenceImages.length > 0) {
         imageArgs.referenceImages = referenceImages;
       }
+      // 透传额外参数（如 seedream_quality）
+      if (extraParams) {
+        imageArgs.params = extraParams;
+      }
 
       steps.push({
         id: stepId,
@@ -214,6 +219,10 @@ export function convertDirectGenerationToWorkflow(
       }
       if (referenceImages.length > 0) {
         videoArgs.referenceImages = referenceImages;
+      }
+      // 透传额外参数（如 aspect_ratio）
+      if (extraParams) {
+        videoArgs.params = extraParams;
       }
 
       steps.push({
@@ -271,6 +280,7 @@ export function convertAgentFlowToWorkflow(
     count,
     size,
     duration,
+    extraParams,
     selection,
   } = params;
 
@@ -291,6 +301,7 @@ export function convertAgentFlowToWorkflow(
       count,
       size,
       duration,
+      ...extraParams,
     },
     selection,
     finalPrompt: prompt,

@@ -26,6 +26,8 @@ export interface ImageGenerationOptions {
   referenceImages?: string[];
   uploadedImages?: Array<{ url?: string; base64?: string }>;
   count?: number;
+  /** 透传给具体适配器的额外参数（如 seedream_quality、aspect_ratio） */
+  params?: Record<string, unknown>;
   signal?: AbortSignal;
   /** 强制使用主线程（跳过 SW） */
   forceMainThread?: boolean;
@@ -41,6 +43,8 @@ export interface VideoGenerationOptions {
   inputReference?: string;
   inputReferences?: Array<{ type: 'image' | 'video'; url: string }>;
   referenceImages?: string[];
+  /** 透传给具体适配器的额外参数（如 aspect_ratio） */
+  params?: Record<string, unknown>;
   signal?: AbortSignal;
   forceMainThread?: boolean;
 }

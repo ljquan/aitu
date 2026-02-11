@@ -13,6 +13,40 @@
 export type ModelType = 'image' | 'video' | 'text';
 
 /**
+ * 模型厂商
+ */
+export enum ModelVendor {
+  GEMINI = 'GEMINI',
+  FLUX = 'FLUX',
+  MIDJOURNEY = 'MIDJOURNEY',
+  GPT = 'GPT',
+  VEO = 'VEO',
+  SORA = 'SORA',
+  KLING = 'KLING',
+  DEEPSEEK = 'DEEPSEEK',
+  ANTHROPIC = 'ANTHROPIC',
+  GOOGLE = 'GOOGLE',
+  DOUBAO = 'DOUBAO',
+}
+
+/**
+ * 厂商显示名称
+ */
+export const VENDOR_NAMES: Record<ModelVendor, string> = {
+  [ModelVendor.GEMINI]: 'Gemini',
+  [ModelVendor.FLUX]: 'Flux',
+  [ModelVendor.MIDJOURNEY]: 'Midjourney',
+  [ModelVendor.GPT]: 'GPT',
+  [ModelVendor.VEO]: 'Veo',
+  [ModelVendor.SORA]: 'Sora',
+  [ModelVendor.KLING]: 'Kling',
+  [ModelVendor.DEEPSEEK]: 'DeepSeek',
+  [ModelVendor.ANTHROPIC]: 'Anthropic',
+  [ModelVendor.GOOGLE]: 'Google',
+  [ModelVendor.DOUBAO]: '即梦',
+};
+
+/**
  * 参数值类型
  */
 export type ParamValueType = 'enum' | 'number' | 'string';
@@ -37,6 +71,8 @@ export interface ParamConfig {
   defaultValue?: string;
   /** 兼容的模型 ID 列表（空数组表示所有模型都兼容） */
   compatibleModels: string[];
+  /** 兼容的模型标签列表（任一命中则视为兼容，用于减少硬编码模型 ID） */
+  compatibleTags?: string[];
   /** 适用的模型类型 */
   modelType: ModelType;
 }
@@ -81,6 +117,8 @@ export interface ModelConfig {
   description?: string;
   /** 模型类型 */
   type: ModelType;
+  /** 模型厂商 */
+  vendor: ModelVendor;
   /** 是否为 VIP/推荐模型 */
   isVip?: boolean;
   /** 是否支持工具调用（用于 Agent 模式） */
@@ -89,6 +127,8 @@ export interface ModelConfig {
   imageDefaults?: ImageModelDefaults;
   /** 视频模型默认参数 */
   videoDefaults?: VideoModelDefaults;
+  /** 模型标签（用于参数兼容匹配的非硬编码方式） */
+  tags?: string[];
 }
 
 // ============================================
@@ -140,6 +180,7 @@ export const IMAGE_MODEL_VIP_OPTIONS: ModelConfig[] = [
     shortCode: 'nb2v',
     description: '最新 Gemini 3 Pro 图片模型（VIP）',
     type: 'image',
+    vendor: ModelVendor.GEMINI,
     isVip: true,
     supportsTools: true,
     imageDefaults: IMAGE_DEFAULT_PARAMS,
@@ -151,6 +192,7 @@ export const IMAGE_MODEL_VIP_OPTIONS: ModelConfig[] = [
     shortCode: 'nb22kv',
     description: '2K 高清图片模型（VIP）',
     type: 'image',
+    vendor: ModelVendor.GEMINI,
     isVip: true,
     supportsTools: true,
     imageDefaults: IMAGE_2K_DEFAULT_PARAMS,
@@ -162,6 +204,7 @@ export const IMAGE_MODEL_VIP_OPTIONS: ModelConfig[] = [
     shortCode: 'nb24kv',
     description: '4K 超高清图片模型（VIP）',
     type: 'image',
+    vendor: ModelVendor.GEMINI,
     isVip: true,
     supportsTools: true,
     imageDefaults: IMAGE_4K_DEFAULT_PARAMS,
@@ -173,6 +216,7 @@ export const IMAGE_MODEL_VIP_OPTIONS: ModelConfig[] = [
     shortCode: 'nbv',
     description: '快速图片生成模型（VIP）',
     type: 'image',
+    vendor: ModelVendor.GEMINI,
     isVip: true,
     supportsTools: true,
     imageDefaults: IMAGE_DEFAULT_PARAMS,
@@ -184,12 +228,79 @@ export const IMAGE_MODEL_VIP_OPTIONS: ModelConfig[] = [
  */
 export const IMAGE_MODEL_MORE_OPTIONS: ModelConfig[] = [
   {
+    id: 'mj-imagine',
+    label: 'midjourney imagine',
+    shortLabel: 'midjourney',
+    shortCode: 'mj',
+    description: 'Midjourney 异步图片生成模型（# 参数）',
+    type: 'image',
+    vendor: ModelVendor.MIDJOURNEY,
+    supportsTools: true,
+    imageDefaults: IMAGE_DEFAULT_PARAMS,
+  },
+  {
     id: 'gpt-image-1.5',
     label: 'gpt-image-1.5',
     shortCode: 'gpt15',
     description: 'GPT 图片生成模型',
     type: 'image',
+    vendor: ModelVendor.GPT,
     supportsTools: true,
+    imageDefaults: IMAGE_DEFAULT_PARAMS,
+  },
+  {
+    id: 'bfl-flux-2-pro',
+    label: 'Flux 2 Pro',
+    shortLabel: 'flux-2-pro',
+    shortCode: 'f2p',
+    description: 'Flux 2 Pro 高质量图片生成',
+    type: 'image',
+    vendor: ModelVendor.FLUX,
+    supportsTools: false,
+    imageDefaults: IMAGE_DEFAULT_PARAMS,
+  },
+  {
+    id: 'bfl-flux-2-max',
+    label: 'Flux 2 Max',
+    shortLabel: 'flux-2-max',
+    shortCode: 'f2m',
+    description: 'Flux 2 Max 最高质量图片生成',
+    type: 'image',
+    vendor: ModelVendor.FLUX,
+    supportsTools: false,
+    imageDefaults: IMAGE_DEFAULT_PARAMS,
+  },
+  {
+    id: 'bfl-flux-2-flex',
+    label: 'Flux 2 Flex',
+    shortLabel: 'flux-2-flex',
+    shortCode: 'f2f',
+    description: 'Flux 2 Flex 灵活图片生成',
+    type: 'image',
+    vendor: ModelVendor.FLUX,
+    supportsTools: false,
+    imageDefaults: IMAGE_DEFAULT_PARAMS,
+  },
+  {
+    id: 'flux-kontext-pro',
+    label: 'Flux Kontext Pro',
+    shortLabel: 'kontext-pro',
+    shortCode: 'fkp',
+    description: 'Flux Kontext Pro 多参考图编辑',
+    type: 'image',
+    vendor: ModelVendor.FLUX,
+    supportsTools: false,
+    imageDefaults: IMAGE_DEFAULT_PARAMS,
+  },
+  {
+    id: 'flux-kontext-max',
+    label: 'Flux Kontext Max',
+    shortLabel: 'kontext-max',
+    shortCode: 'fkm',
+    description: 'Flux Kontext Max 多参考图编辑（最高质量）',
+    type: 'image',
+    vendor: ModelVendor.FLUX,
+    supportsTools: false,
     imageDefaults: IMAGE_DEFAULT_PARAMS,
   },
   {
@@ -199,6 +310,7 @@ export const IMAGE_MODEL_MORE_OPTIONS: ModelConfig[] = [
     shortCode: 'nb2',
     description: 'Gemini 3 Pro 图片模型',
     type: 'image',
+    vendor: ModelVendor.GEMINI,
     supportsTools: true,
     imageDefaults: IMAGE_DEFAULT_PARAMS,
   },
@@ -209,6 +321,7 @@ export const IMAGE_MODEL_MORE_OPTIONS: ModelConfig[] = [
     shortCode: 'nb',
     description: '快速图片生成模型',
     type: 'image',
+    vendor: ModelVendor.GEMINI,
     supportsTools: true,
     imageDefaults: IMAGE_DEFAULT_PARAMS,
   },
@@ -219,6 +332,7 @@ export const IMAGE_MODEL_MORE_OPTIONS: ModelConfig[] = [
     shortCode: 'nb2hd',
     description: 'HD 高清图片模型',
     type: 'image',
+    vendor: ModelVendor.GEMINI,
     supportsTools: true,
     imageDefaults: IMAGE_DEFAULT_PARAMS,
   },
@@ -229,6 +343,7 @@ export const IMAGE_MODEL_MORE_OPTIONS: ModelConfig[] = [
     shortCode: 'nb22k',
     description: '2K 高清图片模型',
     type: 'image',
+    vendor: ModelVendor.GEMINI,
     supportsTools: true,
     imageDefaults: IMAGE_2K_DEFAULT_PARAMS,
   },
@@ -239,6 +354,7 @@ export const IMAGE_MODEL_MORE_OPTIONS: ModelConfig[] = [
     shortCode: 'nb24k',
     description: '4K 超高清图片模型',
     type: 'image',
+    vendor: ModelVendor.GEMINI,
     supportsTools: true,
     imageDefaults: IMAGE_4K_DEFAULT_PARAMS,
   },
@@ -249,6 +365,7 @@ export const IMAGE_MODEL_MORE_OPTIONS: ModelConfig[] = [
     shortCode: 'nb2a',
     description: '异步 1K 图片生成（轮询获取结果）',
     type: 'image',
+    vendor: ModelVendor.GEMINI,
     supportsTools: false,
     imageDefaults: IMAGE_DEFAULT_PARAMS,
   },
@@ -259,6 +376,7 @@ export const IMAGE_MODEL_MORE_OPTIONS: ModelConfig[] = [
     shortCode: 'nb22ka',
     description: '异步 2K 图片生成（轮询获取结果）',
     type: 'image',
+    vendor: ModelVendor.GEMINI,
     supportsTools: false,
     imageDefaults: IMAGE_2K_DEFAULT_PARAMS,
   },
@@ -269,8 +387,45 @@ export const IMAGE_MODEL_MORE_OPTIONS: ModelConfig[] = [
     shortCode: 'nb24ka',
     description: '异步 4K 图片生成（轮询获取结果）',
     type: 'image',
+    vendor: ModelVendor.GEMINI,
     supportsTools: false,
     imageDefaults: IMAGE_4K_DEFAULT_PARAMS,
+  },
+  {
+    id: 'doubao-seedream-4-0-250828',
+    label: 'Seedream 4.0',
+    shortLabel: 'Seedream 4.0',
+    shortCode: 'sd4',
+    description: '即梦 Seedream 4.0 图片生成，支持 2K/4K',
+    type: 'image',
+    vendor: ModelVendor.DOUBAO,
+    supportsTools: false,
+    imageDefaults: IMAGE_2K_DEFAULT_PARAMS,
+    tags: ['seedream'],
+  },
+  {
+    id: 'doubao-seedream-4-5-251128',
+    label: 'Seedream 4.5',
+    shortLabel: 'Seedream 4.5',
+    shortCode: 'sd45',
+    description: '即梦 Seedream 4.5 图片生成，支持 2K/4K',
+    type: 'image',
+    vendor: ModelVendor.DOUBAO,
+    supportsTools: false,
+    imageDefaults: IMAGE_2K_DEFAULT_PARAMS,
+    tags: ['seedream'],
+  },
+  {
+    id: 'seedream-5.0',
+    label: 'Seedream 5.0',
+    shortLabel: 'Seedream 5.0',
+    shortCode: 'sd5',
+    description: '即梦 Seedream 5.0 图片生成，支持 2K/4K',
+    type: 'image',
+    vendor: ModelVendor.DOUBAO,
+    supportsTools: false,
+    imageDefaults: IMAGE_2K_DEFAULT_PARAMS,
+    tags: ['seedream'],
   },
 ];
 
@@ -279,6 +434,7 @@ export const ASYNC_IMAGE_MODEL_IDS = [
   'gemini-3-pro-image-preview-async',
   'gemini-3-pro-image-preview-2k-async',
   'gemini-3-pro-image-preview-4k-async',
+  'mj-imagine',
 ];
 
 export function isAsyncImageModel(modelId?: string): boolean {
@@ -320,16 +476,41 @@ const SORA_DEFAULT_PARAMS: VideoModelDefaults = {
   aspectRatio: '16:9',
 };
 
+/** Kling 模型默认参数（5秒） */
+const KLING_DEFAULT_PARAMS: VideoModelDefaults = {
+  duration: '5',
+  size: '1280x720',
+  aspectRatio: '16:9',
+};
+
+/** Seedance 模型默认参数（5秒，720p） */
+const SEEDANCE_DEFAULT_PARAMS: VideoModelDefaults = {
+  duration: '5',
+  size: '720p',
+  aspectRatio: '16:9',
+};
+
 /**
  * 视频模型配置
  */
 export const VIDEO_MODELS: ModelConfig[] = [
+  {
+    id: 'kling-v1-6',
+    label: 'Kling V1.6',
+    shortCode: 'k16',
+    description: '5s/10s 视频，支持文生视频和图生视频',
+    type: 'video',
+    vendor: ModelVendor.KLING,
+    supportsTools: true,
+    videoDefaults: KLING_DEFAULT_PARAMS,
+  },
   {
     id: 'veo3.1',
     label: 'Veo 3.1',
     shortCode: 'v31',
     description: '8秒快速模式，支持首尾帧',
     type: 'video',
+    vendor: ModelVendor.VEO,
     isVip: true,
     supportsTools: true,
     videoDefaults: VEO_DEFAULT_PARAMS,
@@ -340,6 +521,7 @@ export const VIDEO_MODELS: ModelConfig[] = [
     shortCode: 's2',
     description: '10s/15s 默认标清，支持故事场景模式',
     type: 'video',
+    vendor: ModelVendor.SORA,
     isVip: true,
     supportsTools: true,
     videoDefaults: SORA_DEFAULT_PARAMS,
@@ -350,6 +532,7 @@ export const VIDEO_MODELS: ModelConfig[] = [
     shortCode: 's24',
     description: '4秒固定时长，模型名已包含时长',
     type: 'video',
+    vendor: ModelVendor.SORA,
     isVip: true,
     supportsTools: true,
     videoDefaults: {
@@ -364,6 +547,7 @@ export const VIDEO_MODELS: ModelConfig[] = [
     shortCode: 's28',
     description: '8秒固定时长，模型名已包含时长',
     type: 'video',
+    vendor: ModelVendor.SORA,
     isVip: true,
     supportsTools: true,
     videoDefaults: {
@@ -378,6 +562,7 @@ export const VIDEO_MODELS: ModelConfig[] = [
     shortCode: 's212',
     description: '12秒固定时长，模型名已包含时长',
     type: 'video',
+    vendor: ModelVendor.SORA,
     isVip: true,
     supportsTools: true,
     videoDefaults: {
@@ -392,6 +577,7 @@ export const VIDEO_MODELS: ModelConfig[] = [
     shortCode: 'v3',
     description: '8秒视频',
     type: 'video',
+    vendor: ModelVendor.VEO,
     supportsTools: true,
     videoDefaults: VEO_DEFAULT_PARAMS,
   },
@@ -401,6 +587,7 @@ export const VIDEO_MODELS: ModelConfig[] = [
     shortCode: 'v3p',
     description: '8秒高质量视频',
     type: 'video',
+    vendor: ModelVendor.VEO,
     supportsTools: true,
     videoDefaults: VEO_DEFAULT_PARAMS,
   },
@@ -410,6 +597,7 @@ export const VIDEO_MODELS: ModelConfig[] = [
     shortCode: 'v31p',
     description: '8秒高质量模式，支持首尾帧',
     type: 'video',
+    vendor: ModelVendor.VEO,
     supportsTools: true,
     videoDefaults: VEO_DEFAULT_PARAMS,
   },
@@ -419,6 +607,7 @@ export const VIDEO_MODELS: ModelConfig[] = [
     shortCode: 'v31c',
     description: '8秒模式，支持3张参考图',
     type: 'video',
+    vendor: ModelVendor.VEO,
     supportsTools: true,
     videoDefaults: VEO_DEFAULT_PARAMS,
   },
@@ -428,6 +617,7 @@ export const VIDEO_MODELS: ModelConfig[] = [
     shortCode: 'v314k',
     description: '8秒4K模式，支持首尾帧',
     type: 'video',
+    vendor: ModelVendor.VEO,
     supportsTools: true,
     videoDefaults: VEO_4K_DEFAULT_PARAMS,
   },
@@ -437,6 +627,7 @@ export const VIDEO_MODELS: ModelConfig[] = [
     shortCode: 'v31c4k',
     description: '8秒4K模式，支持3张参考图',
     type: 'video',
+    vendor: ModelVendor.VEO,
     supportsTools: true,
     videoDefaults: VEO_4K_DEFAULT_PARAMS,
   },
@@ -446,6 +637,7 @@ export const VIDEO_MODELS: ModelConfig[] = [
     shortCode: 'v31p4k',
     description: '8秒高质量4K模式，支持首尾帧',
     type: 'video',
+    vendor: ModelVendor.VEO,
     supportsTools: true,
     videoDefaults: VEO_4K_DEFAULT_PARAMS,
   },
@@ -455,8 +647,46 @@ export const VIDEO_MODELS: ModelConfig[] = [
     shortCode: 's2p',
     description: '10s/15s/25s 高清，支持故事场景模式',
     type: 'video',
+    vendor: ModelVendor.SORA,
     supportsTools: true,
     videoDefaults: SORA_DEFAULT_PARAMS,
+  },
+  {
+    id: 'seedance-1.5-pro',
+    label: 'Seedance 1.5 Pro',
+    shortCode: 'sc15p',
+    description: '即梦 1.5 Pro 有声视频，支持首尾帧',
+    type: 'video',
+    vendor: ModelVendor.DOUBAO,
+    isVip: true,
+    videoDefaults: SEEDANCE_DEFAULT_PARAMS,
+  },
+  {
+    id: 'seedance-1.0-pro',
+    label: 'Seedance 1.0 Pro',
+    shortCode: 'sc10p',
+    description: '即梦 1.0 Pro，支持首尾帧',
+    type: 'video',
+    vendor: ModelVendor.DOUBAO,
+    videoDefaults: SEEDANCE_DEFAULT_PARAMS,
+  },
+  {
+    id: 'seedance-1.0-pro-fast',
+    label: 'Seedance 1.0 Fast',
+    shortCode: 'sc10f',
+    description: '即梦 1.0 快速模式，仅首帧',
+    type: 'video',
+    vendor: ModelVendor.DOUBAO,
+    videoDefaults: SEEDANCE_DEFAULT_PARAMS,
+  },
+  {
+    id: 'seedance-1.0-lite',
+    label: 'Seedance 1.0 Lite',
+    shortCode: 'sc10l',
+    description: '即梦 1.0 Lite，支持首尾帧和参考图',
+    type: 'video',
+    vendor: ModelVendor.DOUBAO,
+    videoDefaults: SEEDANCE_DEFAULT_PARAMS,
   },
 ];
 
@@ -474,6 +704,7 @@ export const TEXT_MODELS: ModelConfig[] = [
     shortCode: 'ds32',
     description: 'DeepSeek 最新大语言模型，性价比高',
     type: 'text',
+    vendor: ModelVendor.DEEPSEEK,
     supportsTools: true,
   },
   {
@@ -482,6 +713,7 @@ export const TEXT_MODELS: ModelConfig[] = [
     shortCode: 'op45',
     description: 'Anthropic 旗舰模型，推理能力最强',
     type: 'text',
+    vendor: ModelVendor.ANTHROPIC,
     isVip: true,
     supportsTools: true,
   },
@@ -491,6 +723,7 @@ export const TEXT_MODELS: ModelConfig[] = [
     shortCode: 'sn45',
     description: 'Anthropic 均衡模型，性能与速度兼顾',
     type: 'text',
+    vendor: ModelVendor.ANTHROPIC,
     isVip: true,
     supportsTools: true,
   },
@@ -500,6 +733,7 @@ export const TEXT_MODELS: ModelConfig[] = [
     shortCode: 'g25f',
     description: 'Google 快速响应模型，适合日常任务',
     type: 'text',
+    vendor: ModelVendor.GOOGLE,
     supportsTools: true,
   },
   {
@@ -508,6 +742,7 @@ export const TEXT_MODELS: ModelConfig[] = [
     shortCode: 'g3pp',
     description: 'Google 最新预览模型，能力强大',
     type: 'text',
+    vendor: ModelVendor.GOOGLE,
     isVip: true,
     supportsTools: true,
   },
@@ -595,6 +830,39 @@ export function getVideoModelDefaults(modelId: string): VideoModelDefaults {
  */
 export function getModelTypeColor(type: ModelType): string {
   return MODEL_TYPE_COLORS[type];
+}
+
+/**
+ * 按厂商分组模型列表
+ */
+export function getModelsByVendor(
+  models: ModelConfig[]
+): Map<ModelVendor, ModelConfig[]> {
+  const map = new Map<ModelVendor, ModelConfig[]>();
+  for (const model of models) {
+    const list = map.get(model.vendor);
+    if (list) {
+      list.push(model);
+    } else {
+      map.set(model.vendor, [model]);
+    }
+  }
+  return map;
+}
+
+/**
+ * 按首次出现顺序返回厂商列表
+ */
+export function getVendorOrder(models: ModelConfig[]): ModelVendor[] {
+  const seen = new Set<ModelVendor>();
+  const order: ModelVendor[] = [];
+  for (const model of models) {
+    if (!seen.has(model.vendor)) {
+      seen.add(model.vendor);
+      order.push(model.vendor);
+    }
+  }
+  return order;
 }
 
 // ============================================
@@ -724,12 +992,31 @@ const SORA_2_PRO_MODEL_IDS = ['sora-2-pro'];
 /** Sora 2 固定时长模型（模型名已包含时长，不传 seconds） */
 const SORA_2_FIXED_MODEL_IDS = ['sora-2-4s', 'sora-2-8s', 'sora-2-12s'];
 
+/** Seedance 视频模型 ID */
+const SEEDANCE_MODEL_IDS = [
+  'seedance-1.5-pro',
+  'seedance-1.0-pro',
+  'seedance-1.0-pro-fast',
+  'seedance-1.0-lite',
+];
+
+/** Seedream 图片模型 ID */
+const SEEDREAM_IMAGE_MODEL_IDS = [
+  'doubao-seedream-4-0-250828',
+  'doubao-seedream-4-5-251128',
+  'seedream-5.0',
+];
+
 /** GPT 图片模型 ID（仅支持有限尺寸） */
 const GPT_IMAGE_MODEL_IDS = ['gpt-image-1.5'];
+const MJ_IMAGE_MODEL_IDS = ['mj-imagine'];
 
 /** Gemini 图片模型 ID（支持完整尺寸） */
 const GEMINI_IMAGE_MODEL_IDS = IMAGE_MODELS.filter(
-  (m) => !GPT_IMAGE_MODEL_IDS.includes(m.id)
+  (m) =>
+    !GPT_IMAGE_MODEL_IDS.includes(m.id) &&
+    !SEEDREAM_IMAGE_MODEL_IDS.includes(m.id) &&
+    !MJ_IMAGE_MODEL_IDS.includes(m.id)
 ).map((m) => m.id);
 
 /** 所有图片模型 ID */
@@ -830,6 +1117,58 @@ export const VIDEO_PARAMS: ParamConfig[] = [
     compatibleModels: SORA_2_PRO_MODEL_IDS,
     modelType: 'video',
   },
+  // Seedance 时长参数（5/10 秒）
+  {
+    id: 'duration',
+    label: '视频时长',
+    shortLabel: '时长',
+    description: '生成视频的时长（秒）',
+    valueType: 'enum',
+    options: [
+      { value: '5', label: '5秒' },
+      { value: '10', label: '10秒' },
+    ],
+    defaultValue: '5',
+    compatibleModels: SEEDANCE_MODEL_IDS,
+    modelType: 'video',
+  },
+  // Seedance 分辨率参数（480p/720p/1080p）
+  {
+    id: 'size',
+    label: '视频分辨率',
+    shortLabel: '分辨率',
+    description: '生成视频的分辨率',
+    valueType: 'enum',
+    options: [
+      { value: '1080p', label: '1080p' },
+      { value: '720p', label: '720p' },
+      { value: '480p', label: '480p' },
+    ],
+    defaultValue: '720p',
+    compatibleModels: SEEDANCE_MODEL_IDS,
+    modelType: 'video',
+  },
+  // Seedance 宽高比参数
+  {
+    id: 'aspect_ratio',
+    label: '视频比例',
+    shortLabel: '比例',
+    description: '生成视频的宽高比',
+    valueType: 'enum',
+    options: [
+      { value: '16:9', label: '16:9 横屏' },
+      { value: '9:16', label: '9:16 竖屏' },
+      { value: '1:1', label: '1:1 方形' },
+      { value: '4:3', label: '4:3 横屏' },
+      { value: '3:4', label: '3:4 竖屏' },
+      { value: '21:9', label: '21:9 超宽' },
+      { value: 'keep_ratio', label: '保持上传比例' },
+      { value: 'adaptive', label: '自适应' },
+    ],
+    defaultValue: '16:9',
+    compatibleModels: SEEDANCE_MODEL_IDS,
+    modelType: 'video',
+  },
 ];
 
 /**
@@ -879,6 +1218,150 @@ export const IMAGE_PARAMS: ParamConfig[] = [
     compatibleModels: GEMINI_IMAGE_MODEL_IDS,
     modelType: 'image',
   },
+  // Seedream 图片模型尺寸（支持 8 种宽高比，label 显示具体像素）
+  // 实际像素由 adapter 根据 quality(2K/4K) + 宽高比 计算
+  {
+    id: 'size',
+    label: '图片尺寸',
+    shortLabel: '尺寸',
+    description: '生成图片的尺寸比例',
+    valueType: 'enum',
+    options: [
+      { value: '1x1', label: '1:1 方形 (2048×2048)' },
+      { value: '16x9', label: '16:9 横版 (2720×1536)' },
+      { value: '9x16', label: '9:16 竖版 (1536×2720)' },
+      { value: '3x2', label: '3:2 横版 (2496×1664)' },
+      { value: '2x3', label: '2:3 竖版 (1664×2496)' },
+      { value: '4x3', label: '4:3 横版 (2368×1776)' },
+      { value: '3x4', label: '3:4 竖版 (1776×2368)' },
+      { value: '21x9', label: '21:9 超宽 (2688×1152)' },
+    ],
+    defaultValue: '1x1',
+    compatibleModels: SEEDREAM_IMAGE_MODEL_IDS,
+    compatibleTags: ['seedream'],
+    modelType: 'image',
+  },
+  // Seedream 图片质量（2K/4K）
+  {
+    id: 'seedream_quality',
+    label: '图片质量',
+    shortLabel: '质量',
+    description: '2K 或 4K 分辨率',
+    valueType: 'enum',
+    options: [
+      { value: '2k', label: '2K' },
+      { value: '4k', label: '4K' },
+    ],
+    defaultValue: '2k',
+    compatibleModels: SEEDREAM_IMAGE_MODEL_IDS,
+    compatibleTags: ['seedream'],
+    modelType: 'image',
+  },
+  {
+    id: 'mj_ar',
+    label: 'MJ 画幅',
+    shortLabel: '画幅',
+    description: 'Midjourney 长宽比参数 (--ar)',
+    valueType: 'enum',
+    options: [
+      { value: 'default', label: '默认' },
+      { value: '1:1', label: '1:1 方形' },
+      { value: '16:9', label: '16:9 横版' },
+      { value: '9:16', label: '9:16 竖版' },
+      { value: '3:2', label: '3:2 横版' },
+      { value: '2:3', label: '2:3 竖版' },
+      { value: '4:3', label: '4:3 横版' },
+      { value: '3:4', label: '3:4 竖版' },
+      { value: '5:4', label: '5:4 横版' },
+      { value: '4:5', label: '4:5 竖版' },
+      { value: '21:9', label: '21:9 超宽' },
+    ],
+    defaultValue: 'default',
+    compatibleModels: MJ_IMAGE_MODEL_IDS,
+    modelType: 'image',
+  },
+  {
+    id: 'mj_v',
+    label: 'MJ 版本',
+    shortLabel: '版本',
+    description: 'Midjourney 版本参数 (--v)',
+    valueType: 'enum',
+    options: [
+      { value: 'default', label: '默认 (V7)' },
+      { value: '7', label: 'V7' },
+      { value: '6', label: 'V6' },
+    ],
+    defaultValue: 'default',
+    compatibleModels: MJ_IMAGE_MODEL_IDS,
+    modelType: 'image',
+  },
+  {
+    id: 'mj_style',
+    label: 'MJ 风格',
+    shortLabel: '风格',
+    description: 'Midjourney 风格参数 (--style)',
+    valueType: 'enum',
+    options: [
+      { value: 'default', label: '默认' },
+      { value: 'raw', label: 'raw (Legacy)' },
+    ],
+    defaultValue: 'default',
+    compatibleModels: MJ_IMAGE_MODEL_IDS,
+    modelType: 'image',
+  },
+  {
+    id: 'mj_s',
+    label: 'MJ 风格化',
+    shortLabel: '风格化',
+    description: 'Midjourney 风格化强度 (--s)',
+    valueType: 'enum',
+    options: [
+      { value: 'default', label: '默认 (100)' },
+      { value: '50', label: '50' },
+      { value: '100', label: '100' },
+      { value: '200', label: '200' },
+      { value: '400', label: '400' },
+      { value: '800', label: '800' },
+      { value: '1000', label: '1000' },
+    ],
+    defaultValue: 'default',
+    compatibleModels: MJ_IMAGE_MODEL_IDS,
+    modelType: 'image',
+  },
+  {
+    id: 'mj_q',
+    label: 'MJ 质量',
+    shortLabel: '质量',
+    description: 'Midjourney 质量档位 (--q)',
+    valueType: 'enum',
+    options: [
+      { value: 'default', label: '默认 (1)' },
+      { value: '1', label: '1x' },
+      { value: '2', label: '2x' },
+      { value: '4', label: '4x' },
+    ],
+    defaultValue: 'default',
+    compatibleModels: MJ_IMAGE_MODEL_IDS,
+    modelType: 'image',
+  },
+  {
+    id: 'mj_seed',
+    label: 'MJ 种子',
+    shortLabel: '种子',
+    description: 'Midjourney 随机种子 (--seed)',
+    valueType: 'enum',
+    options: [
+      { value: 'default', label: '默认 (随机)' },
+      { value: '0', label: '0' },
+      { value: '42', label: '42' },
+      { value: '2024', label: '2024' },
+      { value: '7777', label: '7777' },
+      { value: '9999', label: '9999' },
+    ],
+    defaultValue: 'default',
+    compatibleModels: MJ_IMAGE_MODEL_IDS,
+    modelType: 'image',
+  },
 ];
 
 /**
@@ -900,12 +1383,34 @@ export function getCompatibleParams(modelId: string): ParamConfig[] {
   const modelConfig = getModelConfig(modelId);
   if (!modelConfig) return [];
 
+  // 构建模型标签集合：显式标签 + 类型 + 厂商 + 基于 ID 的启发式
+  const modelTags = new Set<string>();
+  (modelConfig.tags || []).forEach((t) => modelTags.add(t.toLowerCase()));
+  if (modelConfig.type) modelTags.add(modelConfig.type.toLowerCase());
+  if (modelConfig.vendor) modelTags.add(modelConfig.vendor.toLowerCase());
+  const idLower = modelConfig.id.toLowerCase();
+  if (idLower.includes('seedream')) modelTags.add('seedream');
+  if (idLower.startsWith('mj') || idLower.includes('midjourney')) modelTags.add('mj');
+  if (idLower.includes('gemini')) modelTags.add('gemini');
+  if (idLower.includes('gpt')) modelTags.add('gpt');
+  if (idLower.includes('flux')) modelTags.add('flux');
+  if (idLower.includes('veo')) modelTags.add('veo');
+  if (idLower.includes('sora')) modelTags.add('sora');
+  if (idLower.includes('seedance')) modelTags.add('seedance');
+  // 这里不再自动按 doubao 分类，避免与 seedream 重复；若需要可通过 tags 显式声明
+
   return ALL_PARAMS.filter((param) => {
     // 检查模型类型是否匹配
     if (param.modelType !== modelConfig.type) return false;
-    // 检查是否在兼容列表中（空数组表示所有模型都兼容）
-    if (param.compatibleModels.length === 0) return true;
-    return param.compatibleModels.includes(modelId);
+    // 检查是否在兼容 ID 列表（空数组表示所有模型都兼容）
+    const idMatched =
+      param.compatibleModels.length === 0 ||
+      param.compatibleModels.includes(modelId);
+    // 检查标签兼容（可选）
+    const tagMatched = param.compatibleTags
+      ? param.compatibleTags.some((tag) => modelTags.has(tag.toLowerCase()))
+      : false;
+    return idMatched || tagMatched;
   });
 }
 

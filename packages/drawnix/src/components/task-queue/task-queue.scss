@@ -565,6 +565,20 @@
     }
   }
 
+  &__multi-badge {
+    position: absolute;
+    bottom: 4px;
+    right: 4px;
+    background: rgba(0, 0, 0, 0.65);
+    color: white;
+    padding: 1px 5px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 500;
+    z-index: 1;
+    pointer-events: none;
+  }
+
   &__cache-badge {
     position: absolute;
     bottom: 4px;

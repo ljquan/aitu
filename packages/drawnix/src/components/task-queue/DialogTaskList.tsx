@@ -146,33 +146,30 @@ export const DialogTaskList: React.FC<DialogTaskListProps> = ({
 
   const handleDownload = async (taskId: string) => {
     const task = tasks.find(t => t.id === taskId);
-    if (!task?.result?.url) return;
+    if (!task?.result?.url && !task?.result?.urls?.length) return;
 
-    const filename = `${sanitizeFilename(task.params.prompt) || task.type}.${task.result.format}`;
+    const urls = task.result.urls?.length ? task.result.urls : [task.result.url];
 
     try {
-      // 1. 优先从本地 IndexedDB 缓存获取
-      const cachedBlob = await unifiedCacheService.getCachedBlob(task.result.url);
-      if (cachedBlob) {
-        // console.log('[Download] Using cached blob for task:', taskId);
-        downloadFromBlob(cachedBlob, filename);
-        MessagePlugin.success('下载成功');
-        return;
+      for (let i = 0; i < urls.length; i++) {
+        const url = urls[i];
+        const filename = `${sanitizeFilename(task.params.prompt) || task.type}${urls.length > 1 ? `-${i + 1}` : ''}.${task.result.format}`;
+        const cachedBlob = await unifiedCacheService.getCachedBlob(url);
+        if (cachedBlob) {
+          downloadFromBlob(cachedBlob, filename);
+          continue;
+        }
+        const result = await downloadMediaFile(
+          url,
+          task.params.prompt,
+          task.result.format,
+          task.type
+        );
+        if (result && 'opened' in result) {
+          // 浏览器已打开标签页
+        }
       }
-
-      // 2. 缓存不存在，从 URL 下载（带重试，SW 会自动去重）
-      // console.log('[Download] No cache, fetching from URL:', task.result.url);
-      const result = await downloadMediaFile(
-        task.result.url,
-        task.params.prompt,
-        task.result.format,
-        task.type
-      );
-      if (result && 'opened' in result) {
-        MessagePlugin.success('已在新标签页打开，请右键另存为');
-      } else {
-        MessagePlugin.success('下载成功');
-      }
+      MessagePlugin.success(urls.length > 1 ? '多图已开始下载' : '下载成功');
     } catch (error) {
       console.error('Download failed:', error);
       MessagePlugin.error('下载失败，请稍后重试');
@@ -181,7 +178,7 @@ export const DialogTaskList: React.FC<DialogTaskListProps> = ({
 
   const handleInsert = async (taskId: string) => {
     const task = tasks.find(t => t.id === taskId);
-    if (!task?.result?.url || !board) {
+    if ((!task?.result?.url && !task?.result?.urls?.length) || !board) {
       console.warn('Cannot insert: task result or board not available');
       MessagePlugin.warning('无法插入：白板未就绪');
       return;
@@ -189,9 +186,11 @@ export const DialogTaskList: React.FC<DialogTaskListProps> = ({
 
     try {
       if (task.type === TaskType.IMAGE) {
-        // 直接插入原始生成的图片（包括宫格图和普通图片）
-        await insertImageFromUrl(board, task.result.url);
-        MessagePlugin.success('图片已插入到白板');
+        const urls = task.result.urls?.length ? task.result.urls : [task.result.url];
+        for (const url of urls) {
+          await insertImageFromUrl(board, url);
+        }
+        MessagePlugin.success(urls.length > 1 ? '多图已插入到白板' : '图片已插入到白板');
       } else if (task.type === TaskType.VIDEO) {
         await insertVideoFromUrl(board, task.result.url);
         MessagePlugin.success('视频已插入到白板');
@@ -224,6 +223,7 @@ export const DialogTaskList: React.FC<DialogTaskListProps> = ({
         initialHeight: task.params.height,
         initialImages: task.params.uploadedImages,  // 传递上传的参考图片(数组)
         initialResultUrl: task.result?.url,  // 传递结果URL用于预览
+        initialResultUrls: task.result?.urls,  // 多图结果
       };
       openDialog(DialogType.aiImageGeneration, initialData);
     } else if (task.type === TaskType.VIDEO) {
@@ -237,6 +237,7 @@ export const DialogTaskList: React.FC<DialogTaskListProps> = ({
         initialSize: task.params.size,  // 传递尺寸
         initialImages: task.params.uploadedImages,  // 传递上传的图片（多图片格式）
         initialResultUrl: task.result?.url,  // 传递结果URL用于预览
+        initialResultUrls: task.result?.urls,  // 多图/多视频结果
       };
       // console.log('DialogTaskList - handleEdit VIDEO task:', {
       //   taskId,
@@ -259,30 +260,40 @@ export const DialogTaskList: React.FC<DialogTaskListProps> = ({
   const completedTasksWithResults = useMemo(() => {
     const seen = new Set<string>();
     return filteredTasks.filter(t => {
-      if (t.status !== TaskStatus.COMPLETED || !t.result?.url) return false;
-      if (seen.has(t.id)) return false; // 跳过重复的任务 ID
+      if (t.status !== TaskStatus.COMPLETED) return false;
+      if (!t.result?.url && !t.result?.urls?.length) return false;
+      if (seen.has(t.id)) return false;
       seen.add(t.id);
       return true;
     });
   }, [filteredTasks]);
 
-  // 创建 taskId -> previewIndex 的映射，用于精确查找
-  const taskIdToPreviewIndex = useMemo(() => {
-    const map = new Map<string, number>();
-    completedTasksWithResults.forEach((task, index) => {
-      map.set(task.id, index);
-    });
-    return map;
-  }, [completedTasksWithResults]);
+  // 展开多图任务为多个 MediaItem，同时建立 taskId -> 首个 previewIndex 的映射
+  const { previewMediaItems, taskIdToPreviewIndex } = useMemo(() => {
+    const items: UnifiedMediaItem[] = [];
+    const indexMap = new Map<string, number>();
 
-  // Convert tasks to MediaItem list for UnifiedMediaViewer
-  const previewMediaItems: UnifiedMediaItem[] = useMemo(() => {
-    return completedTasksWithResults.map(task => ({
-      id: task.id,
-      url: task.result!.url,
-      type: task.type === TaskType.VIDEO ? 'video' as const : 'image' as const,
-      title: task.params.prompt?.substring(0, 50),
-    }));
+    for (const task of completedTasksWithResults) {
+      const urls = task.result!.urls?.length
+        ? task.result!.urls
+        : [task.result!.url];
+      const mediaType = task.type === TaskType.VIDEO ? 'video' as const : 'image' as const;
+      const title = task.params.prompt?.substring(0, 50);
+
+      // 记录该任务第一张图在列表中的索引
+      indexMap.set(task.id, items.length);
+
+      for (let i = 0; i < urls.length; i++) {
+        items.push({
+          id: urls.length > 1 ? `${task.id}-${i}` : task.id,
+          url: urls[i],
+          type: mediaType,
+          title: urls.length > 1 ? `${title} (${i + 1}/${urls.length})` : title,
+        });
+      }
+    }
+
+    return { previewMediaItems: items, taskIdToPreviewIndex: indexMap };
   }, [completedTasksWithResults]);
 
   // Preview handlers - 使用 Map 精确查找索引

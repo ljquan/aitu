@@ -8,6 +8,7 @@ import { TaskType } from '../../types/task.types';
 import { MessagePlugin } from 'tdesign-react';
 import { useGenerationHistory } from '../../hooks/useGenerationHistory';
 import { ModelDropdown } from '../ai-input-bar/ModelDropdown';
+import { ParametersDropdown } from '../ai-input-bar/ParametersDropdown';
 import {
   useGenerationState,
   useKeyboardShortcuts,
@@ -29,6 +30,8 @@ import {
 import { DialogTaskList } from '../task-queue/DialogTaskList';
 import { geminiSettings } from '../../utils/settings-manager';
 import { promptForApiKey } from '../../utils/gemini-api';
+import { buildMJPromptSuffix } from '../../utils/mj-params';
+import { getCompatibleParams } from '../../constants/model-config';
 
 interface AIImageGenerationProps {
   initialPrompt?: string;
@@ -58,6 +61,13 @@ const AIImageGeneration = ({
   onModelChange,
 }: AIImageGenerationProps = {}) => {
   const [prompt, setPrompt] = useState(initialPrompt);
+  const [mjSelectedParams, setMjSelectedParams] = useState<
+    Record<string, string>
+  >({});
+  const [currentModel, setCurrentModel] = useState(() => {
+    const settings = geminiSettings.get();
+    return settings.imageModelName || 'gemini-2.5-flash-image-vip';
+  });
   const [width, setWidth] = useState<number | string>(initialWidth || 1024);
   const [height, setHeight] = useState<number | string>(initialHeight || 1024);
   const [aspectRatio, setAspectRatio] = useState<string>(initialAspectRatio || DEFAULT_ASPECT_RATIO);
@@ -67,7 +77,9 @@ const AIImageGeneration = ({
 
   // 任务列表面板状态 - 使用像素宽度
   const [isTaskListVisible, setIsTaskListVisible] = useState(true);
-  const [taskListWidth, setTaskListWidth] = useState(() => loadSavedWidth('image'));
+  const [taskListWidth, setTaskListWidth] = useState(() =>
+    loadSavedWidth('image')
+  );
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Use generation history from task queue
@@ -75,6 +87,34 @@ const AIImageGeneration = ({
   const { isGenerating } = useGenerationState('image');
   const { language } = useI18n();
   const { createTask } = useTaskQueue();
+
+  const isMJModel = currentModel.startsWith('mj');
+  const hasCompatibleParams = React.useMemo(() => {
+    const params = getCompatibleParams(currentModel);
+    // MJ 模型所有参数都走 dropdown；非 MJ 模型排除 size（已有 AspectRatioSelector）
+    if (isMJModel) return params.length > 0;
+    return params.some(p => p.id !== 'size');
+  }, [currentModel, isMJModel]);
+
+  // 模型切换时清空已选参数，避免跨模型残留不兼容配置
+  useEffect(() => {
+    setMjSelectedParams({});
+  }, [currentModel]);
+
+  const handleMJParamChange = useCallback((paramId: string, value: string) => {
+    if (!value || value === 'default') {
+      setMjSelectedParams((prev) => {
+        const next = { ...prev };
+        delete next[paramId];
+        return next;
+      });
+      return;
+    }
+    setMjSelectedParams((prev) => ({
+      ...prev,
+      [paramId]: value,
+    }));
+  }, []);
 
   // Track if we're in manual edit mode (from handleEditTask) to prevent props from overwriting
   const [isManualEdit, setIsManualEdit] = useState(false);
@@ -136,6 +176,31 @@ const AIImageGeneration = ({
     isManualEdit,
   ]);
 
+  useEffect(() => {
+    const handleSettingsChange = (newSettings: any) => {
+      const nextModel =
+        newSettings.imageModelName || 'gemini-2.5-flash-image-vip';
+      if (nextModel !== currentModel) {
+        setCurrentModel(nextModel);
+      }
+    };
+    geminiSettings.addListener(handleSettingsChange);
+    return () => geminiSettings.removeListener(handleSettingsChange);
+  }, [currentModel]);
+
+  // Keep local模型状态与头部下拉（受控 selectedModel）同步，避免展示过期的参数列表
+  useEffect(() => {
+    if (selectedModel && selectedModel !== currentModel) {
+      setCurrentModel(selectedModel);
+    }
+  }, [selectedModel, currentModel]);
+
+  useEffect(() => {
+    if (!hasCompatibleParams && Object.keys(mjSelectedParams).length > 0) {
+      setMjSelectedParams({});
+    }
+  }, [hasCompatibleParams, mjSelectedParams]);
+
   // 清除错误状态当组件挂载时（对话框打开时）
   useEffect(() => {
     // 组件挂载时清除之前的错误状态
@@ -150,6 +215,7 @@ const AIImageGeneration = ({
   // 重置所有状态
   const handleReset = () => {
     setPrompt('');
+    setMjSelectedParams({});
     setUploadedImages([]);
     setError(null);
     setAspectRatio(DEFAULT_ASPECT_RATIO); // 重置比例
@@ -183,6 +249,7 @@ const AIImageGeneration = ({
 
     // 直接更新表单状态
     setPrompt(task.params.prompt || '');
+    setMjSelectedParams({});
     setWidth(task.params.width || 1024);
     setHeight(task.params.height || 1024);
 
@@ -264,6 +331,10 @@ const AIImageGeneration = ({
       }
     }
 
+    if (isMJModel) {
+      setError(null);
+    }
+
     try {
       const finalWidth =
         typeof width === 'string' ? parseInt(width) || 1024 : width;
@@ -282,13 +353,29 @@ const AIImageGeneration = ({
         const currentImageModel =
           settings.imageModelName || 'gemini-3-pro-image-preview-vip';
 
+        const finalPrompt = currentImageModel.startsWith('mj')
+          ? [prompt.trim(), buildMJPromptSuffix(mjSelectedParams)]
+              .filter(Boolean)
+              .join(' ')
+          : (prompt || '').trim();
+
+        // 非 MJ 模型的额外参数（如 seedream_quality）透传给 adapter
+        const extraParams = !currentImageModel.startsWith('mj') && Object.keys(mjSelectedParams).length > 0
+          ? mjSelectedParams
+          : undefined;
+
+        // 如果参数中有 size，优先使用参数中的 size
+        const finalSize = extraParams?.size
+          ? extraParams.size
+          : convertAspectRatioToSize(aspectRatio);
+
         for (let i = 0; i < count; i++) {
           const taskParams = {
-            prompt: (prompt || '').trim(),
+            prompt: finalPrompt,
             width: finalWidth,
             height: finalHeight,
             aspectRatio,
-            size: convertAspectRatioToSize(aspectRatio),
+            size: finalSize,
             model: currentImageModel,
             uploadedImages: convertedImages,
             batchId,
@@ -297,6 +384,7 @@ const AIImageGeneration = ({
             autoInsertToCanvas: true,
             targetFrameId,
             targetFrameDimensions,
+            ...(extraParams ? { params: extraParams } : {}),
           };
 
           const task = createTask(taskParams, TaskType.IMAGE);
@@ -312,7 +400,7 @@ const AIImageGeneration = ({
               : `Added ${batchTaskIds.length} tasks to queue`
           );
 
-          savePromptToHistory(prompt);
+          savePromptToHistory(finalPrompt);
           setError(null);
           // Clear manual edit mode after batch generating
           setIsManualEdit(false);
@@ -333,13 +421,29 @@ const AIImageGeneration = ({
       const currentImageModel =
         settings.imageModelName || 'gemini-2.5-flash-image-vip';
 
+      const finalPrompt = currentImageModel.startsWith('mj')
+        ? [prompt.trim(), buildMJPromptSuffix(mjSelectedParams)]
+            .filter(Boolean)
+            .join(' ')
+        : (prompt || '').trim();
+
+      // 非 MJ 模型的额外参数（如 seedream_quality）透传给 adapter
+      const extraParams = !currentImageModel.startsWith('mj') && Object.keys(mjSelectedParams).length > 0
+        ? mjSelectedParams
+        : undefined;
+
+      // 如果参数中有 size，优先使用参数中的 size
+      const finalSize = extraParams?.size
+        ? extraParams.size
+        : convertAspectRatioToSize(aspectRatio);
+
       // 创建任务参数（单个任务也需要 batchId 以跳过 SW 重复检测）
       const taskParams = {
-        prompt: (prompt || '').trim(),
+        prompt: finalPrompt,
         width: finalWidth,
         height: finalHeight,
         aspectRatio,
-        size: convertAspectRatioToSize(aspectRatio),
+        size: finalSize,
         model: currentImageModel,
         // 保存上传的图片（已转换为可序列化的格式）
         uploadedImages: convertedImages,
@@ -350,6 +454,7 @@ const AIImageGeneration = ({
         batchTotal: 1,
         targetFrameId,
         targetFrameDimensions,
+        ...(extraParams ? { params: extraParams } : {}),
       };
 
       // 创建任务并添加到队列
@@ -364,7 +469,7 @@ const AIImageGeneration = ({
         );
 
         // 保存提示词到历史记录
-        savePromptToHistory(prompt);
+        savePromptToHistory(finalPrompt);
 
         // 只清除预览和错误，保留表单数据（prompt和参考图）
         setError(null);
@@ -434,6 +539,20 @@ const AIImageGeneration = ({
               </div>
             )}
 
+            {/* 模型参数（排除 size，已有 AspectRatioSelector） */}
+            {hasCompatibleParams && (
+              <div className="model-params-row">
+                <ParametersDropdown
+                  selectedParams={mjSelectedParams}
+                  onParamChange={handleMJParamChange}
+                  modelId={currentModel}
+                  language={language}
+                  disabled={isGenerating}
+                  excludeParamIds={isMJModel ? undefined : ['size']}
+                />
+              </div>
+            )}
+
             {/* 参考图片区域 */}
             <ReferenceImageUpload
               images={uploadedImages}
@@ -471,11 +590,13 @@ const AIImageGeneration = ({
             onGenerate={handleGenerate}
             onReset={handleReset}
             leftContent={
-              <AspectRatioSelector
-                value={aspectRatio}
-                onChange={setAspectRatio}
-                compact={true}
-              />
+              isMJModel ? null : (
+                <AspectRatioSelector
+                  value={aspectRatio}
+                  onChange={setAspectRatio}
+                  compact={true}
+                />
+              )
             }
           />
         </div>
@@ -492,7 +613,7 @@ const AIImageGeneration = ({
 
         {/* 任务列表侧栏 */}
         {isTaskListVisible && (
-          <div 
+          <div
             className="task-sidebar"
             style={{ width: taskListWidth, flexShrink: 0 }}
           >

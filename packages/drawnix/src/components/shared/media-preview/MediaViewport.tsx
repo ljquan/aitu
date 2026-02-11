@@ -377,6 +377,8 @@ export const MediaViewport = forwardRef<MediaViewportRef, MediaViewportProps>(({
             loop={videoLoop}
             controls
             className="media-viewport__video"
+            // @ts-expect-error -- React types lack referrerPolicy on <video>
+            referrerPolicy="no-referrer"
             onClick={(e) => e.stopPropagation()}
             onPlay={() => {
               if (isSyncMode && onVideoPlayStateChange) {
@@ -400,6 +402,7 @@ export const MediaViewport = forwardRef<MediaViewportRef, MediaViewportProps>(({
             alt={item.alt || item.title || ''}
             className="media-viewport__image"
             draggable={false}
+            referrerPolicy="no-referrer"
           />
         )}
       </div>

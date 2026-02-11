@@ -57,6 +57,22 @@
     flex-direction: column;
     gap: 12px;
 
+    .form-header-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+
+      .model-selector-wrapper {
+        flex: 1;
+        width: 100%;
+        max-width: none;
+      }
+    }
+
+    .model-params-row {
+      margin-bottom: 0;
+    }
+
     // 描述输入区域 - 自适应填充剩余空间，但保持最小高度
     .form-field--prompt {
       flex: 1 1 auto;

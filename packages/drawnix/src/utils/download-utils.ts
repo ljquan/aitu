@@ -77,7 +77,7 @@ export async function downloadAsZip(items: BatchDownloadItem[], zipFilename?: st
     items,
     async (item, index) => {
       try {
-        const response = await fetch(item.url);
+        const response = await fetch(item.url, { referrerPolicy: 'no-referrer' });
         if (!response.ok) {
           console.warn(`Failed to fetch ${item.url}: ${response.status}`);
           return;
