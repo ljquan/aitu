@@ -314,6 +314,7 @@ export const RetryImage: React.FC<RetryImageProps> = ({
         alt={alt}
         loading={shouldEagerLoad ? 'eager' : 'lazy'}
         decoding={shouldEagerLoad ? 'sync' : 'async'}
+        referrerPolicy="no-referrer"
         onLoad={handleLoad}
         onError={handleError}
         style={{

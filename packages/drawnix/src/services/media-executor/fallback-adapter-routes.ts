@@ -17,7 +17,7 @@ import { isAuthError, dispatchApiAuthError } from '../../utils/api-auth-error-ev
 import { unifiedCacheService } from '../unified-cache-service';
 import { getAdapterContextFromSettings } from '../model-adapters';
 import type { ImageModelAdapter, VideoModelAdapter } from '../model-adapters';
-import { ensureBase64ForAI } from './fallback-utils';
+import { ensureBase64ForAI, cacheRemoteUrl, cacheRemoteUrls } from './fallback-utils';
 
 /**
  * 通过专用 adapter 生成图片（mj-imagine 等非 gemini 模型）
@@ -89,10 +89,16 @@ export async function executeImageViaAdapter(
 
     options?.onProgress?.({ progress: 100 });
 
+    // 缓存远程签名 URL 到本地，避免 Referer 校验导致 403
+    const fmt = result.format || 'png';
+    const allUrls = result.urls?.length ? result.urls : [result.url];
+    const cachedUrls = await cacheRemoteUrls(allUrls, taskId, 'image', fmt);
+    const cachedPrimary = cachedUrls[0];
+
     await taskStorageWriter.completeTask(taskId, {
-      url: result.url,
-      urls: result.urls,
-      format: result.format || 'png',
+      url: cachedPrimary,
+      urls: cachedUrls.length > 1 ? cachedUrls : undefined,
+      format: fmt,
       size: 0,
     });
   } catch (error: any) {
@@ -199,9 +205,13 @@ export async function executeVideoViaAdapter(
 
     options?.onProgress?.({ progress: 100 });
 
+    // 缓存远程签名 URL 到本地
+    const videoFmt = result.format || 'mp4';
+    const cachedVideoUrl = await cacheRemoteUrl(result.url, taskId, 'video', videoFmt);
+
     await taskStorageWriter.completeTask(taskId, {
-      url: result.url,
-      format: result.format || 'mp4',
+      url: cachedVideoUrl,
+      format: videoFmt,
       size: 0,
       duration: result.duration,
     });

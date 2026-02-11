@@ -66,7 +66,7 @@ export async function downloadFile(
   url: string,
   filename?: string
 ): Promise<void> {
-  const response = await fetch(url);
+  const response = await fetch(url, { referrerPolicy: 'no-referrer' });
   if (!response.ok) {
     throw new Error(`HTTP error! status: ${response.status}`);
   }

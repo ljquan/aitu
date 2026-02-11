@@ -36,6 +36,8 @@ import {
   isAsyncImageModel,
   generateAsyncImage,
   ensureBase64ForAI,
+  cacheRemoteUrl,
+  cacheRemoteUrls,
 } from './fallback-utils';
 import { resolveAdapterForModel } from '../model-adapters';
 import {
@@ -192,10 +194,14 @@ export class FallbackMediaExecutor implements IMediaExecutor {
 
       options?.onProgress?.({ progress: 100 });
 
+      // 缓存远程 URL 到本地，避免签名 URL 的 Referer 校验问题
+      const allImgUrls = result.urls?.length ? result.urls : [result.url];
+      const cachedImgUrls = await cacheRemoteUrls(allImgUrls, taskId, 'image', 'png');
+
       // 完成任务
       await taskStorageWriter.completeTask(taskId, {
-        url: result.url,
-        urls: result.urls,
+        url: cachedImgUrls[0],
+        urls: cachedImgUrls.length > 1 ? cachedImgUrls : undefined,
         format: 'png',
         size: 0,
       });
@@ -300,9 +306,12 @@ export class FallbackMediaExecutor implements IMediaExecutor {
 
       options?.onProgress?.({ progress: 100 });
 
+      // 缓存远程 URL 到本地
+      const cachedAsyncUrl = await cacheRemoteUrl(result.url, taskId, 'image', result.format);
+
       // 完成任务
       await taskStorageWriter.completeTask(taskId, {
-        url: result.url,
+        url: cachedAsyncUrl,
         format: result.format,
         size: 0,
       });
@@ -452,9 +461,12 @@ export class FallbackMediaExecutor implements IMediaExecutor {
 
       options?.onProgress?.({ progress: 100 });
 
+      // 缓存远程 URL 到本地
+      const cachedVidUrl = await cacheRemoteUrl(result.url, taskId, 'video', 'mp4');
+
       // 完成任务
       await taskStorageWriter.completeTask(taskId, {
-        url: result.url,
+        url: cachedVidUrl,
         format: 'mp4',
         size: 0,
         duration: duration ? parseInt(duration, 10) : undefined,

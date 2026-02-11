@@ -41,11 +41,17 @@ function getImageCache(): Promise<Cache> {
 
 /**
  * 获取预览图 URL（通过添加查询参数）
+ * 仅对虚拟路径（/__aitu_cache__/、/asset-library/）追加 thumbnail 参数，
+ * 外部 URL（如 TOS 签名 URL）追加参数会破坏签名导致 403，直接返回原 URL。
  * @param originalUrl 原始 URL
  * @param size 预览图尺寸（默认 small）
  * @returns 预览图 URL（带 ?thumbnail={size} 参数）
  */
 function getThumbnailUrl(originalUrl: string, size: 'small' | 'large' = 'small'): string {
+  // 外部 URL 不追加参数，避免破坏签名
+  if (originalUrl.startsWith('http://') || originalUrl.startsWith('https://')) {
+    return originalUrl;
+  }
   try {
     const url = new URL(originalUrl, window.location.origin);
     url.searchParams.set('thumbnail', size);

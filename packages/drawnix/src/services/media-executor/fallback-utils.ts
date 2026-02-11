@@ -8,6 +8,7 @@
 import type { VideoAPIConfig, GeminiConfig } from './types';
 import { compressImageBlob } from '@aitu/utils';
 import { getDataURL } from '../../data/blob';
+import { unifiedCacheService } from '../unified-cache-service';
 
 /** 参考图转 base64 时最大体积（1MB），避免请求体过大 */
 export const MAX_REFERENCE_IMAGE_BYTES = 1 * 1024 * 1024;
@@ -176,4 +177,61 @@ export async function generateAsyncImage(
     url: result.url,
     format: result.format || 'png',
   };
+}
+
+/**
+ * 将远程 URL 下载并缓存到本地 Cache Storage，返回虚拟路径。
+ * 用于签名 URL（如 TOS）在浏览器中因 Referer 校验导致 403 的场景。
+ * 已经是虚拟路径或 data URL 的直接返回。
+ */
+export async function cacheRemoteUrl(
+  remoteUrl: string,
+  taskId: string,
+  mediaType: 'image' | 'video',
+  format: string,
+  index?: number
+): Promise<string> {
+  // 已经是本地路径或 data URL，无需缓存
+  if (
+    remoteUrl.startsWith('/__aitu_cache__/') ||
+    remoteUrl.startsWith('/asset-library/') ||
+    remoteUrl.startsWith('data:')
+  ) {
+    return remoteUrl;
+  }
+
+  const suffix = index !== undefined ? `_${index}` : '';
+  const localUrl = `/__aitu_cache__/${mediaType}/${taskId}${suffix}.${format}`;
+
+  try {
+    const response = await fetch(remoteUrl, { referrerPolicy: 'no-referrer' });
+    if (!response.ok) {
+      console.warn(`[cacheRemoteUrl] Failed to fetch ${remoteUrl}: ${response.status}, using original URL`);
+      return remoteUrl;
+    }
+    const blob = await response.blob();
+    if (blob.size === 0) {
+      console.warn('[cacheRemoteUrl] Empty blob, using original URL');
+      return remoteUrl;
+    }
+    await unifiedCacheService.cacheMediaFromBlob(localUrl, blob, mediaType, { taskId });
+    return localUrl;
+  } catch (error) {
+    console.warn('[cacheRemoteUrl] Cache failed, using original URL:', error);
+    return remoteUrl;
+  }
+}
+
+/**
+ * 批量缓存多个远程 URL
+ */
+export async function cacheRemoteUrls(
+  urls: string[],
+  taskId: string,
+  mediaType: 'image' | 'video',
+  format: string
+): Promise<string[]> {
+  return Promise.all(
+    urls.map((url, i) => cacheRemoteUrl(url, taskId, mediaType, format, urls.length > 1 ? i : undefined))
+  );
 }

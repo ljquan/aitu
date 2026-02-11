@@ -79,6 +79,7 @@ export const loadHTMLImageElement = (dataURL: DataURL, crossOrigin = false) => {
     if (crossOrigin) {
       image.crossOrigin = 'anonymous';
     }
+    image.referrerPolicy = 'no-referrer';
     image.onload = () => {
       resolve(image);
     };
@@ -129,6 +130,7 @@ export const loadHTMLImageElementWithRetry = (
       if (crossOrigin) {
         image.crossOrigin = 'anonymous';
       }
+      image.referrerPolicy = 'no-referrer';
 
       image.onload = () => {
         resolve(image);
@@ -535,6 +537,7 @@ const loadImageDirectly = (imageUrl: string): Promise<HTMLImageElement> => {
   return new Promise((resolve, reject) => {
     const image = new Image();
     // 不设置 crossOrigin，这样可以加载不支持 CORS 的图片
+    image.referrerPolicy = 'no-referrer';
     image.onload = () => resolve(image);
     image.onerror = (error) => reject(error);
     image.src = imageUrl;

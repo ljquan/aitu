@@ -263,6 +263,8 @@ export function useAutoInsertToCanvas(config: Partial<AutoInsertConfig> = {}): v
 
             const type = task.type === TaskType.VIDEO ? 'video' : 'image';
             const dimensions = parseSizeToPixels(task.params.size);
+            // 展开多图：优先使用 urls 数组
+            const allUrls = task.result?.urls?.length ? task.result.urls : [url];
 
             // 检查是否需要插入到 Frame 内部
             const taskFrameId = targetFrameId || (task.params.targetFrameId as string | undefined);
@@ -270,18 +272,22 @@ export function useAutoInsertToCanvas(config: Partial<AutoInsertConfig> = {}): v
 
             if (taskFrameId && taskFrameDims && board) {
               // 插入到 Frame 内部，contain 模式等比缩放
-              await insertMediaIntoFrame(board, url, type, taskFrameId, taskFrameDims, dimensions);
+              await insertMediaIntoFrame(board, allUrls[0], type, taskFrameId, taskFrameDims, dimensions);
             } else if (mergedConfig.insertPrompt) {
-              await insertAIFlow(task.params.prompt, [{ type, url, dimensions }], insertionPoint);
+              await insertAIFlow(task.params.prompt, allUrls.map(u => ({ type, url: u, dimensions })), insertionPoint);
+            } else if (type === 'image' && allUrls.length > 1) {
+              await insertImageGroup(allUrls, insertionPoint, dimensions);
             } else {
-              await quickInsert(type, url, insertionPoint, dimensions);
+              await quickInsert(type, allUrls[0], insertionPoint, dimensions);
             }
 
-            workflowCompletionService.completePostProcessing(task.id, 1, insertionPoint);
+            workflowCompletionService.completePostProcessing(task.id, allUrls.length, insertionPoint);
           } else {
-            // 多个同 Prompt 任务，水平排列
+            // 多个同 Prompt 任务，水平排列（展开每个任务的多图）
             const urls = inserts
-              .map(({ task }) => task.result?.url)
+              .flatMap(({ task }) =>
+                task.result?.urls?.length ? task.result.urls : [task.result?.url]
+              )
               .filter((url): url is string => !!url);
 
             if (urls.length === 0) {
