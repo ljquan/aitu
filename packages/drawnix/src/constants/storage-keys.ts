@@ -202,7 +202,7 @@ export const IDB_DATABASES = {
     },
   },
 
-  /** 知识库（目录、笔记、标签） */
+  /** 知识库（目录、笔记、标签、正文、图片） */
   KNOWLEDGE_BASE: {
     NAME: 'aitu-knowledge-base',
     VERSION: 1,
@@ -211,6 +211,8 @@ export const IDB_DATABASES = {
       NOTES: 'notes',
       TAGS: 'tags',
       NOTE_TAGS: 'noteTags',
+      NOTE_CONTENTS: 'noteContents',
+      NOTE_IMAGES: 'noteImages',
     },
   },
 } as const;

@@ -1,14 +1,11 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useCallback, memo, useState } from 'react';
 import { editorViewCtx } from '@milkdown/kit/core';
-import { listener, listenerCtx } from '@milkdown/kit/plugin/listener';
-import { Milkdown, MilkdownProvider, useEditor, useInstance } from '@milkdown/react';
-import { replaceAll, getMarkdown } from '@milkdown/kit/utils';
+import { replaceAll } from '@milkdown/kit/utils';
 import { Crepe, CrepeFeature } from '@milkdown/crepe';
+import { Milkdown, MilkdownProvider, useEditor } from '@milkdown/react';
 import '@milkdown/crepe/theme/common/style.css';
-import '@milkdown/crepe/theme/frame.css';
+import '@milkdown/crepe/theme/nord.css';
 import 'katex/dist/katex.min.css';
-import { useImageViewer } from './useImageViewer';
-import { linkClickPlugin } from './linkPlugin';
 import { Eye, Code2 } from 'lucide-react';
 import './MarkdownEditor.css';
 
@@ -18,7 +15,7 @@ export type EditorMode = 'wysiwyg' | 'source';
 export interface MarkdownEditorProps {
   /** 初始 Markdown 内容 */
   markdown: string;
-  /** 源码模式下显示的 Markdown 内容（可选，用于显示原始 URL 而非 base64） */
+  /** 源码模式下显示的 Markdown 内容（可选） */
   sourceMarkdown?: string;
   /** 内容变化回调 */
   onChange?: (markdown: string) => void;
@@ -35,26 +32,31 @@ export interface MarkdownEditorProps {
 }
 
 export interface MarkdownEditorRef {
-  /** 获取当前 Markdown 内容 */
   getMarkdown: () => string;
-  /** 设置 Markdown 内容 */
   setMarkdown: (markdown: string) => void;
-  /** 聚焦编辑器 */
   focus: () => void;
-  /** 获取当前编辑模式 */
   getMode: () => EditorMode;
-  /** 设置编辑模式 */
   setMode: (mode: EditorMode) => void;
 }
 
-/** 内部编辑器 ref 接口（不含模式切换方法） */
+// 图片上传：转 base64
+function handleImageUpload(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '');
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
+
+/** 内部编辑器 ref */
 interface InternalEditorRef {
   getMarkdown: () => string;
   setMarkdown: (markdown: string) => void;
   focus: () => void;
 }
 
-interface MilkdownEditorInnerProps {
+interface CrepeEditorCoreProps {
   markdown: string;
   onChange?: (markdown: string) => void;
   placeholder?: string;
@@ -62,40 +64,18 @@ interface MilkdownEditorInnerProps {
   editorRef: React.MutableRefObject<InternalEditorRef | null>;
 }
 
-// 内部编辑器组件
-function MilkdownEditorInner({
-  markdown,
-  onChange,
-  placeholder,
-  readOnly,
-  editorRef,
-}: MilkdownEditorInnerProps) {
-  const [loading, getInstance] = useInstance();
-  const getCrepe = useCallback(() => getInstance() as unknown as Crepe | null, [getInstance]);
-
-  // 使用 ref 存储最新的 onChange 回调，避免闭包陷阱
+/**
+ * 核心编辑器组件 - 使用 useEditor hook（必须在 MilkdownProvider 内部）
+ */
+function CrepeEditorCore({ markdown, onChange, placeholder, readOnly, editorRef }: CrepeEditorCoreProps) {
   const onChangeRef = useRef(onChange);
-  useEffect(() => {
-    onChangeRef.current = onChange;
-  }, [onChange]);
+  useEffect(() => { onChangeRef.current = onChange; }, [onChange]);
 
-  // 存储上一次的 markdown 内容，用于比对
   const lastMarkdownRef = useRef(markdown);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const crepeRef = useRef<Crepe | null>(null);
 
-  // 防抖 timer
-  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
-
-  // 创建编辑器
-  const handleUpload = useCallback((file: File) => {
-    return new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '');
-      reader.onerror = () => reject(reader.error);
-      reader.readAsDataURL(file);
-    });
-  }, []);
-
-  useEditor((root) => {
+  const { get, loading } = useEditor((root) => {
     const crepe = new Crepe({
       root,
       defaultValue: markdown,
@@ -112,109 +92,89 @@ function MilkdownEditorInner({
         [CrepeFeature.Latex]: true,
       },
       featureConfigs: {
-        [CrepeFeature.Placeholder]: {
-          text: placeholder || '开始编辑...',
+        [CrepeFeature.Placeholder]: { text: placeholder || '开始编辑...' },
+        [CrepeFeature.Cursor]: {
+          color: '#3b82f6',
+          width: 4,
         },
         [CrepeFeature.ImageBlock]: {
-          onUpload: handleUpload,
-          inlineOnUpload: handleUpload,
-          blockOnUpload: handleUpload,
+          onUpload: handleImageUpload,
+          inlineOnUpload: handleImageUpload,
+          blockOnUpload: handleImageUpload,
+        },
+        [CrepeFeature.Latex]: {
+          katexOptions: { strict: 'ignore' },
         },
       },
     });
-    crepe.editor.use(listener);
-    crepe.editor.use(linkClickPlugin);
-    crepe.editor.config((ctx: any) => {
-      const listenerManager = ctx.get(listenerCtx);
-      listenerManager.markdownUpdated((_: unknown, md: string) => {
-        if (debounceTimerRef.current) {
-          clearTimeout(debounceTimerRef.current);
-        }
 
+    // 监听 markdown 变化
+    crepe.on((listener) => {
+      listener.markdownUpdated((_: unknown, md: string) => {
+        if (debounceRef.current) clearTimeout(debounceRef.current);
         if (md !== lastMarkdownRef.current) {
           lastMarkdownRef.current = md;
-          debounceTimerRef.current = setTimeout(() => {
-            onChangeRef.current?.(md);
-          }, 50);
+          debounceRef.current = setTimeout(() => onChangeRef.current?.(md), 50);
         }
       });
     });
+
+    crepeRef.current = crepe;
     return crepe;
-  }, [handleUpload, placeholder]);
-
-  // 暴露方法给父组件
-  useEffect(() => {
-    if (!loading && getInstance()) {
-      editorRef.current = {
-        getMarkdown: () => {
-          const crepe = getCrepe();
-          if (crepe?.getMarkdown) {
-            return crepe.getMarkdown();
-          }
-          if (crepe?.editor) {
-            return crepe.editor.action(getMarkdown());
-          }
-          return '';
-        },
-        setMarkdown: (newMarkdown: string) => {
-          const crepe = getCrepe();
-          if (crepe) {
-            lastMarkdownRef.current = newMarkdown;
-            if (crepe.editor) {
-              crepe.editor.action(replaceAll(newMarkdown));
-            }
-          }
-        },
-        focus: () => {
-          const crepe = getCrepe();
-          if (crepe?.editor) {
-            const view = crepe.editor.ctx.get(editorViewCtx);
-            view.focus();
-          }
-        },
-      };
-    }
-  }, [loading, getInstance, editorRef, getCrepe]);
-
-  useEffect(() => {
-    const crepe = getCrepe();
-    if (crepe?.setReadonly) {
-      crepe.setReadonly(!!readOnly);
-    }
-  }, [readOnly, getCrepe]);
-
-  // 当外部 markdown prop 变化时，同步更新编辑器
-  useEffect(() => {
-    if (!loading) {
-      const crepe = getCrepe();
-      if (crepe) {
-        const currentMarkdown = crepe.getMarkdown ? crepe.getMarkdown() : crepe.editor?.action(getMarkdown());
-        if (currentMarkdown !== undefined && markdown !== currentMarkdown && markdown !== lastMarkdownRef.current) {
-          lastMarkdownRef.current = markdown;
-          if (crepe.editor) {
-            crepe.editor.action(replaceAll(markdown));
-          }
-        }
-      }
-    }
-  }, [markdown, loading, getInstance, getCrepe]);
-
-  // 清理防抖 timer
-  useEffect(() => {
-    return () => {
-      if (debounceTimerRef.current) {
-        clearTimeout(debounceTimerRef.current);
-      }
-    };
   }, []);
+
+  // 编辑器就绪后暴露方法 & 设置只读
+  useEffect(() => {
+    if (loading) return;
+    const crepe = crepeRef.current;
+    if (!crepe) return;
+
+    if (readOnly) {
+      try { crepe.setReadonly(true); } catch { /* 忽略 */ }
+    }
+
+    editorRef.current = {
+      getMarkdown: () => { try { return crepe.getMarkdown?.() ?? ''; } catch { return ''; } },
+      setMarkdown: (md: string) => {
+        try { lastMarkdownRef.current = md; crepe.editor?.action(replaceAll(md)); } catch { /* 忽略 */ }
+      },
+      focus: () => {
+        try { crepe.editor?.ctx.get(editorViewCtx)?.focus(); } catch { /* 忽略 */ }
+      },
+    };
+
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      editorRef.current = null;
+    };
+  }, [get, readOnly, editorRef, loading]);
+
+  // 同步 readOnly
+  useEffect(() => {
+    if (loading) return;
+    const crepe = crepeRef.current;
+    if (crepe) { try { crepe.setReadonly(!!readOnly); } catch { /* 忽略 */ } }
+  }, [readOnly, loading]);
+
+  // 外部 markdown prop 变化时同步
+  useEffect(() => {
+    if (loading) return;
+    const crepe = crepeRef.current;
+    if (!crepe) return;
+    try {
+      const cur = crepe.getMarkdown?.();
+      if (cur !== undefined && markdown !== cur && markdown !== lastMarkdownRef.current) {
+        lastMarkdownRef.current = markdown;
+        crepe.editor?.action(replaceAll(markdown));
+      }
+    } catch { /* 忽略 */ }
+  }, [markdown, loading]);
 
   return <Milkdown />;
 }
 
 /**
  * 封装的 Markdown 富文本编辑器组件
- * 基于 Milkdown 实现统一的编辑和预览体验
- * 支持所见即所得和 Markdown 源码两种编辑模式
  */
 export const MarkdownEditor = memo(forwardRef<MarkdownEditorRef, MarkdownEditorProps>(
   function MarkdownEditor(
@@ -231,132 +191,48 @@ export const MarkdownEditor = memo(forwardRef<MarkdownEditorRef, MarkdownEditorP
     ref
   ) {
     const editorRef = useRef<InternalEditorRef | null>(null);
-    const containerRef = useRef<HTMLDivElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
-    
-    // 编辑模式状态
     const [mode, setMode] = useState<EditorMode>(initialMode);
-    // 源码模式下的内容（优先使用 sourceMarkdown）
     const [sourceContent, setSourceContent] = useState(sourceMarkdown || markdown);
-    // 用于传递给 WYSIWYG 编辑器的内容（切换模式时更新）
-    const [wysiwygContent, setWysiwygContent] = useState(markdown);
 
-    // 图片预览功能
-    const { updateViewer } = useImageViewer({
-      containerRef,
-      enabled: mode === 'wysiwyg',
-    });
-
-    // 切换模式时同步内容
     const handleModeChange = useCallback((newMode: EditorMode) => {
       if (newMode === mode) return;
-
       if (newMode === 'source') {
-        // 切换到源码模式：优先使用 sourceMarkdown（原始 URL），否则从编辑器获取
-        if (sourceMarkdown) {
-          setSourceContent(sourceMarkdown);
-        } else {
-          const currentMarkdown = editorRef.current?.getMarkdown() || wysiwygContent;
-          setSourceContent(currentMarkdown);
-        }
-      } else {
-        // 切换到 WYSIWYG 模式：
-        // 如果有 sourceMarkdown（即 base64 和 URL 是分开管理的），
-        // 则保持 wysiwygContent 不变（使用 base64 版本）
-        // 否则将源码内容同步到编辑器
-        if (!sourceMarkdown) {
-          setWysiwygContent(sourceContent);
-          onChange?.(sourceContent);
-        }
-        // 有 sourceMarkdown 时，wysiwygContent 保持原样（base64 版本），无需 onChange
+        setSourceContent(sourceMarkdown || editorRef.current?.getMarkdown() || markdown);
+      } else if (!sourceMarkdown) {
+        // 从源码模式切回 WYSIWYG，同步内容
+        editorRef.current?.setMarkdown(sourceContent);
+        onChange?.(sourceContent);
       }
-
       setMode(newMode);
-    }, [mode, wysiwygContent, sourceContent, sourceMarkdown, onChange]);
+    }, [mode, markdown, sourceContent, sourceMarkdown, onChange]);
 
-    // 源码模式下的内容变化
     const handleSourceChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
-      const newContent = e.target.value;
-      setSourceContent(newContent);
-      onChange?.(newContent);
+      const v = e.target.value;
+      setSourceContent(v);
+      onChange?.(v);
     }, [onChange]);
 
-    // 暴露方法给父组件
     useImperativeHandle(ref, () => ({
-      getMarkdown: () => {
-        if (mode === 'source') {
-          return sourceContent;
-        }
-        return editorRef.current?.getMarkdown() || '';
-      },
-      setMarkdown: (newMarkdown: string) => {
-        setSourceContent(newMarkdown);
-        setWysiwygContent(newMarkdown);
-        editorRef.current?.setMarkdown(newMarkdown);
-      },
-      focus: () => {
-        if (mode === 'source') {
-          textareaRef.current?.focus();
-        } else {
-          editorRef.current?.focus();
-        }
-      },
+      getMarkdown: () => mode === 'source' ? sourceContent : (editorRef.current?.getMarkdown() || ''),
+      setMarkdown: (md: string) => { setSourceContent(md); editorRef.current?.setMarkdown(md); },
+      focus: () => { mode === 'source' ? textareaRef.current?.focus() : editorRef.current?.focus(); },
       getMode: () => mode,
       setMode: handleModeChange,
     }));
 
-    // 当外部 markdown prop 变化时，同步更新内容
+    // 外部 markdown prop 变化时同步源码内容
     useEffect(() => {
-      // 同步更新 WYSIWYG 内容
-      if (markdown !== wysiwygContent) {
-        setWysiwygContent(markdown);
-      }
-      // 源码内容优先使用 sourceMarkdown
-      const newSourceContent = sourceMarkdown || markdown;
-      if (newSourceContent !== sourceContent) {
-        setSourceContent(newSourceContent);
-      }
+      const src = sourceMarkdown || markdown;
+      if (src !== sourceContent) setSourceContent(src);
     }, [markdown, sourceMarkdown]);
 
-    // 当 markdown 内容变化时，更新图片预览器
-    useEffect(() => {
-      if (mode === 'wysiwyg') {
-        // 延迟更新，等待 DOM 渲染完成
-        const timer = setTimeout(() => {
-          updateViewer();
-        }, 100);
-        return () => clearTimeout(timer);
-      }
-    }, [markdown, updateViewer, mode]);
-
-    // 阻止滚动事件冒泡到外层页面（Shadow DOM 中重要）
-    const handleWheel = useCallback((e: React.WheelEvent<HTMLDivElement>) => {
-      const container = containerRef.current;
-      if (!container) return;
-
-      const { scrollTop, scrollHeight, clientHeight } = container;
-      const atTop = scrollTop === 0;
-      const atBottom = scrollTop + clientHeight >= scrollHeight - 1;
-
-      // 如果在顶部向上滚动，或在底部向下滚动，阻止事件
-      if ((atTop && e.deltaY < 0) || (atBottom && e.deltaY > 0)) {
-        // 已经到达边界，不阻止（让父级可以滚动）
-        return;
-      }
-
-      // 否则阻止事件冒泡，让编辑器内部滚动
-      e.stopPropagation();
-    }, []);
-
     return (
-      <div 
-        ref={containerRef}
-        className={`collimind-markdown-editor ${className}`} 
+      <div
+        className={`collimind-markdown-editor ${className}`}
         data-readonly={readOnly}
         data-mode={mode}
-        onWheel={handleWheel}
       >
-        {/* 模式切换按钮 - 放在编辑器内部 */}
         {showModeSwitch && (
           <div className="collimind-markdown-editor-mode-switch">
             <button
@@ -379,17 +255,17 @@ export const MarkdownEditor = memo(forwardRef<MarkdownEditorRef, MarkdownEditorP
         )}
 
         {/* WYSIWYG 编辑器 */}
-        {mode === 'wysiwyg' && (
+        <div style={{ display: mode === 'wysiwyg' ? 'contents' : 'none' }}>
           <MilkdownProvider>
-            <MilkdownEditorInner
-              markdown={wysiwygContent}
+            <CrepeEditorCore
+              markdown={markdown}
               onChange={onChange}
               placeholder={placeholder}
               readOnly={readOnly}
               editorRef={editorRef}
             />
           </MilkdownProvider>
-        )}
+        </div>
 
         {/* 源码编辑器 */}
         {mode === 'source' && (

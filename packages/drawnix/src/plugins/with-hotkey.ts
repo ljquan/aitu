@@ -27,7 +27,8 @@ export const buildDrawnixHotkeyPlugin = (
     board.globalKeyDown = (event: KeyboardEvent) => {
       const isTypingNormal =
         event.target instanceof HTMLInputElement ||
-        event.target instanceof HTMLTextAreaElement;
+        event.target instanceof HTMLTextAreaElement ||
+        (event.target instanceof HTMLElement && event.target.isContentEditable);
       // 命令面板和画布搜索快捷键 - 始终可用（不需要画布焦点）
       if (!isTypingNormal) {
         if (isHotkey(['mod+k'])(event)) {

@@ -36,6 +36,7 @@ export { longVideoGenerationTool, createLongVideoTask } from './tools/long-video
 export type { LongVideoGenerationParams } from './tools/long-video-generation';
 export { pptGenerationTool, generatePPT } from './tools/ppt-generation';
 export type { PPTGenerationParams } from '../services/ppt';
+export { knowledgeBaseTools } from './tools/knowledge-base-tool';
 
 // 共享模块导出
 export { setBoard, getBoard } from './tools/shared';
@@ -54,6 +55,7 @@ import { splitImageTool } from './tools/split-image-tool';
 import { svgTool } from './tools/svg-tool';
 import { longVideoGenerationTool } from './tools/long-video-generation';
 import { pptGenerationTool } from './tools/ppt-generation';
+import { knowledgeBaseTools } from './tools/knowledge-base-tool';
 
 /** 标记 MCP 是否已初始化 */
 let mcpInitialized = false;
@@ -81,6 +83,7 @@ export function initializeMCP(): void {
     splitImageTool,
     svgTool,
     pptGenerationTool,
+    ...knowledgeBaseTools,
   ]);
   // console.log('[MCP] Initialized with built-in tools');
 }

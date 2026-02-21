@@ -13,7 +13,6 @@ import { DecryptionError } from './crypto-service';
 import { kvStorageService } from '../kv-storage-service';
 import { workspaceStorageService } from '../workspace-storage-service';
 import { workspaceService } from '../workspace-service';
-import { recoverBoardsFromRemote } from './board-recovery-service';
 import {
   startSyncSession,
   endSyncSession,
@@ -36,20 +35,14 @@ import {
   ConflictResolution,
   ChangeSet,
   SyncSafetyCheck,
-  SyncWarning,
-  SkippedItem,
   DeletedItems,
-  BoardSyncInfo,
-  PromptTombstone,
-  TaskTombstone,
   BoardData,
-  TasksData,
   PagedSyncResult,
-  detectTaskSyncFormat,
 } from './types';
 import { taskSyncService } from './task-sync-service';
 import { workflowSyncService } from './workflow-sync-service';
 import { toolSyncService } from './tool-sync-service';
+import { knowledgeBaseSyncService } from './knowledge-base-sync-service';
 
 /** 同步配置存储键 */
 const SYNC_CONFIG_KEY = 'github_sync_config';
@@ -253,8 +246,8 @@ class SyncEngine {
     if (this.syncInProgress) {
       return {
         success: false,
-        uploaded: { boards: 0, prompts: 0, tasks: 0, media: 0 },
-        downloaded: { boards: 0, prompts: 0, tasks: 0, media: 0 },
+        uploaded: { boards: 0, prompts: 0, tasks: 0, media: 0, knowledgeBase: 0 },
+        downloaded: { boards: 0, prompts: 0, tasks: 0, media: 0, knowledgeBase: 0 },
         conflicts: [],
         error: '同步正在进行中',
         duration: 0,
@@ -271,8 +264,8 @@ class SyncEngine {
 
     const result: SyncResult = {
       success: false,
-      uploaded: { boards: 0, prompts: 0, tasks: 0, media: 0 },
-      downloaded: { boards: 0, prompts: 0, tasks: 0, media: 0 },
+      uploaded: { boards: 0, prompts: 0, tasks: 0, media: 0, knowledgeBase: 0 },
+      downloaded: { boards: 0, prompts: 0, tasks: 0, media: 0, knowledgeBase: 0 },
       conflicts: [],
       duration: 0,
     };
@@ -383,8 +376,8 @@ class SyncEngine {
           const taskResult = await taskSyncService.syncTasks(config.gistId, customPassword || undefined);
           result.uploaded.tasks = taskResult.uploaded;
         } catch (taskError) {
-          logWarning('Tasks paged sync failed during overwrite', taskError);
-        }
+            logWarning('Tasks paged sync failed during overwrite', { error: String(taskError) });
+          }
         
         await this.saveConfig({
           lastSyncTime: Date.now(),
@@ -394,6 +387,8 @@ class SyncEngine {
         result.uploaded.prompts = localData.prompts.promptHistory.length +
           localData.prompts.videoPromptHistory.length +
           localData.prompts.imagePromptHistory.length;
+        result.uploaded.knowledgeBase = (localData.knowledgeBase?.notes.length || 0) + 
+          (localData.knowledgeBase?.directories.length || 0);
         result.success = true;
         logSuccess('Remote overwritten with local data');
       } else if (!config.gistId) {
@@ -448,6 +443,7 @@ class SyncEngine {
             result.downloaded.boards = applied.boardsApplied;
             result.downloaded.prompts = applied.promptsApplied;
             result.downloaded.tasks = applied.tasksApplied;
+            result.downloaded.knowledgeBase = applied.knowledgeBaseApplied;
             result.remoteCurrentBoardId = applied.remoteCurrentBoardId;
             result.success = true;
           } catch (decryptError) {
@@ -462,8 +458,8 @@ class SyncEngine {
               const taskResult = await taskSyncService.syncTasks(existingGist.id, customPassword || undefined);
               result.uploaded.tasks = taskResult.uploaded;
             } catch (taskError) {
-              logWarning('Tasks paged sync failed during overwrite', taskError);
-            }
+            logWarning('Tasks paged sync failed during overwrite', { error: String(taskError) });
+          }
             
             await this.saveConfig({
               gistId: existingGist.id,
@@ -475,6 +471,8 @@ class SyncEngine {
             result.uploaded.prompts = localData.prompts.promptHistory.length +
               localData.prompts.videoPromptHistory.length +
               localData.prompts.imagePromptHistory.length;
+            result.uploaded.knowledgeBase = (localData.knowledgeBase?.notes.length || 0) + 
+              (localData.knowledgeBase?.directories.length || 0);
             result.success = true;
             logSuccess('Existing gist overwritten with local data');
           }
@@ -503,7 +501,7 @@ class SyncEngine {
             const taskResult = await taskSyncService.syncTasks(gistId, customPassword || undefined);
             result.uploaded.tasks = taskResult.uploaded;
           } catch (taskError) {
-            logWarning('Tasks paged sync failed during new gist creation', taskError);
+            logWarning('Tasks paged sync failed during new gist creation', { error: String(taskError) });
           }
           
           const gist = emptyGist;
@@ -518,6 +516,8 @@ class SyncEngine {
           result.uploaded.prompts = localData.prompts.promptHistory.length +
             localData.prompts.videoPromptHistory.length +
             localData.prompts.imagePromptHistory.length;
+          result.uploaded.knowledgeBase = (localData.knowledgeBase?.notes.length || 0) + 
+            (localData.knowledgeBase?.directories.length || 0);
           result.success = true;
         }
       } else if (config.gistId) {
@@ -566,7 +566,7 @@ class SyncEngine {
             const taskResult = await taskSyncService.syncTasks(config.gistId, customPassword || undefined);
             result.uploaded.tasks = taskResult.uploaded;
           } catch (taskError) {
-            logWarning('Tasks paged sync failed during initial sync', taskError);
+            logWarning('Tasks paged sync failed during initial sync', { error: String(taskError) });
           }
           
           result.success = true;
@@ -601,8 +601,7 @@ class SyncEngine {
         logDebug('Detecting local deletions...');
         const localDeletions = dataSerializer.detectDeletions(
           localData,
-          remoteManifest,
-          localData.manifest.deviceId
+          remoteManifest
         );
         logDebug('Local deletions detected', {
           boards: localDeletions.deletedBoards.length,
@@ -672,8 +671,7 @@ class SyncEngine {
               // 使用元素级别合并
               const mergeResult = dataSerializer.mergeBoardElements(
                 localBoard,
-                remoteBoard,
-                config.lastSyncTime
+                remoteBoard
               );
               
               // 记录合并结果
@@ -808,14 +806,61 @@ class SyncEngine {
           result.downloaded.boards += mergedBoards.length;
         }
 
-        // 上传本地变更（加密）+ 处理本地删除的画板
+        // --- 知识库同步开始 ---
+        let kbNeedsUpload = false;
+        if (localData.knowledgeBase || remoteData.knowledgeBase) {
+          logDebug('Processing Knowledge Base sync...');
+          
+          let finalKB = localData.knowledgeBase;
+
+          if (localData.knowledgeBase && remoteData.knowledgeBase) {
+            // 双端都有，执行合并
+            logDebug('Merging local and remote Knowledge Base');
+            finalKB = knowledgeBaseSyncService.merge(localData.knowledgeBase, remoteData.knowledgeBase);
+            
+            // 检查合并结果是否与本地不同
+            const localJson = JSON.stringify(localData.knowledgeBase);
+            const mergedJson = JSON.stringify(finalKB);
+            
+            if (localJson !== mergedJson) {
+              logInfo('Knowledge Base merged, applying to local');
+              await knowledgeBaseSyncService.apply(finalKB);
+              localData.knowledgeBase = finalKB; // 更新本地数据引用，以便后续上传
+              result.downloaded.knowledgeBase = Math.abs(
+                (finalKB.notes.length + finalKB.directories.length) - 
+                (JSON.parse(localJson).notes.length + JSON.parse(localJson).directories.length)
+              );
+            }
+          } else if (remoteData.knowledgeBase && !localData.knowledgeBase) {
+            // 只有远程有，下载
+            logInfo('Downloading Knowledge Base from remote');
+            await knowledgeBaseSyncService.apply(remoteData.knowledgeBase);
+            localData.knowledgeBase = remoteData.knowledgeBase;
+            finalKB = remoteData.knowledgeBase;
+            result.downloaded.knowledgeBase = finalKB.notes.length + finalKB.directories.length;
+          }
+          // 如果只有本地有，不需要这里处理，后续上传流程会处理
+
+          // 检查是否需要上传知识库 (合并后或仅本地有时)
+          if (localData.knowledgeBase) {
+            const currentKbJson = JSON.stringify(localData.knowledgeBase);
+            const remoteKbJson = remoteData.knowledgeBase ? JSON.stringify(remoteData.knowledgeBase) : '';
+            if (currentKbJson !== remoteKbJson) {
+              kbNeedsUpload = true;
+            }
+          }
+        }
+        // --- 知识库同步结束 ---
+
+        // 上传本地变更（加密）+ 处理本地删除的画板 + 知识库更新
         const hasLocalUploads = changes.toUpload.length > 0;
         const hasLocalDeletions = localDeletions.deletedBoards.length > 0;
         
-        if (hasLocalUploads || hasLocalDeletions) {
+        if (hasLocalUploads || hasLocalDeletions || kbNeedsUpload) {
           logInfo('开始上传本地变更', {
             boardsToUpload: changes.toUpload.length,
             deletedBoards: localDeletions.deletedBoards.length,
+            kbNeedsUpload,
           });
           
           const filesToUpdate: Record<string, string> = {};
@@ -864,6 +909,19 @@ class SyncEngine {
           const promptsJson = JSON.stringify(localData.prompts);
           filesToUpdate[SYNC_FILES.PROMPTS] = await cryptoService.encrypt(promptsJson, config.gistId!, customPassword || undefined);
 
+          // 加密知识库
+          if (localData.knowledgeBase) {
+            const kbJson = JSON.stringify(localData.knowledgeBase);
+            const remoteKBJson = remoteData.knowledgeBase ? JSON.stringify(remoteData.knowledgeBase) : '';
+            
+            // 如果与远程不同，则上传
+            if (kbJson !== remoteKBJson) {
+              logDebug('Uploading Knowledge Base (changed)');
+              filesToUpdate[SYNC_FILES.KNOWLEDGE_BASE] = await cryptoService.encrypt(kbJson, config.gistId!, customPassword || undefined);
+              result.uploaded.knowledgeBase = localData.knowledgeBase.notes.length + localData.knowledgeBase.directories.length;
+            }
+          }
+
           await gitHubApiService.updateGistFiles(filesToUpdate);
           result.uploaded.boards = changes.toUpload.length;
           
@@ -872,7 +930,7 @@ class SyncEngine {
             const taskResult = await taskSyncService.syncTasks(config.gistId!, customPassword || undefined);
             result.uploaded.tasks = taskResult.uploaded;
           } catch (taskError) {
-            logWarning('Tasks paged sync failed during incremental sync', taskError);
+            logWarning('Tasks paged sync failed during incremental sync', { error: String(taskError) });
           }
           
           // Log upload success
@@ -965,8 +1023,7 @@ class SyncEngine {
    */
   private async uploadMergedTasksToRemote(
     gistId: string, 
-    customPassword?: string,
-    remoteManifest?: SyncManifest
+    customPassword?: string
   ): Promise<void> {
     try {
       logDebug('uploadMergedTasksToRemote: Starting with paged format...');
@@ -1011,8 +1068,8 @@ class SyncEngine {
     if (this.syncInProgress) {
       return {
         success: false,
-        uploaded: { boards: 0, prompts: 0, tasks: 0, media: 0 },
-        downloaded: { boards: 0, prompts: 0, tasks: 0, media: 0 },
+        uploaded: { boards: 0, prompts: 0, tasks: 0, media: 0, knowledgeBase: 0 },
+        downloaded: { boards: 0, prompts: 0, tasks: 0, media: 0, knowledgeBase: 0 },
         conflicts: [],
         error: '同步正在进行中',
         duration: 0,
@@ -1025,8 +1082,8 @@ class SyncEngine {
 
     const result: SyncResult = {
       success: false,
-      uploaded: { boards: 0, prompts: 0, tasks: 0, media: 0 },
-      downloaded: { boards: 0, prompts: 0, tasks: 0, media: 0 },
+      uploaded: { boards: 0, prompts: 0, tasks: 0, media: 0, knowledgeBase: 0 },
+      downloaded: { boards: 0, prompts: 0, tasks: 0, media: 0, knowledgeBase: 0 },
       conflicts: [],
       duration: 0,
     };
@@ -1066,7 +1123,7 @@ class SyncEngine {
           const taskResult = await taskSyncService.syncTasks(gistId, customPassword || undefined);
           result.uploaded.tasks = taskResult.uploaded;
         } catch (taskError) {
-          logWarning('pushToRemote: Tasks paged sync failed during new gist creation', taskError);
+          logWarning('pushToRemote: Tasks paged sync failed during new gist creation', { error: String(taskError) });
         }
         
         await this.saveConfig({
@@ -1158,6 +1215,13 @@ class SyncEngine {
         const promptsJson = JSON.stringify(localData.prompts);
         filesToUpdate[SYNC_FILES.PROMPTS] = await cryptoService.encrypt(promptsJson, config.gistId, customPassword || undefined);
         
+        // 加密知识库
+        if (localData.knowledgeBase) {
+           const kbJson = JSON.stringify(localData.knowledgeBase);
+           filesToUpdate[SYNC_FILES.KNOWLEDGE_BASE] = await cryptoService.encrypt(kbJson, config.gistId, customPassword || undefined);
+           result.uploaded.knowledgeBase = localData.knowledgeBase.notes.length + localData.knowledgeBase.directories.length;
+        }
+        
         // 注意：不再上传 tasks.json，改用分页格式
         
         // 只有有变化时才更新
@@ -1173,7 +1237,7 @@ class SyncEngine {
           const taskResult = await taskSyncService.syncTasks(config.gistId, customPassword || undefined);
           result.uploaded.tasks = taskResult.uploaded;
         } catch (taskError) {
-          logWarning('pushToRemote: Tasks paged sync failed', taskError);
+          logWarning('pushToRemote: Tasks paged sync failed', { error: String(taskError) });
         }
         
         await this.saveConfig({
@@ -1223,8 +1287,8 @@ class SyncEngine {
       logDebug('pullFromRemote: Sync already in progress, aborting');
       return {
         success: false,
-        uploaded: { boards: 0, prompts: 0, tasks: 0, media: 0 },
-        downloaded: { boards: 0, prompts: 0, tasks: 0, media: 0 },
+        uploaded: { boards: 0, prompts: 0, tasks: 0, media: 0, knowledgeBase: 0 },
+        downloaded: { boards: 0, prompts: 0, tasks: 0, media: 0, knowledgeBase: 0 },
         conflicts: [],
         error: '同步正在进行中',
         duration: 0,
@@ -1237,8 +1301,8 @@ class SyncEngine {
 
     const result: SyncResult = {
       success: false,
-      uploaded: { boards: 0, prompts: 0, tasks: 0, media: 0 },
-      downloaded: { boards: 0, prompts: 0, tasks: 0, media: 0 },
+      uploaded: { boards: 0, prompts: 0, tasks: 0, media: 0, knowledgeBase: 0 },
+      downloaded: { boards: 0, prompts: 0, tasks: 0, media: 0, knowledgeBase: 0 },
       conflicts: [],
       duration: 0,
     };
@@ -1424,6 +1488,15 @@ class SyncEngine {
         logWarning('pullFromRemote: prompts.json 未找到或为空');
       }
       
+      logDebug('pullFromRemote: Downloading knowledge base file');
+      const kbContent = await gitHubApiService.getGistFileContent(SYNC_FILES.KNOWLEDGE_BASE);
+      if (kbContent) {
+        remoteFiles[SYNC_FILES.KNOWLEDGE_BASE] = kbContent;
+        logDebug('pullFromRemote: knowledge-base.json downloaded', { length: kbContent.length });
+      } else {
+        logWarning('pullFromRemote: knowledge-base.json not found or empty');
+      }
+      
       // 注意：tasks 使用分页格式同步，由 taskSyncService 单独处理
       
       // 只下载需要更新的画板
@@ -1535,6 +1608,20 @@ class SyncEngine {
       result.downloaded.prompts = applied.promptsApplied;
       result.downloaded.tasks = applied.tasksApplied;
       result.remoteCurrentBoardId = applied.remoteCurrentBoardId;
+      
+      // 应用知识库 (合并)
+      if (remoteData.knowledgeBase) {
+        logDebug('pullFromRemote: Applying knowledge base (merge)');
+        let finalKB = remoteData.knowledgeBase;
+        
+        if (localData.knowledgeBase) {
+           finalKB = knowledgeBaseSyncService.merge(localData.knowledgeBase, remoteData.knowledgeBase);
+        }
+        
+        await knowledgeBaseSyncService.apply(finalKB);
+        result.downloaded.knowledgeBase = finalKB.notes.length + finalKB.directories.length;
+      }
+
       result.success = true;
       
       // 记录因本地有更新修改而跳过下载的画板
@@ -1577,7 +1664,7 @@ class SyncEngine {
       }
 
       // 合并完成后，自动上传任务数据到远程（确保双向同步）
-      await this.uploadMergedTasksToRemote(gistId, customPassword || undefined, remoteManifest);
+      await this.uploadMergedTasksToRemote(gistId, customPassword || undefined);
 
       // 初始化分片系统（用于媒体同步）
       await this.initializeShardingSystem(gistId);
@@ -2270,8 +2357,8 @@ class SyncEngine {
     const startTime = Date.now();
     const result: SyncResult = {
       success: false,
-      uploaded: { boards: 0, prompts: 0, tasks: 0, media: 0 },
-      downloaded: { boards: 0, prompts: 0, tasks: 0, media: 0 },
+      uploaded: { boards: 0, prompts: 0, tasks: 0, media: 0, knowledgeBase: 0 },
+      downloaded: { boards: 0, prompts: 0, tasks: 0, media: 0, knowledgeBase: 0 },
       conflicts: [],
       duration: 0,
     };
@@ -2314,7 +2401,7 @@ class SyncEngine {
         const taskResult = await taskSyncService.syncTasks(gistId, customPassword || undefined);
         result.uploaded.tasks = taskResult.uploaded;
       } catch (taskError) {
-        logWarning('创建新 Gist: Tasks paged sync failed', taskError);
+        logWarning('创建新 Gist: Tasks paged sync failed', { error: String(taskError) });
       }
       
       await this.saveConfig({
@@ -2414,7 +2501,7 @@ class SyncEngine {
         result.tasksDownloaded = taskResult.downloaded;
         result.tasksSkipped = taskResult.skipped;
       } catch (error) {
-        logWarning('任务同步失败', error);
+        logWarning('任务同步失败', { error: String(error) });
       }
 
       // 同步工作流
@@ -2427,7 +2514,7 @@ class SyncEngine {
         result.workflowsDownloaded = workflowResult.downloaded;
         result.workflowsSkipped = workflowResult.skipped;
       } catch (error) {
-        logWarning('工作流同步失败', error);
+        logWarning('工作流同步失败', { error: String(error) });
       }
 
       // 同步自定义工具
@@ -2438,7 +2525,7 @@ class SyncEngine {
         );
         logDebug('自定义工具同步结果', toolResult);
       } catch (error) {
-        logWarning('自定义工具同步失败', error);
+        logWarning('自定义工具同步失败', { error: String(error) });
       }
 
       result.success = true;

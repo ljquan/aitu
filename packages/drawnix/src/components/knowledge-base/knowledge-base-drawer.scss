@@ -1,82 +1,171 @@
-/**
- * Knowledge Base Drawer Styles
- * BEM 命名规范 - 主布局、目录树、笔记列表
- */
-
-@import './knowledge-base-editor';
-
-// ============================================================================
-// Main Drawer Layout
-// ============================================================================
+@import 'tdesign-react/es/style/index.css';
 
 .kb-drawer {
+  height: 100%;
   display: flex;
   flex-direction: column;
-  height: 100%;
-  overflow: hidden;
-
-  &__toolbar {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    padding: 12px 16px;
-    border-bottom: 1px solid var(--td-border-level-1-color, #e7e7e7);
-  }
-
-  &__search {
-    width: 100%;
-  }
-
-  &__sort {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  &__filter-btn {
-    padding: 2px 8px;
-    font-size: 12px;
-    border: 1px solid var(--td-border-level-2-color, #dcdcdc);
-    border-radius: 4px;
-    background: transparent;
-    cursor: pointer;
-    white-space: nowrap;
-    color: var(--td-text-color-secondary, #666);
-    transition: all 0.15s;
-
-    &:hover {
-      border-color: var(--td-brand-color, #0052d9);
-      color: var(--td-brand-color, #0052d9);
-    }
-
-    &--active {
-      border-color: var(--td-brand-color, #0052d9);
-      background-color: var(--td-brand-color-light, #ecf2fe);
-      color: var(--td-brand-color, #0052d9);
-    }
-  }
-
-  &__tag-filter {
-    padding: 8px 16px;
-    border-bottom: 1px solid var(--td-border-level-1-color, #e7e7e7);
-  }
+  background-color: var(--td-bg-color-container, #fff);
 
   &__body {
-    display: flex;
     flex: 1;
+    display: flex;
     overflow: hidden;
+    position: relative; // For absolute positioning if needed, though flex is better here
   }
 
+  // Left Sidebar
   &__sidebar {
-    width: 240px;
-    min-width: 200px;
+    // width: 280px; // Removed fixed width, controlled by JS
     display: flex;
     flex-direction: column;
-    border-right: 1px solid var(--td-border-level-1-color, #e7e7e7);
-    overflow-y: auto;
+    // border-right: 1px solid var(--td-component-border, #e7e7e7); // Border handled by resizer or kept?
+    background-color: var(--td-bg-color-secondarycontainer, #f5f5f5);
+    flex-shrink: 0; // Prevent shrinking
   }
 
+  &__toolbar {
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--td-component-border, #e7e7e7);
+    background-color: var(--td-bg-color-container, #fff);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  &__search-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+
+  &__menu-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    color: var(--td-text-color-secondary, #666);
+    border-radius: 4px;
+    margin-left: 4px;
+
+    &:hover {
+      background-color: var(--td-bg-color-container-hover, #f3f3f3);
+    }
+  }
+
+  &__storage-bar {
+    padding: 8px 12px;
+    border-top: 1px solid var(--td-component-border, #e7e7e7);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--td-text-color-placeholder, #999);
+    font-size: 11px;
+    background-color: var(--td-bg-color-container, #fff);
+  }
+
+  // Editor Area
   &__editor {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    position: relative;
+    background-color: var(--td-bg-color-container, #fff);
+    min-width: 400px; // Ensure editor doesn't get too small
+  }
+
+
+
+
+  // Right Sidebar
+  &__right-sidebar {
+    // width: 300px; // Removed fixed width, controlled by JS
+    display: flex;
+    flex-direction: column;
+    // border-left: 1px solid var(--td-component-border, #e7e7e7);
+    background-color: var(--td-bg-color-container, #fff);
+    flex-shrink: 0; // Prevent shrinking
+  }
+
+  &__right-toggle {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    z-index: 10;
+    width: 32px;
+    height: 32px;
+    border-radius: 4px;
+    border: 1px solid var(--td-component-border, #e7e7e7);
+    background-color: var(--td-bg-color-container, #fff);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: var(--td-text-color-secondary, #666);
+    
+    &:hover {
+      background-color: var(--td-bg-color-container-hover, #f3f3f3);
+    }
+  }
+  
+  &__right-header {
+    height: 48px;
+    border-bottom: 1px solid var(--td-component-border, #e7e7e7);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 12px;
+  }
+  
+  &__right-tabs {
+    display: flex;
+    gap: 4px;
+  }
+  
+  &__right-tab {
+    padding: 6px 12px;
+    border: none;
+    background: transparent;
+    border-radius: 4px;
+    cursor: pointer;
+    color: var(--td-text-color-secondary, #666);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    
+    &:hover {
+      background-color: var(--td-bg-color-container-hover, #f3f3f3);
+    }
+    
+    &--active {
+      color: var(--td-brand-color, #0052d9);
+      background-color: var(--td-brand-color-light, #ecf2fe);
+      
+      &:hover {
+        background-color: var(--td-brand-color-light, #ecf2fe);
+      }
+    }
+  }
+  
+  &__right-collapse-btn {
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    color: var(--td-text-color-secondary, #666);
+    padding: 4px;
+    border-radius: 4px;
+    display: flex;
+    
+    &:hover {
+      background-color: var(--td-bg-color-container-hover, #f3f3f3);
+    }
+  }
+  
+  &__right-content {
     flex: 1;
     overflow: hidden;
     display: flex;
@@ -84,65 +173,69 @@
   }
 }
 
-// ============================================================================
-// Directory Tree
-// ============================================================================
-
-.kb-dir-tree {
-  padding: 8px 0;
-
-  &__header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 4px 12px;
+// Resizer styles
+.kb-resizer {
+  width: 1px;
+  background-color: var(--td-component-border, #e7e7e7);
+  cursor: col-resize;
+  position: relative;
+  flex-shrink: 0;
+  z-index: 10;
+  transition: background-color 0.2s;
+  
+  &::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: -4px;
+    right: -4px;
+    z-index: 1;
   }
 
-  &__title {
-    font-size: 11px;
-    font-weight: 600;
-    text-transform: uppercase;
-    color: var(--td-text-color-placeholder, #999);
-    letter-spacing: 0.5px;
+  &:hover, &--active {
+    background-color: var(--td-brand-color, #0052d9);
+    width: 2px; // Make it slightly visible on hover
   }
+}
 
-  &__add-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 20px;
-    height: 20px;
-    border: none;
-    border-radius: 4px;
-    background: transparent;
-    cursor: pointer;
-    color: var(--td-text-color-secondary, #666);
+// Tree styles
+.kb-tree {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
 
-    &:hover {
-      background-color: var(--td-bg-color-container-hover, #f3f3f3);
-    }
+  &__list {
+    flex: 1;
+    padding: 8px 0;
   }
 
   &__create-row {
     display: flex;
     align-items: center;
-    gap: 4px;
     padding: 4px 12px;
+    gap: 4px;
+    background-color: var(--td-bg-color-container-active, #eef2ff);
   }
 
   &__input {
     flex: 1;
-    padding: 2px 8px;
-    font-size: 13px;
-    border: 1px solid var(--td-brand-color, #0052d9);
+    height: 28px;
+    padding: 0 8px;
+    border: 1px solid var(--td-component-border, #dcdcdc);
     border-radius: 4px;
+    font-size: 13px;
     outline: none;
-    background: var(--td-bg-color-container, #fff);
-    color: var(--td-text-color-primary, #333);
+    
+    &:focus {
+      border-color: var(--td-brand-color, #0052d9);
+    }
 
     &--inline {
-      width: 0;
-      flex: 1;
+      height: 24px;
+      padding: 0 4px;
+      font-size: 13px;
     }
   }
 
@@ -150,216 +243,188 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 20px;
-    height: 20px;
+    width: 24px;
+    height: 24px;
     border: none;
-    border-radius: 4px;
     background: transparent;
     cursor: pointer;
     color: var(--td-text-color-secondary, #666);
+    border-radius: 4px;
 
     &:hover {
       background-color: var(--td-bg-color-container-hover, #f3f3f3);
+      color: var(--td-text-color-primary, #333);
     }
 
     &--danger:hover {
-      color: var(--td-error-color, #e34d59);
-      background-color: var(--td-error-color-1, #fff0ed);
+      color: var(--td-error-color, #d54941);
+      background-color: var(--td-error-color-1, #fdecee);
     }
   }
 
-  &__list {
+  // Directory Row
+  &__dir {
     display: flex;
     flex-direction: column;
   }
 
-  &__item {
-    &--selected > .kb-dir-tree__item-row {
-      background-color: var(--td-brand-color-light, #ecf2fe);
-      color: var(--td-brand-color, #0052d9);
+  &__dir-row {
+    display: flex;
+    align-items: center;
+    padding: 6px 12px 6px 4px;
+    cursor: pointer;
+    color: var(--td-text-color-primary, #333);
+    user-select: none;
+    height: 32px;
+    
+    &:hover {
+      background-color: var(--td-bg-color-container-hover, #f3f3f3);
+      
+      .kb-tree__dir-actions {
+        opacity: 1;
+      }
     }
   }
 
-  &__item-row {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    padding: 6px 12px;
-    cursor: pointer;
-    font-size: 13px;
-    color: var(--td-text-color-primary, #333);
-    transition: background-color 0.15s;
-
-    &:hover {
-      background-color: var(--td-bg-color-container-hover, #f3f3f3);
-    }
-
-    &:hover .kb-dir-tree__item-actions {
-      opacity: 1;
-    }
+  &__dir--selected > &__dir-row {
+    background-color: var(--td-brand-color-light, #ecf2fe);
+    color: var(--td-brand-color, #0052d9);
   }
 
   &__expand-btn {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 16px;
-    height: 16px;
+    width: 20px;
+    height: 20px;
     border: none;
     background: transparent;
     cursor: pointer;
     color: inherit;
-    padding: 0;
-    flex-shrink: 0;
+    margin-right: 2px;
   }
 
-  &__item-name {
+  &__dir-name {
     flex: 1;
+    margin-left: 6px;
+    font-size: 13px;
+    white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    white-space: nowrap;
+    font-weight: 500;
   }
 
-  &__item-count {
-    font-size: 11px;
+  &__dir-count {
+    font-size: 12px;
     color: var(--td-text-color-placeholder, #999);
-    flex-shrink: 0;
+    margin: 0 8px;
   }
 
-  &__item-actions {
+  &__dir-actions {
     display: flex;
     gap: 2px;
     opacity: 0;
-    transition: opacity 0.15s;
-    flex-shrink: 0;
+    transition: opacity 0.2s;
   }
-}
 
-// ============================================================================
-// Note List
-// ============================================================================
-
-.kb-note-list {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  border-top: 1px solid var(--td-border-level-1-color, #e7e7e7);
-  padding-top: 8px;
-
-  &__header {
+  // Notes List
+  &__notes {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 4px 12px;
+    flex-direction: column;
   }
 
-  &__title {
-    font-size: 11px;
-    font-weight: 600;
-    text-transform: uppercase;
-    color: var(--td-text-color-placeholder, #999);
-    letter-spacing: 0.5px;
-  }
-
-  &__add-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 20px;
-    height: 20px;
-    border: none;
-    border-radius: 4px;
-    background: transparent;
-    cursor: pointer;
-    color: var(--td-text-color-secondary, #666);
-
-    &:hover {
-      background-color: var(--td-bg-color-container-hover, #f3f3f3);
-    }
-  }
-
-  &__items {
-    flex: 1;
-    overflow-y: auto;
-    padding: 4px 0;
-  }
-
-  &__empty {
-    padding: 24px 16px;
-    text-align: center;
-    font-size: 13px;
+  &__notes-empty {
+    padding: 8px 12px 8px 32px;
+    font-size: 12px;
     color: var(--td-text-color-placeholder, #999);
   }
 
-  &__item {
+  &__note-row {
     display: flex;
     align-items: flex-start;
-    gap: 8px;
-    padding: 8px 12px;
+    padding: 8px 12px 8px 28px;
     cursor: pointer;
-    transition: background-color 0.15s;
-
+    border-bottom: 1px solid transparent;
+    position: relative;
+    
     &:hover {
       background-color: var(--td-bg-color-container-hover, #f3f3f3);
+      
+      .kb-tree__note-delete {
+        opacity: 1;
+      }
     }
-
-    &:hover .kb-note-list__delete-btn {
-      opacity: 1;
-    }
-
+    
     &--selected {
       background-color: var(--td-brand-color-light, #ecf2fe);
+      
+      &::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 3px;
+        background-color: var(--td-brand-color, #0052d9);
+      }
     }
   }
 
-  &__item-icon {
-    flex-shrink: 0;
-    margin-top: 2px;
+  &__note-icon {
+    margin-top: 3px;
+    margin-right: 8px;
     color: var(--td-text-color-secondary, #666);
+    flex-shrink: 0;
   }
 
-  &__item-content {
+  &__note-content {
     flex: 1;
     min-width: 0;
   }
 
-  &__item-title {
+  &__note-title {
     font-size: 13px;
-    font-weight: 500;
     color: var(--td-text-color-primary, #333);
+    margin-bottom: 2px;
+    white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    white-space: nowrap;
+    line-height: 20px;
   }
 
-  &__item-meta {
+  &__note-domain {
     display: flex;
     align-items: center;
-    gap: 8px;
-    margin-top: 4px;
-    flex-wrap: wrap;
-  }
-
-  &__item-time {
+    gap: 4px;
     font-size: 11px;
     color: var(--td-text-color-placeholder, #999);
-    flex-shrink: 0;
+    margin-bottom: 2px;
   }
 
-  &__item-tags {
+  &__favicon {
+    width: 12px;
+    height: 12px;
+    border-radius: 2px;
+  }
+
+  &__note-meta {
     display: flex;
-    gap: 4px;
+    align-items: center;
+    min-height: 16px;
+  }
+
+  &__note-tags {
+    display: flex;
     flex-wrap: wrap;
+    gap: 4px;
   }
 
   &__tag-badge {
-    display: inline-block;
-    padding: 0 6px;
+    padding: 0 4px;
+    border-radius: 2px;
     font-size: 10px;
-    line-height: 18px;
-    border-radius: 3px;
-    white-space: nowrap;
+    height: 16px;
+    line-height: 16px;
   }
 
   &__tag-more {
@@ -367,25 +432,62 @@
     color: var(--td-text-color-placeholder, #999);
   }
 
-  &__delete-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 20px;
-    height: 20px;
+  &__note-time {
+    font-size: 11px;
+    color: var(--td-text-color-placeholder, #999);
+  }
+
+  &__note-delete {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
     border: none;
-    border-radius: 4px;
     background: transparent;
     cursor: pointer;
-    color: var(--td-text-color-secondary, #666);
+    color: var(--td-text-color-placeholder, #999);
+    padding: 4px;
+    border-radius: 4px;
     opacity: 0;
-    transition: opacity 0.15s;
-    flex-shrink: 0;
-    margin-top: 2px;
+    transition: opacity 0.2s;
 
     &:hover {
-      color: var(--td-error-color, #e34d59);
-      background-color: var(--td-error-color-1, #fff0ed);
+      background-color: var(--td-error-color-1, #fdecee);
+      color: var(--td-error-color, #d54941);
+    }
+  }
+}
+
+// Context Menu
+.kb-context-menu {
+  position: fixed;
+  z-index: 2000;
+  background: var(--td-bg-color-container, #fff);
+  border: 1px solid var(--td-component-border, #e7e7e7);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border-radius: 4px;
+  padding: 4px 0;
+  min-width: 120px;
+
+  &__item {
+    padding: 6px 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--td-text-color-primary, #333);
+    cursor: pointer;
+
+    &:hover {
+      background-color: var(--td-bg-color-container-hover, #f3f3f3);
+    }
+
+    &--danger {
+      color: var(--td-error-color, #d54941);
+      
+      &:hover {
+        background-color: var(--td-error-color-1, #fdecee);
+      }
     }
   }
 }

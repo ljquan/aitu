@@ -1,0 +1,125 @@
+
+.kb-tag-management-dialog {
+  .t-dialog__body {
+    padding: 0;
+    max-height: 60vh;
+    overflow-y: auto;
+  }
+}
+
+.kb-tag-list {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.kb-tag-item {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+  background-color: var(--td-bg-color-container);
+  border: 1px solid transparent;
+
+  &:hover {
+    background-color: var(--td-bg-color-secondary-container);
+    
+    .kb-tag-item__actions {
+      opacity: 1;
+    }
+  }
+
+  &--create-btn {
+    justify-content: center;
+    border: 1px dashed var(--td-component-border);
+    color: var(--td-text-color-secondary);
+    
+    &:hover {
+      border-color: var(--td-brand-color);
+      color: var(--td-brand-color);
+      background-color: var(--td-brand-color-light);
+    }
+
+    svg {
+      margin-right: 6px;
+    }
+  }
+
+  &--creating {
+    padding: 0;
+    border: none;
+    background: transparent;
+    
+    &:hover {
+      background: transparent;
+    }
+  }
+
+  &__dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 10px;
+    flex-shrink: 0;
+  }
+
+  &__name {
+    font-size: 14px;
+    color: var(--td-text-color-primary);
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    margin-right: 8px;
+  }
+
+  &__count {
+    font-size: 12px;
+    color: var(--td-text-color-placeholder);
+    margin-right: 8px;
+  }
+
+  &__actions {
+    display: flex;
+    gap: 4px;
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+
+  &__action-btn {
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    background: transparent;
+    border-radius: 4px;
+    color: var(--td-text-color-secondary);
+    cursor: pointer;
+
+    &:hover {
+      background-color: var(--td-bg-color-component-hover);
+      color: var(--td-text-color-primary);
+    }
+
+    &--delete:hover {
+      background-color: var(--td-error-color-1);
+      color: var(--td-error-color);
+    }
+  }
+
+  &__editing {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    gap: 4px;
+
+    .t-input {
+      flex: 1;
+    }
+  }
+}

@@ -327,6 +327,9 @@ importers:
       katex:
         specifier: ^0.16.27
         version: 0.16.27
+      localforage:
+        specifier: ^1.10.0
+        version: 1.10.0
       mobile-detect:
         specifier: ^1.4.5
         version: 1.4.5

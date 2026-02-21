@@ -1,17 +1,29 @@
 /**
  * KBNoteEditor - 知识库笔记编辑器
  *
- * 标题编辑 + Markdown 编辑器 + 标签选择
+ * 标题编辑 + 来源信息（可折叠） + 标签选择 + Markdown 编辑器
  * 自动保存（500ms 防抖）
  * 支持语音朗读、导出 Markdown
  */
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Volume2, VolumeX, Download } from 'lucide-react';
+import {
+  Volume2,
+  VolumeX,
+  Download,
+  ChevronDown,
+  ChevronRight,
+  Globe,
+  User,
+  Calendar,
+  ExternalLink,
+  BookOpen,
+} from 'lucide-react';
 import { MarkdownEditor, MarkdownEditorRef } from '../MarkdownEditor';
 import { KBTagSelector } from './KBTagSelector';
 import { useTextToSpeech } from './useTextToSpeech';
 import { knowledgeBaseService } from '../../services/knowledge-base-service';
+import './knowledge-base-editor.scss';
 import type { KBNote, KBTag, KBTagWithCount } from '../../types/knowledge-base.types';
 
 interface KBNoteEditorProps {
@@ -42,6 +54,7 @@ export const KBNoteEditor: React.FC<KBNoteEditorProps> = ({
   onCreateTag,
 }) => {
   const [title, setTitle] = useState('');
+  const [metadataCollapsed, setMetadataCollapsed] = useState(false);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const editorRef = useRef<MarkdownEditorRef>(null);
   const currentNoteIdRef = useRef<string | null>(null);
@@ -51,6 +64,10 @@ export const KBNoteEditor: React.FC<KBNoteEditorProps> = ({
 
   // 标签 IDs
   const selectedTagIds = useMemo(() => noteTags.map((t) => t.id), [noteTags]);
+
+  // 笔记元数据
+  const metadata = (note as any)?.metadata;
+  const hasSourceInfo = metadata && (metadata.sourceUrl || metadata.author || metadata.domain);
 
   // 切换笔记时重置标题和语音
   useEffect(() => {
@@ -140,14 +157,20 @@ export const KBNoteEditor: React.FC<KBNoteEditorProps> = ({
     return (
       <div className="kb-note-editor kb-note-editor--empty">
         <div className="kb-note-editor__placeholder">
-          选择一篇笔记开始编辑，或创建新笔记
+          <div className="kb-note-editor__placeholder-icon">
+            <BookOpen size={64} strokeWidth={1} />
+          </div>
+          <h3 className="kb-note-editor__placeholder-title">无笔记选中</h3>
+          <p className="kb-note-editor__placeholder-text">
+            选择左侧的一篇笔记开始编辑，或者创建一个新笔记
+          </p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="kb-note-editor" key={note.id}>
+    <div className="kb-note-editor">
       {/* 标题行 */}
       <div className="kb-note-editor__title-row">
         <input
@@ -185,21 +208,115 @@ export const KBNoteEditor: React.FC<KBNoteEditorProps> = ({
         </div>
       </div>
 
-      {/* 元数据 */}
-      <div className="kb-note-editor__meta">
-        <span>创建: {formatDate(note.createdAt)}</span>
-        <span>更新: {formatDate(note.updatedAt)}</span>
-      </div>
+      {/* 来源信息区域 - 可折叠 */}
+      {hasSourceInfo && (
+        <div className={`kb-note-editor__metadata-section ${metadataCollapsed ? 'kb-note-editor__metadata-section--collapsed' : ''}`}>
+          <button
+            className="kb-note-editor__metadata-toggle"
+            onClick={() => setMetadataCollapsed(!metadataCollapsed)}
+            title={metadataCollapsed ? '展开来源信息' : '收起来源信息'}
+          >
+            {metadataCollapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
+            <span>来源信息</span>
+          </button>
 
-      {/* 标签 */}
-      <div className="kb-note-editor__tags">
-        <KBTagSelector
-          allTags={allTags}
-          selectedTagIds={selectedTagIds}
-          onSelectedChange={handleTagsChange}
-          onCreateTag={onCreateTag}
-        />
-      </div>
+          {/* 折叠时显示简要信息 */}
+          {metadataCollapsed && (
+            <div className="kb-note-editor__metadata-collapsed">
+              {metadata.author && (
+                <span className="kb-note-editor__metadata-collapsed-item">
+                  <User size={10} />
+                  <span>{metadata.author}</span>
+                </span>
+              )}
+              {metadata.sourceUrl && (
+                <a
+                  href={metadata.sourceUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="kb-note-editor__metadata-collapsed-link"
+                  onClick={(e) => e.stopPropagation()}
+                  title={metadata.sourceUrl}
+                >
+                  <ExternalLink size={10} />
+                  <span>{metadata.domain || metadata.sourceUrl}</span>
+                </a>
+              )}
+            </div>
+          )}
+
+          {/* 展开时显示完整信息 */}
+          {!metadataCollapsed && (
+            <div className="kb-note-editor__metadata-body">
+              {/* 标签选择器 */}
+              <div className="kb-note-editor__tags">
+                <KBTagSelector
+                  allTags={allTags}
+                  selectedTagIds={selectedTagIds}
+                  onSelectedChange={handleTagsChange}
+                  onCreateTag={onCreateTag}
+                />
+              </div>
+
+              {/* 元数据信息行 */}
+              <div className="kb-note-editor__metadata-info">
+                {metadata.domain && (
+                  <span className="kb-note-editor__metadata-item">
+                    {metadata.faviconUrl ? (
+                      <img
+                        src={metadata.faviconUrl}
+                        alt=""
+                        className="kb-note-editor__favicon"
+                        onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                      />
+                    ) : (
+                      <Globe size={12} />
+                    )}
+                    <span>{metadata.domain}</span>
+                  </span>
+                )}
+                {metadata.author && (
+                  <span className="kb-note-editor__metadata-item">
+                    <User size={12} />
+                    <span>{metadata.author}</span>
+                  </span>
+                )}
+                {metadata.publishedAt && (
+                  <span className="kb-note-editor__metadata-item">
+                    <Calendar size={12} />
+                    <span>{metadata.publishedAt}</span>
+                  </span>
+                )}
+              </div>
+              {metadata.sourceUrl && (
+                <a
+                  href={metadata.sourceUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="kb-note-editor__source-link"
+                >
+                  {metadata.sourceUrl}
+                </a>
+              )}
+              {metadata.description && (
+                <p className="kb-note-editor__metadata-desc">{metadata.description}</p>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 无来源信息时仍显示标签 */}
+      {!hasSourceInfo && (
+        <div className="kb-note-editor__tags">
+          <KBTagSelector
+            allTags={allTags}
+            selectedTagIds={selectedTagIds}
+            onSelectedChange={handleTagsChange}
+            onCreateTag={onCreateTag}
+          />
+        </div>
+      )}
 
       {/* Markdown 编辑器 */}
       <div className="kb-note-editor__content">

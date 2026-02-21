@@ -143,18 +143,40 @@ export const ModelSelector: React.FC<ModelSelectorProps> = React.memo(
 
     const currentModel = getChatModelById(selectedModel);
 
-    const [portalPosition, setPortalPosition] = useState({ top: 0, left: 0, width: 0, bottom: 0 });
+    const [portalPosition, setPortalPosition] = useState({ 
+      top: 0, 
+      left: 0, 
+      width: 0, 
+      bottom: 0, 
+      placement: 'bottom' as 'top' | 'bottom',
+      maxHeight: 480
+    });
 
     useLayoutEffect(() => {
       if (isOpen) {
         const updatePosition = () => {
           if (!triggerRef.current) return;
           const rect = triggerRef.current.getBoundingClientRect();
+          const windowHeight = window.innerHeight;
+          const spaceBelow = windowHeight - rect.bottom;
+          const spaceAbove = rect.top;
+          
+          // If space below is less than 400px and space above is larger, flip to top
+          const placement = (spaceBelow < 400 && spaceAbove > spaceBelow) ? 'top' : 'bottom';
+
+          // Calculate max height based on available space
+          // Leave some padding (e.g. 16px) from viewport edges
+          const availableHeight = placement === 'top' 
+            ? spaceAbove - 16 
+            : windowHeight - rect.bottom - 16;
+
           setPortalPosition({
             top: rect.top,
             left: rect.left,
             width: rect.width,
-            bottom: rect.bottom
+            bottom: rect.bottom,
+            placement,
+            maxHeight: Math.min(Math.max(availableHeight, 200), 600) // Min 200px, Max 600px
           });
         };
 
@@ -180,10 +202,16 @@ export const ModelSelector: React.FC<ModelSelectorProps> = React.memo(
             position: 'fixed',
             zIndex: Z_INDEX.DROPDOWN_PORTAL,
             left: portalPosition.left,
-            top: portalPosition.bottom + 8,
+            top: portalPosition.placement === 'bottom' ? portalPosition.bottom + 8 : 'auto',
+            bottom: portalPosition.placement === 'top' ? (window.innerHeight - portalPosition.top + 8) : 'auto',
             minWidth: 360,
             width: variant === 'form' ? portalPosition.width : 'auto',
+            maxHeight: portalPosition.maxHeight,
             visibility: portalPosition.width === 0 ? 'hidden' : 'visible',
+            // Add transform origin for animation if needed, though simple positioning is key here
+            transformOrigin: portalPosition.placement === 'bottom' ? 'top left' : 'bottom left',
+            display: 'flex',
+            flexDirection: 'column',
           }}
           onClick={(e) => e.stopPropagation()}
         >
@@ -200,7 +228,14 @@ export const ModelSelector: React.FC<ModelSelectorProps> = React.memo(
           </div>
 
           {/* Model list */}
-          <div className="model-selector__list">
+          <div 
+            className="model-selector__list"
+            style={{
+              flex: 1,
+              overflowY: 'auto',
+              maxHeight: 'none', // Override CSS max-height
+            }}
+          >
             {groupedModels.length === 0 ? (
               <div className="model-selector__empty">未找到匹配的模型</div>
             ) : (

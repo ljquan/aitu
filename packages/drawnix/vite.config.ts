@@ -41,6 +41,10 @@ export default defineConfig({
   define: {
     'import.meta.env.VITE_APP_VERSION': JSON.stringify(appVersion),
     __APP_VERSION__: JSON.stringify(appVersion),
+    // Vue feature flags - Crepe 内部使用了 Vue，需要定义这些编译时标志
+    __VUE_OPTIONS_API__: JSON.stringify(false),
+    __VUE_PROD_DEVTOOLS__: JSON.stringify(false),
+    __VUE_PROD_HYDRATION_MISMATCH_DETAILS__: JSON.stringify(false),
   },
 
   // Uncomment this if you are using workers.

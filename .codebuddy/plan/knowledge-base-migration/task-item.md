@@ -1,0 +1,121 @@
+# 实施计划：知识库能力迁移（translate → aitu）
+
+- [x] 1. 扩展知识库类型定义与存储配置
+  - 修改 `packages/drawnix/src/types/knowledge-base.types.ts`：
+    - 新增 `KBNoteContent` 接口（id, noteId, content）
+    - 新增 `KBNoteImage` 接口（id, noteId, hash, data, mimeType, size, createdAt）
+    - 扩展 `KBNoteMetadata`，新增 sourceUrl、domain、faviconUrl、publishedAt 等字段
+    - 新增 `KBSaveState` 类型（unsaved/saving/saved/duplicate/error）
+    - 新增 `KBKnowledgeType` 枚举和 `KBExtractedKnowledge` 接口
+  - 修改 `packages/drawnix/src/constants/storage-keys.ts`：
+    - 在 `KNOWLEDGE_BASE.STORES` 中新增 `NOTE_CONTENTS: 'noteContents'` 和 `NOTE_IMAGES: 'noteImages'`
+  - _需求：1.1, 1.3, 2.1, 3.1, 6.1, 7.2_
+
+- [x] 2. 重构知识库存储服务：笔记元数据/正文分离
+  - 修改 `packages/drawnix/src/services/knowledge-base-service.ts`：
+    - 新增 `noteContentsStore` 和 `noteImagesStore` 两个 localforage 实例
+    - 重构 `createNote`：拆分存储，meta 存入 notesStore（不含 content），content 存入 noteContentsStore
+    - 重构 `getNoteById`：合并加载 meta + content
+    - 重构 `updateNote`：content 变更时仅更新 noteContentsStore
+    - 重构 `deleteNote`：同时删除 noteContentsStore 中的正文
+    - 保持 `getAllNoteMetas` 和 `getNoteMetasByDirectory` 不变（它们已经排除 content）
+    - 暴露新 store 实例给 `_getStoreInstances()`
+  - _需求：1.1, 1.2, 1.3, 1.4_
+
+- [x] 3. 实现图片独立存储与处理服务
+  - 新建 `packages/drawnix/src/services/kb-image-service.ts`：
+    - 实现 `extractBase64ImagesFromContent(content)` —— 从 Markdown/HTML 内容中提取 base64 图片
+    - 实现 `saveImage(noteId, base64Data, mimeType)` —— 存储图片到 noteImagesStore，基于 hash 去重
+    - 实现 `replaceBase64WithUrls(content, noteId)` —— 保存图片后替换正文中 base64 为 `kb-image://{imageId}` URL
+    - 实现 `replaceUrlsWithBase64(content)` —— 加载笔记时将 URL 还原为 base64
+    - 实现 `deleteImagesByNoteId(noteId)` —— 删除笔记时清理仅被该笔记引用的图片
+    - 实现 `cleanupUnusedImages()` —— 清理所有未被引用的图片
+    - 实现 base64 hash 计算（DJB2）用于去重
+  - 在 `knowledge-base-service.ts` 的 createNote/updateNote/deleteNote 中集成图片处理
+  - _需求：2.1, 2.2, 2.3, 2.4, 2.5_
+
+- [x] 4. 实现来源URL元数据与Upsert、批量创建
+  - 修改 `packages/drawnix/src/services/knowledge-base-service.ts`：
+    - 实现 `upsertNoteBySourceUrl(directoryId, sourceUrl, title, content, metadata?)` —— 同目录同URL去重更新
+    - 实现 `batchCreateNotes(notes[])` —— 批量创建笔记返回 ID 列表
+    - 实现 `getNotesBySourceUrl(sourceUrl, directoryId?)` —— 按 sourceUrl 查询
+    - 实现 `getUniqueDomains()` —— 获取所有来源域名及计数统计
+    - 在 upsertNoteBySourceUrl 中自动处理 metadata.tags 的标签创建与关联
+  - 扩展排序字段支持 `domain`
+  - _需求：3.1, 3.2, 3.3, 3.4, 3.5_
+
+- [x] 5. 实现存储配额管理
+  - 修改 `packages/drawnix/src/services/knowledge-base-service.ts`：
+    - 实现 `getStorageUsage()` —— 使用 `navigator.storage.estimate()` 返回已用空间、总配额、使用百分比
+    - 实现 `isStorageNearQuota(threshold = 0.8)` —— 判断是否接近配额
+  - 修改 `packages/drawnix/src/components/knowledge-base/KnowledgeBaseContent.tsx`：
+    - 在知识库界面底部或设置面板中展示存储使用情况
+    - 超过 80% 时展示警告样式
+    - 添加"清理未使用图片"按钮
+  - _需求：4.1, 4.2, 4.3_
+
+- [x] 6. 实现知识保存管理器（KnowledgeSaveManager）
+  - 新建 `packages/drawnix/src/services/kb-save-manager.ts`：
+    - 实现内容指纹计算（DJB2 hash）
+    - 实现 `saveToKnowledgeBase(content, options)` —— 智能保存入口，支持 force/mergeIfExists/autoDirectory
+    - 实现重复检测：基于指纹缓存快速判断
+    - 实现 `mergeToExistingNote(noteId, content)` —— 追加内容到已有笔记
+    - 实现自动目录推断（根据 content type 和 metadata 自动选择目标目录）
+    - 实现保存历史记录（最近 N 次保存的指纹、时间、目标笔记 ID）
+  - _需求：5.1, 5.2, 5.3, 5.4, 5.5_
+
+- [x] 7. 实现保存状态追踪器（SaveStateTracker）
+  - 新建 `packages/drawnix/src/services/kb-save-state-tracker.ts`：
+    - 实现 `getState(contentFingerprint)` —— 返回内容保存状态
+    - 实现 `setState(contentFingerprint, state, meta?)` —— 更新保存状态
+    - 实现状态缓存（Map），超过 5 分钟自动过期重新检查
+    - 实现监听器注册模式 `onStateChange(callback)` —— 状态变更通知
+    - 导出 React Hook `useSaveState(content)` 方便组件中使用
+  - _需求：6.1, 6.2, 6.3, 6.4_
+
+- [x] 8. 实现 NLP 分词与语义搜索引擎
+  - 新建 `packages/drawnix/src/services/kb-nlp/` 目录：
+    - `tokenizer.ts` —— 中英文混合分词（正则分割中文单字/英文单词、n-gram 生成、停用词过滤）
+    - `tfidf.ts` —— TF-IDF 向量化器（词频统计、逆文档频率计算、文档向量生成）
+    - `similarity.ts` —— 余弦相似度计算
+  - 新建 `packages/drawnix/src/services/kb-search-engine.ts`：
+    - 实现 `KBSearchEngine` 类：初始化时为所有笔记构建 TF-IDF 索引
+    - 实现增量索引（addNote/updateNote/removeNote 时同步更新索引）
+    - 实现 `search(query, limit?)` —— 余弦相似度排序、阈值过滤（默认 0.1）、智能摘要
+    - 实现 `getRelatedNotes(noteId, limit?)` —— 基于向量相似度推荐关联笔记
+    - 标题加权（2x）、元数据加权（1.5x）
+  - 修改 `KBRelatedNotes.tsx` 组件接入新的搜索引擎获取关联笔记
+  - 修改 `KnowledgeBaseContent.tsx` 中的搜索功能接入语义搜索引擎
+  - _需求：8.1, 8.2, 8.3, 8.4, 8.5, 8.6_
+
+- [x] 9. 实现 AI 知识提取功能
+  - 新建 `packages/drawnix/src/services/kb-knowledge-extraction/` 目录：
+    - `types.ts` —— KnowledgeType 枚举、ExtractedKnowledge 接口
+    - `prompt-template.ts` —— 系统提示词和用户提示词模板
+    - `extraction-service.ts` —— 调用 `sendChatWithGemini` 进行知识提取、解析 AI 响应为结构化知识点
+    - `storage-service.ts` —— 将知识点保存到知识库（合并/分别保存）
+    - `export-service.ts` —— 导出为 Markdown/JSON 格式文件下载
+  - 新建 `packages/drawnix/src/components/knowledge-base/KBKnowledgeExtraction.tsx`：
+    - 知识提取按钮（在笔记编辑器工具栏中）
+    - 提取结果面板（知识点列表、可选中/取消、合并/分别保存选项）
+    - 导出按钮（Markdown/JSON）
+  - _需求：7.1, 7.2, 7.3, 7.4, 7.5_
+
+- [x] 10. 实现知识库 MCP 工具
+  - 新建 `packages/drawnix/src/mcp/tools/knowledge-base-tool.ts`：
+    - 实现 `search_notes` 工具 —— 调用搜索引擎搜索笔记，返回标题、摘要、元数据
+    - 实现 `get_note` 工具 —— 按 ID 获取完整笔记内容
+    - 实现 `create_note` 工具 —— 创建笔记，支持目录、标签、来源URL
+    - 实现 `list_directories` 工具 —— 返回所有目录列表
+    - 每个工具按 `MCPTool` 接口定义 name、description、inputSchema、execute、promptGuidance
+  - 修改 `packages/drawnix/src/mcp/index.ts`：
+    - 导入并导出 knowledge-base-tool
+    - 在 `initializeMCP()` 中注册知识库工具
+  - _需求：9.1, 9.2, 9.3, 9.4_
+
+- [x] 11. 更新导入导出服务适配新的存储结构
+  - 修改 `packages/drawnix/src/services/kb-import-export-service.ts`：
+    - 导出时从 noteContentsStore 加载正文、从 noteImagesStore 加载图片
+    - 导入时将正文和图片分别写入对应 store
+    - 保持向下兼容：导入旧格式数据（正文在 note 对象中）时自动拆分
+  - _需求：1.1, 2.1_

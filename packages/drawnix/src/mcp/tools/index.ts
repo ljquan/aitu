@@ -20,6 +20,8 @@ export type { MindmapToolParams } from './mindmap-tool';
 export { pptGenerationTool, generatePPT } from './ppt-generation';
 export type { PPTGenerationParams } from '../../services/ppt';
 
+export { knowledgeBaseTools, kbSearchNotesTool, kbGetNoteTool, kbCreateNoteTool, kbListDirectoriesTool } from './knowledge-base-tool';
+
 // 共享模块导出
 export { setBoard, getBoard, isBoardAvailable, requireBoard } from './shared';
 export { extractCodeBlock, getInsertionPoint, insertElementsToCanvas } from './shared';

@@ -43,6 +43,7 @@ export const BackupRestoreDialog = ({
     includePrompts: true,
     includeProjects: true,
     includeAssets: true,
+    includeKnowledgeBase: true,
   });
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -122,7 +123,7 @@ export const BackupRestoreDialog = ({
 
   const handleBackup = useCallback(async () => {
     // 检查是否至少选择了一项
-    if (!backupOptions.includePrompts && !backupOptions.includeProjects && !backupOptions.includeAssets) {
+    if (!backupOptions.includePrompts && !backupOptions.includeProjects && !backupOptions.includeAssets && !backupOptions.includeKnowledgeBase) {
       MessagePlugin.warning('请至少选择一项要备份的内容');
       return;
     }
@@ -276,6 +277,17 @@ export const BackupRestoreDialog = ({
                   <span className="backup-restore-dialog__option-desc">包含所有本地上传的图片和视频</span>
                 </div>
               </Checkbox>
+
+              <Checkbox
+                checked={backupOptions.includeKnowledgeBase}
+                onChange={(checked) => handleOptionChange('includeKnowledgeBase', checked as boolean)}
+                disabled={isProcessing}
+              >
+                <div className="backup-restore-dialog__option-content">
+                  <span className="backup-restore-dialog__option-title">知识库</span>
+                  <span className="backup-restore-dialog__option-desc">包含所有目录、笔记和标签</span>
+                </div>
+              </Checkbox>
             </div>
 
             {isProcessing && (
@@ -355,6 +367,11 @@ export const BackupRestoreDialog = ({
                   {(importResult.assets.imported > 0 || importResult.assets.skipped > 0) && (
                     <li>
                       素材：导入 {importResult.assets.imported} 个，跳过 {importResult.assets.skipped} 个
+                    </li>
+                  )}
+                  {importResult.knowledgeBase && (importResult.knowledgeBase.notes > 0 || importResult.knowledgeBase.directories > 0) && (
+                    <li>
+                      知识库：导入 {importResult.knowledgeBase.directories} 个目录，{importResult.knowledgeBase.notes} 篇笔记，{importResult.knowledgeBase.tags} 个标签
                     </li>
                   )}
                   {importResult.tasks && (importResult.tasks.imported > 0 || importResult.tasks.skipped > 0) && (
