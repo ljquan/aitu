@@ -20,6 +20,7 @@ import {
   Globe,
   Copy,
 } from 'lucide-react';
+import { Z_INDEX } from '../../constants/z-index';
 import type { KBDirectory, KBNoteMeta, KBTag } from '../../types/knowledge-base.types';
 
 interface KBUnifiedTreeProps {
@@ -227,7 +228,11 @@ export const KBUnifiedTree: React.FC<KBUnifiedTreeProps> = ({
         createPortal(
           <div
             className="kb-context-menu"
-            style={{ top: contextMenu.y, left: contextMenu.x }}
+            style={{ 
+              top: contextMenu.y, 
+              left: contextMenu.x,
+              zIndex: Z_INDEX.DROPDOWN_PORTAL
+            }}
             onClick={(e) => e.stopPropagation()}
           >
             {contextMenu.type === 'directory' ? (
