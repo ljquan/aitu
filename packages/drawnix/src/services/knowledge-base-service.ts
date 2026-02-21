@@ -88,21 +88,44 @@ async function ensureDefaultDirectories(): Promise<void> {
   if (defaultDirsInitialized) return;
 
   const dirs = await getAllDirectories();
-  const hasDefaults = dirs.some((d) => d.isDefault);
-  if (!hasDefaults) {
-    const now = Date.now();
-    for (const def of KB_DEFAULT_DIRECTORIES) {
-      const dir: KBDirectory = {
+  const defaultDirNames = new Set(KB_DEFAULT_DIRECTORIES.map((d) => d.name));
+  const existingMap = new Map(dirs.map((d) => [d.name, d]));
+  const now = Date.now();
+
+  // 1. 确保默认目录存在且状态正确
+  for (const def of KB_DEFAULT_DIRECTORIES) {
+    const existing = existingMap.get(def.name);
+    if (existing) {
+      // 如果已存在但不是默认，更新为默认
+      if (!existing.isDefault) {
+        existing.isDefault = true;
+        existing.order = def.order; // 更新排序
+        existing.updatedAt = now;
+        await directoriesStore.setItem(existing.id, existing);
+      }
+    } else {
+      // 创建不存在的默认目录
+      const newDir: KBDirectory = {
         id: generateId(),
         name: def.name,
-        isDefault: def.isDefault,
+        isDefault: true,
         createdAt: now,
         updatedAt: now,
         order: def.order,
       };
+      await directoriesStore.setItem(newDir.id, newDir);
+    }
+  }
+
+  // 2. 将不再是默认的目录（如"收集"）取消默认状态
+  for (const dir of dirs) {
+    if (dir.isDefault && !defaultDirNames.has(dir.name)) {
+      dir.isDefault = false;
+      dir.updatedAt = now;
       await directoriesStore.setItem(dir.id, dir);
     }
   }
+
   defaultDirsInitialized = true;
 }
 

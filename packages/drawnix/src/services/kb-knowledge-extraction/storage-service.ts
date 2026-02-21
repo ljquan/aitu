@@ -72,9 +72,9 @@ function mergeKnowledgeToMarkdown(
 /** 获取或创建"知识提炼"目录 */
 export async function getKnowledgeExtractionDirectory(): Promise<{ id: string; name: string }> {
   const dirs = await getAllDirectories();
-  const existing = dirs.find((d) => d.name === '知识提炼');
+  const existing = dirs.find((d) => d.name === '笔记');
   if (existing) return { id: existing.id, name: existing.name };
-  const newDir = await createDirectory('知识提炼');
+  const newDir = await createDirectory('笔记');
   return { id: newDir.id, name: newDir.name };
 }
 

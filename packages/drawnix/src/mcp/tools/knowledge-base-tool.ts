@@ -209,7 +209,7 @@ export const kbCreateNoteTool: MCPTool = {
       },
       directoryName: {
         type: 'string',
-        description: '目录名称（不存在则自动创建），默认为"默认"',
+        description: '目录名称（不存在则自动创建），默认为"笔记"',
       },
       tags: {
         type: 'array',
@@ -252,7 +252,7 @@ export const kbCreateNoteTool: MCPTool = {
   execute: async (params: Record<string, unknown>): Promise<MCPResult> => {
     const title = params.title as string;
     const content = params.content as string;
-    const directoryName = (params.directoryName as string) || '默认';
+    const directoryName = (params.directoryName as string) || '笔记';
     const tags = params.tags as string[] | undefined;
     const sourceUrl = params.sourceUrl as string | undefined;
 

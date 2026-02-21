@@ -24,14 +24,11 @@ import type { KBNoteMeta, KBNoteMetadata } from '../types/knowledge-base.types';
 // ============================================
 
 /** 目录类型 */
-export type DirectoryType = 'collection' | 'note' | 'ai_chat' | 'knowledge_extraction';
+export type DirectoryType =  'note';
 
 /** 目录名称映射 */
 export const DIRECTORY_NAMES: Record<DirectoryType, string> = {
-  collection: '收集',
   note: '笔记',
-  ai_chat: 'AI收藏',
-  knowledge_extraction: '知识提炼',
 };
 
 /** 保存历史最大记录数 */
@@ -246,8 +243,7 @@ class KnowledgeSaveManager {
   // ============================================
 
   private _inferDirectoryType(item: SaveContentItem): DirectoryType {
-    if (item.contentType === 'ai_response') return 'ai_chat';
-    return 'collection';
+    return 'note';
   }
 
   private async _ensureDirectory(type: DirectoryType): Promise<string> {
@@ -445,7 +441,7 @@ class KnowledgeSaveManager {
       noteName: '',
       isNewNote: false,
       isDuplicate: false,
-      directoryType: 'collection',
+      directoryType: 'note',
       message,
       fingerprint: '',
       savedAt: Date.now(),

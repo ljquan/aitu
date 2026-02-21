@@ -166,8 +166,8 @@ export const KB_DEFAULT_SORT: KBSortOptions = {
  * 默认目录列表
  */
 export const KB_DEFAULT_DIRECTORIES: Array<{ name: string; isDefault: boolean; order: number }> = [
-  { name: '收集', isDefault: true, order: 0 },
-  { name: '笔记', isDefault: true, order: 1 },
+  { name: '笔记', isDefault: true, order: 0 },
+  { name: 'Skill', isDefault: true, order: 1 },
 ];
 
 // ==================== 保存状态类型 ====================
