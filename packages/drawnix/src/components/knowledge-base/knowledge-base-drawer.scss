@@ -461,7 +461,7 @@
 // Context Menu
 .kb-context-menu {
   position: fixed;
-  z-index: 2000;
+  z-index: 5500;
   background: var(--td-bg-color-container, #fff);
   border: 1px solid var(--td-component-border, #e7e7e7);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
