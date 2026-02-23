@@ -19,9 +19,14 @@ import {
   FileText,
   Globe,
   Copy,
+  Lock,
 } from 'lucide-react';
 import { Z_INDEX } from '../../constants/z-index';
 import type { KBDirectory, KBNoteMeta, KBTag } from '../../types/knowledge-base.types';
+import { SYSTEM_SKILLS } from '../../constants/skills';
+
+/** 系统内置 Skill 虚拟笔记的 ID 前缀 */
+export const SYSTEM_SKILL_NOTE_PREFIX = '__system_skill__';
 
 interface KBUnifiedTreeProps {
   directories: KBDirectory[];
@@ -33,6 +38,9 @@ interface KBUnifiedTreeProps {
   selectedNoteId: string | null;
   expandedDirIds: Set<string>;
   isCreatingDir: boolean;
+
+  /** Skill 目录名称，用于在该目录下注入系统内置 Skill 虚拟笔记 */
+  skillDirName?: string;
 
   onSelectDir: (id: string) => void;
   onToggleExpand: (id: string) => void;
@@ -74,6 +82,7 @@ export const KBUnifiedTree: React.FC<KBUnifiedTreeProps> = ({
   selectedNoteId,
   expandedDirIds,
   isCreatingDir,
+  skillDirName = 'Skill',
   onSelectDir,
   onToggleExpand,
   onCreateDir,
@@ -213,13 +222,14 @@ export const KBUnifiedTree: React.FC<KBUnifiedTreeProps> = ({
               onCreateNote(dir.id);
               setContextMenu(null);
             }}
-            onSelectNote={onSelectNote}
+          onSelectNote={onSelectNote}
             onDeleteNote={(id) => {
               onDeleteNote(id);
               setContextMenu(null);
             }}
             onContextMenu={(e) => handleContextMenu(e, 'directory', dir.id, dir.isDefault)}
             onNoteContextMenu={(e, noteId) => handleContextMenu(e, 'note', noteId)}
+            isSkillDir={dir.name === skillDirName}
           />
         ))}
       </div>
@@ -316,6 +326,8 @@ interface DirectoryNodeProps {
   selectedNoteId: string | null;
   isRenaming: boolean;
   renameValue: string;
+  /** 是否为 Skill 目录，若是则在笔记列表顶部注入系统内置 Skill 虚拟笔记 */
+  isSkillDir?: boolean;
   onSelectDir: () => void;
   onToggleExpand: () => void;
   onStartRename: () => void;
@@ -339,6 +351,7 @@ const DirectoryNode: React.FC<DirectoryNodeProps> = ({
   selectedNoteId,
   isRenaming,
   renameValue,
+  isSkillDir = false,
   onSelectDir,
   onToggleExpand,
   onStartRename,
@@ -389,31 +402,54 @@ const DirectoryNode: React.FC<DirectoryNodeProps> = ({
           >
             <Plus size={12} />
           </button>
-          {!dir.isDefault && (
-            <>
-              <button
-                className="kb-tree__icon-btn"
-                onClick={(e) => { e.stopPropagation(); onStartRename(); }}
-                title="重命名"
-              >
-                <Pencil size={12} />
-              </button>
-              <button
-                className="kb-tree__icon-btn kb-tree__icon-btn--danger"
-                onClick={(e) => { e.stopPropagation(); onDeleteDir(); }}
-                title="删除"
-              >
-                <Trash2 size={12} />
-              </button>
-            </>
-          )}
+          <>
+            <button
+              className="kb-tree__icon-btn"
+              onClick={(e) => { e.stopPropagation(); onStartRename(); }}
+              title="重命名"
+            >
+              <Pencil size={12} />
+            </button>
+            <button
+              className="kb-tree__icon-btn kb-tree__icon-btn--danger"
+              onClick={(e) => { e.stopPropagation(); onDeleteDir(); }}
+              title="删除"
+            >
+              <Trash2 size={12} />
+            </button>
+          </>
         </div>
       </div>
 
       {/* 展开后显示笔记 */}
       {isExpanded && (
         <div className="kb-tree__notes">
-          {notes.length === 0 && (
+          {/* Skill 目录：在顶部注入系统内置 Skill 虚拟笔记 */}
+          {isSkillDir && SYSTEM_SKILLS.map((skill) => {
+            const virtualId = `${SYSTEM_SKILL_NOTE_PREFIX}${skill.id}`;
+            const isNoteSelected = selectedNoteId === virtualId;
+            return (
+              <div
+                key={virtualId}
+                className={`kb-tree__note-row kb-tree__note-row--system ${isNoteSelected ? 'kb-tree__note-row--selected' : ''}`}
+                onClick={() => onSelectNote(virtualId)}
+              >
+                <div className="kb-tree__note-icon">
+                  <Lock size={14} />
+                </div>
+                <div className="kb-tree__note-content">
+                  <div className="kb-tree__note-title">
+                    {skill.name}
+                    <span className="kb-tree__system-badge">系统</span>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+          {notes.length === 0 && !isSkillDir && (
+            <div className="kb-tree__notes-empty">暂无笔记</div>
+          )}
+          {notes.length === 0 && isSkillDir && SYSTEM_SKILLS.length === 0 && (
             <div className="kb-tree__notes-empty">暂无笔记</div>
           )}
           {Array.from(new Map(notes.map(n => [n.id, n])).values()).map((note) => {

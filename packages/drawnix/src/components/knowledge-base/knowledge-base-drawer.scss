@@ -287,8 +287,8 @@
   }
 
   &__dir--selected > &__dir-row {
-    background-color: var(--td-brand-color-light, #ecf2fe);
-    color: var(--td-brand-color, #0052d9);
+    background-color: var(--td-warning-color-1, #fff3e8);
+    color: var(--td-warning-color, #ed7b2f);
   }
 
   &__expand-btn {
@@ -356,7 +356,7 @@
     }
     
     &--selected {
-      background-color: var(--td-brand-color-light, #ecf2fe);
+      background-color: var(--td-warning-color-1, #fff3e8);
       
       &::before {
         content: '';
@@ -365,7 +365,7 @@
         top: 0;
         bottom: 0;
         width: 3px;
-        background-color: var(--td-brand-color, #0052d9);
+        background-color: var(--td-warning-color, #ed7b2f);
       }
     }
   }
@@ -455,6 +455,39 @@
       background-color: var(--td-error-color-1, #fdecee);
       color: var(--td-error-color, #d54941);
     }
+  }
+
+  // 系统内置 Skill 虚拟笔记行
+  &__note-row--system {
+    background-color: var(--td-bg-color-secondarycontainer, #f5f5f5);
+
+    .kb-tree__note-icon {
+      color: var(--td-warning-color, #ed7b2f);
+    }
+
+    &:hover {
+      background-color: var(--td-bg-color-container-hover, #f3f3f3);
+    }
+
+    &.kb-tree__note-row--selected {
+      background-color: var(--td-warning-color-1, #fff3e8);
+    }
+  }
+
+  // 系统 badge
+  &__system-badge {
+    display: inline-block;
+    margin-left: 6px;
+    padding: 0 5px;
+    height: 16px;
+    line-height: 16px;
+    font-size: 10px;
+    border-radius: 3px;
+    background-color: var(--td-warning-color-1, #fff3e8);
+    color: var(--td-warning-color, #ed7b2f);
+    border: 1px solid var(--td-warning-color-3, #fac18a);
+    vertical-align: middle;
+    font-weight: 500;
   }
 }
 

@@ -45,6 +45,8 @@ export const LS_KEYS = {
   KB_SORT_PREFERENCE: 'aitu:kb:sort-preference',
   /** 知识库抽屉宽度 */
   KB_DRAWER_WIDTH: 'aitu:kb:drawer-width',
+  /** 知识库已被用户删除的默认目录名称列表（JSON 数组） */
+  KB_DELETED_DEFAULT_DIRS: 'aitu:kb:deleted-default-dirs',
 
   // ---- 迁移标记 ----
   /** 数据库清理完成标记 */

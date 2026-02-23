@@ -7,6 +7,7 @@
  */
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { SkillDSLParser } from '../ai-input-bar/skill-dsl-parser';
 import {
   Volume2,
   VolumeX,
@@ -18,6 +19,7 @@ import {
   Calendar,
   ExternalLink,
   BookOpen,
+  Lock,
 } from 'lucide-react';
 import { MarkdownEditor, MarkdownEditorRef } from '../MarkdownEditor';
 import { KBTagSelector } from './KBTagSelector';
@@ -30,6 +32,10 @@ interface KBNoteEditorProps {
   note: KBNote | null;
   allTags: KBTagWithCount[];
   noteTags: KBTag[];
+  /** 是否只读模式（系统内置 Skill 笔记） */
+  readOnly?: boolean;
+  /** 是否在 Skill 目录下（用于显示 DSL 解析状态提示） */
+  isSkillDirectory?: boolean;
   onUpdateNote: (id: string, updates: { title?: string; content?: string }) => void;
   onSetNoteTags: (noteId: string, tagIds: string[]) => void;
   onCreateTag: (name: string) => Promise<KBTag>;
@@ -49,12 +55,17 @@ export const KBNoteEditor: React.FC<KBNoteEditorProps> = ({
   note,
   allTags,
   noteTags,
+  readOnly = false,
+  isSkillDirectory = false,
   onUpdateNote,
   onSetNoteTags,
   onCreateTag,
 }) => {
   const [title, setTitle] = useState('');
   const [metadataCollapsed, setMetadataCollapsed] = useState(false);
+  /** DSL 解析状态：null=不显示, true=符合规范, false=不符合规范 */
+  const [isDSLContent, setIsDSLContent] = useState<boolean | null>(null);
+  const dslCheckTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const editorRef = useRef<MarkdownEditorRef>(null);
   const currentNoteIdRef = useRef<string | null>(null);
@@ -69,17 +80,25 @@ export const KBNoteEditor: React.FC<KBNoteEditorProps> = ({
   const metadata = (note as any)?.metadata;
   const hasSourceInfo = metadata && (metadata.sourceUrl || metadata.author || metadata.domain);
 
-  // 切换笔记时重置标题和语音
+  // 切换笔记时重置标题、语音和 DSL 状态
   useEffect(() => {
     if (note) {
       setTitle(note.title);
       currentNoteIdRef.current = note.id;
+      // 切换笔记时立即检测 DSL 状态
+      if (isSkillDirectory && !readOnly) {
+        const content = note.content || '';
+        setIsDSLContent(content.trim() ? SkillDSLParser.isDSLContent(content) : null);
+      } else {
+        setIsDSLContent(null);
+      }
     } else {
       setTitle('');
       currentNoteIdRef.current = null;
+      setIsDSLContent(null);
     }
     stop();
-  }, [note?.id, stop]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [note?.id, stop, isSkillDirectory, readOnly]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 标题变化时防抖保存
   const handleTitleChange = useCallback(
@@ -94,7 +113,7 @@ export const KBNoteEditor: React.FC<KBNoteEditorProps> = ({
     [note, onUpdateNote]
   );
 
-  // 内容变化时防抖保存
+  // 内容变化时防抖保存，并在 Skill 目录下检测 DSL 状态
   const handleContentChange = useCallback(
     (content: string) => {
       if (!note) return;
@@ -102,8 +121,20 @@ export const KBNoteEditor: React.FC<KBNoteEditorProps> = ({
       saveTimeoutRef.current = setTimeout(() => {
         onUpdateNote(note.id, { content });
       }, 500);
+
+      // Skill 目录下：debounce 500ms 检测 DSL 规范
+      if (isSkillDirectory && !readOnly) {
+        if (dslCheckTimeoutRef.current) clearTimeout(dslCheckTimeoutRef.current);
+        dslCheckTimeoutRef.current = setTimeout(() => {
+          if (!content.trim()) {
+            setIsDSLContent(null);
+          } else {
+            setIsDSLContent(SkillDSLParser.isDSLContent(content));
+          }
+        }, 500);
+      }
     },
-    [note, onUpdateNote]
+    [note, onUpdateNote, isSkillDirectory, readOnly]
   );
 
   // 标签变化
@@ -150,6 +181,7 @@ export const KBNoteEditor: React.FC<KBNoteEditorProps> = ({
   useEffect(() => {
     return () => {
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+      if (dslCheckTimeoutRef.current) clearTimeout(dslCheckTimeoutRef.current);
     };
   }, []);
 
@@ -170,14 +202,22 @@ export const KBNoteEditor: React.FC<KBNoteEditorProps> = ({
   }
 
   return (
-    <div className="kb-note-editor">
+    <div className={`kb-note-editor ${readOnly ? 'kb-note-editor--readonly' : ''}`}>
+      {/* 只读模式提示条 */}
+      {readOnly && (
+        <div className="kb-note-editor__readonly-banner">
+          <Lock size={14} />
+          <span>系统内置 Skill，不可修改</span>
+        </div>
+      )}
       {/* 标题行 */}
       <div className="kb-note-editor__title-row">
         <input
           className="kb-note-editor__title"
           value={title}
-          onChange={(e) => handleTitleChange(e.target.value)}
+          onChange={(e) => !readOnly && handleTitleChange(e.target.value)}
           placeholder="笔记标题"
+          readOnly={readOnly}
         />
         <div className="kb-note-editor__actions">
           {isSupported && (
@@ -323,11 +363,22 @@ export const KBNoteEditor: React.FC<KBNoteEditorProps> = ({
         <MarkdownEditor
           ref={editorRef}
           markdown={note.content}
-          onChange={handleContentChange}
+          onChange={readOnly ? undefined : handleContentChange}
           placeholder="开始写点什么..."
-          showModeSwitch={true}
+          showModeSwitch={!readOnly}
+          readOnly={readOnly}
         />
       </div>
+
+      {/* DSL 解析状态提示条（仅在 Skill 目录且非只读时显示） */}
+      {isSkillDirectory && !readOnly && isDSLContent !== null && (
+        <div className={`kb-note-editor__dsl-status ${isDSLContent ? 'kb-note-editor__dsl-status--valid' : 'kb-note-editor__dsl-status--fallback'}`}>
+          {isDSLContent
+            ? '✓ 已识别为工作流 DSL（正则解析），将直接执行'
+            : '⚡ 将由 AI 解析为工作流（大模型解析）'
+          }
+        </div>
+      )}
     </div>
   );
 };

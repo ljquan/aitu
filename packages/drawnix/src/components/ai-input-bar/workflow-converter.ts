@@ -16,6 +16,11 @@ import {
   generateReferenceImagesPrompt,
   buildStructuredUserMessage,
 } from '../../services/agent';
+import type { SystemSkill } from '../../constants/skills';
+import { SKILL_AUTO_ID, isSystemSkillId, findSystemSkillById } from '../../constants/skills';
+import { SkillDSLParser } from './skill-dsl-parser';
+import { SkillLLMParser } from './skill-llm-parser';
+import type { SkillDSLVariables } from './skill-dsl.types';
 
 /**
  * 工作流步骤执行选项（批量参数等）
@@ -68,7 +73,9 @@ export interface WorkflowDefinition {
   /** 工作流描述 */
   description: string;
   /** 场景类型 */
-  scenarioType: 'direct_generation' | 'agent_flow';
+  scenarioType: 'direct_generation' | 'agent_flow' | 'skill_flow';
+  /** 选中的 Skill ID（skill_flow 时有值） */
+  skillId?: string;
   /** 生成类型 */
   generationType: GenerationType;
   /** 工作流状态 */
@@ -99,6 +106,8 @@ export interface WorkflowDefinition {
     referenceImages?: string[];
     /** 选中元素的分类信息 */
     selection: SelectionInfo;
+    /** 解析方式标记（用于调试和数据分析） */
+    parseMethod?: 'regex' | 'llm' | 'agent_fallback';
   };
   /** 创建时间 */
   createdAt: number;
@@ -362,6 +371,245 @@ export function convertAgentFlowToWorkflow(
       duration,
       referenceImages: referenceImages.length > 0 ? referenceImages : undefined,
       selection,
+    },
+    createdAt: Date.now(),
+  };
+}
+
+/**
+ * 场景5: 将 Skill 流程转换为工作流定义
+ *
+ * - 系统内置 Skill：跳过 ai_analyze，直接构建对应 MCP 工具步骤（高性能路径）
+ * - 自定义 Skill：按优先级选择解析路径：
+ *   1. 正则解析（SkillDSLParser）→ 成功则直接使用
+ *   2. 大模型解析（SkillLLMParser）→ 成功则使用
+ *   3. Agent 工作流降级（注入 Skill 内容作为系统提示词）
+ *
+ * @param params - 解析后的生成参数
+ * @param skill - Skill 定义（系统内置或用户自定义）
+ * @param referenceImages - 参考图片 URL 列表
+ * @param onLLMParsing - LLM 解析路径触发时的回调（用于 UI 显示加载状态）
+ */
+export async function convertSkillFlowToWorkflow(
+  params: ParsedGenerationParams,
+  skill: SystemSkill | { id: string; name: string; type: 'user'; content: string },
+  referenceImages: string[] = [],
+  onLLMParsing?: () => void
+): Promise<WorkflowDefinition> {
+  const {
+    generationType,
+    modelId,
+    isModelExplicit,
+    prompt,
+    userInstruction,
+    rawInput,
+    count,
+    size,
+    duration,
+    selection,
+  } = params;
+
+  const workflowId = generateWorkflowId();
+
+  // 系统内置 Skill：直接构建 MCP 工具步骤，跳过 ai_analyze（高性能路径）
+  if (skill.type === 'system') {
+    const systemSkill = skill as SystemSkill;
+    const steps: WorkflowStep[] = [
+      {
+        id: `${workflowId}-step-1`,
+        mcp: systemSkill.mcpTool,
+        args: {
+          theme: userInstruction || prompt || rawInput,
+        },
+        options: {
+          mode: 'async',
+        },
+        description: `执行 ${systemSkill.name}`,
+        status: 'pending',
+      },
+    ];
+
+    return {
+      id: workflowId,
+      name: systemSkill.name,
+      description: `使用「${systemSkill.name}」Skill 生成内容`,
+      scenarioType: 'skill_flow',
+      skillId: systemSkill.id,
+      generationType,
+      steps,
+      metadata: {
+        prompt,
+        userInstruction,
+        rawInput,
+        modelId,
+        isModelExplicit,
+        count,
+        size,
+        duration,
+        referenceImages: referenceImages.length > 0 ? referenceImages : undefined,
+        selection,
+      },
+      createdAt: Date.now(),
+    };
+  }
+
+  // 自定义 Skill：按优先级选择解析路径
+  const userSkill = skill as { id: string; name: string; type: 'user'; content: string };
+
+  // 用户输入文本（用于自动注入到工具的主要文本参数）
+  const userInputText = userInstruction || prompt || rawInput;
+
+  // 构建 DSL 变量（保留兼容性）
+  const dslVariables: SkillDSLVariables = {
+    input: userInputText,
+    count,
+    size,
+    model: modelId,
+  };
+
+  // 路径1：正则解析（SkillDSLParser）
+  // 传入 userInputText，解析器会自动将其注入到缺失的主要文本参数（theme/prompt 等）
+  const regexResult = SkillDSLParser.parse(userSkill.content, dslVariables, workflowId, userInputText);
+  if (regexResult) {
+    return {
+      id: workflowId,
+      name: `${userSkill.name} Skill`,
+      description: `使用「${userSkill.name}」自定义 Skill 生成内容`,
+      scenarioType: 'skill_flow',
+      skillId: userSkill.id,
+      generationType,
+      steps: regexResult.steps,
+      metadata: {
+        prompt,
+        userInstruction,
+        rawInput,
+        modelId,
+        isModelExplicit,
+        count,
+        size,
+        duration,
+        referenceImages: referenceImages.length > 0 ? referenceImages : undefined,
+        selection,
+        parseMethod: 'regex',
+      },
+      createdAt: Date.now(),
+    };
+  }
+
+  // 路径2：大模型解析（SkillLLMParser）
+  // 笔记内容为空时直接跳过 LLM 解析
+  if (userSkill.content && userSkill.content.trim()) {
+    // 通知 UI 显示 "AI 正在解析工作流..." 加载状态
+    onLLMParsing?.();
+
+    const llmResult = await SkillLLMParser.parse(userSkill.content, dslVariables, workflowId);
+    if (llmResult) {
+      return {
+        id: workflowId,
+        name: `${userSkill.name} Skill`,
+        description: `使用「${userSkill.name}」自定义 Skill 生成内容`,
+        scenarioType: 'skill_flow',
+        skillId: userSkill.id,
+        generationType,
+        steps: llmResult.steps,
+        metadata: {
+          prompt,
+          userInstruction,
+          rawInput,
+          modelId,
+          isModelExplicit,
+          count,
+          size,
+          duration,
+          referenceImages: referenceImages.length > 0 ? referenceImages : undefined,
+          selection,
+          parseMethod: 'llm',
+        },
+        createdAt: Date.now(),
+      };
+    }
+  }
+
+  // 路径3：Agent 工作流降级（注入 Skill 内容作为系统提示词）
+  const agentContext = {
+    userInstruction,
+    rawInput,
+    model: {
+      id: modelId,
+      type: generationType as 'image' | 'video',
+      isExplicit: isModelExplicit,
+    },
+    params: {
+      count,
+      size,
+      duration,
+    },
+    selection,
+    finalPrompt: prompt,
+  };
+
+  const allReferenceImages = [
+    ...(selection.images || []),
+    ...(selection.graphics || []),
+  ];
+
+  // 在系统提示词中注入 Skill 笔记内容
+  let systemPrompt = generateSystemPrompt();
+  if (userSkill.content && userSkill.content.trim()) {
+    systemPrompt += `\n\n## 当前激活的 Skill：${userSkill.name}\n\n${userSkill.content}`;
+  }
+  if (allReferenceImages.length > 0) {
+    systemPrompt += generateReferenceImagesPrompt(
+      allReferenceImages.length,
+      selection.imageDimensions
+    );
+  }
+
+  const userMessage = buildStructuredUserMessage(agentContext);
+
+  const messages = [
+    { role: 'system' as const, content: systemPrompt },
+    { role: 'user' as const, content: userMessage },
+  ];
+
+  const steps: WorkflowStep[] = [
+    {
+      id: `${workflowId}-step-analyze`,
+      mcp: 'ai_analyze',
+      args: {
+        context: agentContext,
+        messages,
+        referenceImages: allReferenceImages.length > 0 ? allReferenceImages : undefined,
+        textModel: modelId,
+      },
+      options: {
+        mode: 'async',
+      },
+      description: `AI 分析用户意图（Skill: ${userSkill.name}）`,
+      status: 'pending',
+    },
+  ];
+
+  return {
+    id: workflowId,
+    name: `${userSkill.name} Skill`,
+    description: `使用「${userSkill.name}」自定义 Skill 生成内容`,
+    scenarioType: 'skill_flow',
+    skillId: userSkill.id,
+    generationType,
+    steps,
+    metadata: {
+      prompt,
+      userInstruction,
+      rawInput,
+      modelId,
+      isModelExplicit,
+      count,
+      size,
+      duration,
+      referenceImages: referenceImages.length > 0 ? referenceImages : undefined,
+      selection,
+      parseMethod: 'agent_fallback',
     },
     createdAt: Date.now(),
   };

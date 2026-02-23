@@ -811,6 +811,59 @@ $vip-color: #E91E63;
     }
   }
 
+  // Skill Dropdown
+  .skill-dropdown {
+    position: relative;
+    display: inline-flex;
+    flex-shrink: 0;
+
+    &__trigger {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      padding: 4px 8px;
+      background: transparent;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      color: $text-dark;
+      font-size: 13px;
+      font-weight: 500;
+      white-space: nowrap;
+
+      &:hover:not(:disabled) {
+        background: rgba($orange-primary, 0.1);
+      }
+
+      &--open {
+        background: rgba($orange-primary, 0.15);
+      }
+    }
+
+    &__icon-prefix {
+      color: $orange-primary;
+      display: flex;
+      align-items: center;
+      font-weight: 600;
+      margin-right: 1px;
+    }
+
+    &__label {
+      color: $gray-dark;
+    }
+
+    &__chevron {
+      color: $gray-medium;
+      transition: transform 0.2s ease;
+      margin-left: 1px;
+
+      &--open {
+        transform: rotate(180deg);
+      }
+    }
+  }
+
   // Count Dropdown
   .count-dropdown {
     position: relative;
@@ -1076,7 +1129,7 @@ $vip-color: #E91E63;
       }
     }
 
-    .generation-type-dropdown, .count-dropdown {
+    .generation-type-dropdown, .count-dropdown, .skill-dropdown {
       &__trigger {
         color: var(--color-gray-20, #ccc);
         
@@ -1488,7 +1541,8 @@ $vip-color: #E91E63;
 
     // 下拉菜单调整
     .generation-type-dropdown,
-    .count-dropdown {
+    .count-dropdown,
+    .skill-dropdown {
       &__trigger {
         padding: 4px 6px;
         font-size: 12px;
@@ -1547,7 +1601,8 @@ $vip-color: #E91E63;
 
     // 隐藏一些次要元素节省空间
     .generation-type-dropdown__label,
-    .count-dropdown__label {
+    .count-dropdown__label,
+    .skill-dropdown__label {
       display: none;
     }
   }
@@ -1831,6 +1886,103 @@ $vip-color: #E91E63;
   color: $orange-primary;
 }
 
+// Skill Dropdown Menu (portaled to body)
+.skill-dropdown__menu {
+  background: var(--island-bg-color, #fff);
+  border: 1px solid $gray-light;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  padding: 0;
+  min-width: 120px;
+  overflow: hidden;
+}
+
+.skill-dropdown__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  color: $gray-dark;
+  border-bottom: 1px solid $gray-light;
+  background: #FAFAFA;
+}
+
+.skill-dropdown__list {
+  padding: 4px;
+}
+
+.skill-dropdown__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.1s ease;
+  font-size: 13px;
+  white-space: nowrap;
+  color: $text-dark;
+
+  &:hover,
+  &--highlighted {
+    background: $gray-light;
+  }
+
+  &--selected {
+    background: rgba($orange-primary, 0.08);
+    color: $orange-primary;
+    font-weight: 500;
+
+    &:hover,
+    &.skill-dropdown__item--highlighted {
+      background: rgba($orange-primary, 0.12);
+    }
+  }
+}
+
+.skill-dropdown__item-label {
+  flex: 1;
+}
+
+.skill-dropdown__item-badge {
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: rgba($orange-primary, 0.1);
+  color: $orange-primary;
+  font-weight: 500;
+  margin-left: auto;
+  margin-right: 4px;
+}
+
+.skill-dropdown__item-check {
+  color: $orange-primary;
+  flex-shrink: 0;
+}
+
+.skill-dropdown__divider {
+  height: 1px;
+  background: $gray-light;
+  margin: 4px 0;
+}
+
+.skill-dropdown__add-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 13px;
+  color: $orange-primary;
+  transition: background 0.1s ease;
+
+  &:hover {
+    background: rgba($orange-primary, 0.08);
+  }
+}
+
 // Count Dropdown Menu (portaled to body)
 .count-dropdown__menu {
   background: var(--island-bg-color, #fff);
@@ -1895,21 +2047,24 @@ $vip-color: #E91E63;
 // 深色模式下的 Portal 下拉菜单样式（使用应用级别主题检测，与其他组件一致）
 :root[data-theme='dark'] {
   .generation-type-dropdown__menu,
-  .count-dropdown__menu {
+  .count-dropdown__menu,
+  .skill-dropdown__menu {
     background: var(--color-surface-high, #2a2a2a);
     border-color: var(--color-border, #444);
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
   }
 
   .generation-type-dropdown__header,
-  .count-dropdown__header {
+  .count-dropdown__header,
+  .skill-dropdown__header {
     background: var(--color-surface-mid, #333);
     border-bottom-color: var(--color-border, #444);
     color: var(--color-gray-50, #999);
   }
 
   .generation-type-dropdown__item,
-  .count-dropdown__item {
+  .count-dropdown__item,
+  .skill-dropdown__item {
     color: var(--color-gray-20, #ccc);
 
     &:hover,
@@ -1923,9 +2078,32 @@ $vip-color: #E91E63;
 
       &:hover,
       &.generation-type-dropdown__item--highlighted,
-      &.count-dropdown__item--highlighted {
+      &.count-dropdown__item--highlighted,
+      &.skill-dropdown__item--highlighted {
         background: rgba($orange-primary, 0.2);
       }
     }
+  }
+
+  .skill-dropdown__header {
+    background: var(--color-surface-mid, #333);
+    border-bottom-color: var(--color-border, #444);
+    color: var(--color-gray-50, #999);
+  }
+
+  .skill-dropdown__divider {
+    background: var(--color-border, #444);
+  }
+
+  .skill-dropdown__add-btn {
+    color: $orange-primary;
+
+    &:hover {
+      background: rgba($orange-primary, 0.15);
+    }
+  }
+
+  .skill-dropdown__item-badge {
+    background: rgba($orange-primary, 0.2);
   }
 }

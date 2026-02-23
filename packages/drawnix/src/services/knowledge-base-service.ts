@@ -84,6 +84,28 @@ export function _getStoreInstances() {
 
 let defaultDirsInitialized = false;
 
+/** 读取用户已主动删除的默认目录名称集合 */
+function getDeletedDefaultDirNames(): Set<string> {
+  try {
+    const raw = localStorage.getItem(LS_KEYS.KB_DELETED_DEFAULT_DIRS);
+    if (raw) return new Set(JSON.parse(raw) as string[]);
+  } catch {
+    // ignore
+  }
+  return new Set();
+}
+
+/** 将目录名称记录到已删除默认目录列表 */
+function markDefaultDirAsDeleted(name: string): void {
+  try {
+    const deleted = getDeletedDefaultDirNames();
+    deleted.add(name);
+    localStorage.setItem(LS_KEYS.KB_DELETED_DEFAULT_DIRS, JSON.stringify([...deleted]));
+  } catch {
+    // ignore
+  }
+}
+
 async function ensureDefaultDirectories(): Promise<void> {
   if (defaultDirsInitialized) return;
 
@@ -91,15 +113,18 @@ async function ensureDefaultDirectories(): Promise<void> {
   const defaultDirNames = new Set(KB_DEFAULT_DIRECTORIES.map((d) => d.name));
   const existingMap = new Map(dirs.map((d) => [d.name, d]));
   const now = Date.now();
+  // 用户已主动删除的默认目录，不再重新创建
+  const deletedByUser = getDeletedDefaultDirNames();
 
-  // 1. 确保默认目录存在且状态正确
+  // 1. 确保默认目录存在且状态正确（跳过用户已删除的）
   for (const def of KB_DEFAULT_DIRECTORIES) {
+    if (deletedByUser.has(def.name)) continue;
     const existing = existingMap.get(def.name);
     if (existing) {
       // 如果已存在但不是默认，更新为默认
       if (!existing.isDefault) {
         existing.isDefault = true;
-        existing.order = def.order; // 更新排序
+        existing.order = def.order;
         existing.updatedAt = now;
         await directoriesStore.setItem(existing.id, existing);
       }
@@ -117,12 +142,20 @@ async function ensureDefaultDirectories(): Promise<void> {
     }
   }
 
-  // 2. 将不再是默认的目录（如"收集"）取消默认状态
+  // 2. 删除不再是默认的旧版目录（如旧版"收集"），若有笔记则仅取消默认状态
   for (const dir of dirs) {
     if (dir.isDefault && !defaultDirNames.has(dir.name)) {
-      dir.isDefault = false;
-      dir.updatedAt = now;
-      await directoriesStore.setItem(dir.id, dir);
+      // 检查该目录下是否有笔记
+      const notes = await getNoteMetasByDirectory(dir.id);
+      if (notes.length === 0) {
+        // 空目录直接删除，彻底清除旧默认目录
+        await directoriesStore.removeItem(dir.id);
+      } else {
+        // 有笔记则仅取消默认状态，保留目录
+        dir.isDefault = false;
+        dir.updatedAt = now;
+        await directoriesStore.setItem(dir.id, dir);
+      }
     }
   }
 
@@ -214,7 +247,10 @@ export async function duplicateDirectory(id: string): Promise<KBDirectory> {
 export async function deleteDirectory(id: string): Promise<void> {
   const dir = await getDirectoryById(id);
   if (!dir) return;
-  if (dir.isDefault) throw new Error('不能删除默认目录');
+  // 如果是默认目录，记录到已删除列表，允许删除
+  if (dir.isDefault) {
+    markDefaultDirAsDeleted(dir.name);
+  }
 
   // Cascade delete notes in this directory
   const notes = await getNoteMetasByDirectory(id);

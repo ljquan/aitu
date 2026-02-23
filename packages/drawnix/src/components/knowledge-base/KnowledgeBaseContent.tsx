@@ -20,8 +20,9 @@ import {
   FolderPlus,
   Tags,
 } from 'lucide-react';
-import { KBUnifiedTree } from './KBUnifiedTree';
+import { KBUnifiedTree, SYSTEM_SKILL_NOTE_PREFIX } from './KBUnifiedTree';
 import { KBNoteEditor } from './KBNoteEditor';
+import { SYSTEM_SKILLS } from '../../constants/skills';
 import { KBTagFilterDropdown } from './KBTagFilterDropdown';
 import { KBTagManagementDialog } from './KBTagManagementDialog';
 import { KBRelatedNotes } from './KBRelatedNotes';
@@ -179,6 +180,40 @@ const KnowledgeBaseContent: React.FC = () => {
         const usage = await knowledgeBaseService.getStorageUsage();
         setStorageUsage(usage);
       } catch { /* ignore */ }
+
+      // 检查是否有待处理的导航意图（由 AIInputBar 的 handleAddSkill 设置）
+      const pending = (window as any).__kbPendingNavigation;
+      if (pending) {
+        (window as any).__kbPendingNavigation = null;
+        const { directoryName, autoCreateNote: shouldCreate } = pending;
+        if (directoryName) {
+          const dirs = await knowledgeBaseService.getAllDirectories();
+          const targetDir = dirs.find((d: { name: string }) => d.name === directoryName);
+          if (targetDir) {
+            setSelectedDirId(targetDir.id);
+            setExpandedDirIds((prev) => {
+              const next = new Set(prev);
+              next.add(targetDir.id);
+              return next;
+            });
+            if (shouldCreate) {
+              // 直接创建笔记，避免闭包问题
+              const defaultTitle = directoryName === 'Skill' ? '新Skill' : '新笔记';
+              const note = await knowledgeBaseService.createNote(defaultTitle, targetDir.id);
+              await refreshData();
+              setExpandedDirIds((prev) => {
+                const next = new Set(prev);
+                next.add(targetDir.id);
+                return next;
+              });
+              setSelectedNoteId(note.id);
+              const fullNote = await knowledgeBaseService.getNoteById(note.id);
+              setCurrentNote(fullNote);
+              setNoteTags([]);
+            }
+          }
+        }
+      }
     };
     init();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -201,13 +236,14 @@ const KnowledgeBaseContent: React.FC = () => {
     const uniqueTags = Array.from(new Map(tags.map((t) => [t.id, t])).values());
     setAllTags(uniqueTags);
 
-    if (!selectedDirId && uniqueDirs.length > 0) {
+    // 只有在没有任何选中状态时才自动激活第一个目录（初始化场景）
+    if (!selectedDirId && !selectedNoteId && uniqueDirs.length > 0) {
       setSelectedDirId(uniqueDirs[0].id);
       setExpandedDirIds(new Set([uniqueDirs[0].id]));
     }
 
     await refreshNoteTagsMap(uniqueNotes);
-  }, [selectedDirId]);
+  }, [selectedDirId, selectedNoteId]);
 
   const refreshNoteTagsMap = useCallback(async (notes: KBNoteMeta[]) => {
     try {
@@ -339,11 +375,6 @@ const KnowledgeBaseContent: React.FC = () => {
     const dir = directories.find((d) => d.id === id);
     if (!dir) return;
 
-    if (dir.isDefault) {
-      MessagePlugin.warning('默认目录不能被删除');
-      return;
-    }
-
     const confirmDialog = DialogPlugin.confirm({
       header: '确认删除目录',
       body: `确定要删除目录 "${dir.name}" 及其下的所有笔记吗？此操作不可撤销。`,
@@ -381,35 +412,67 @@ const KnowledgeBaseContent: React.FC = () => {
   const handleToggleExpand = useCallback((id: string) => {
     setExpandedDirIds((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
       return next;
     });
   }, []);
 
-  // Note handlers
   const handleSelectNote = useCallback(async (id: string) => {
     setSelectedNoteId(id);
+    // 选中笔记时清空目录激活态，保持激活态互斥
+    setSelectedDirId(null);
+    setNoteTags(noteTagsMap[id] || []);
+
+    // 系统内置 Skill 虚拟笔记：构造虚拟 KBNote 对象，不查询 IndexedDB
+    if (id.startsWith(SYSTEM_SKILL_NOTE_PREFIX)) {
+      const skillId = id.slice(SYSTEM_SKILL_NOTE_PREFIX.length);
+      const skill = SYSTEM_SKILLS.find((s) => s.id === skillId);
+      if (skill) {
+        const virtualNote: KBNote = {
+          id,
+          title: skill.name,
+          content: skill.description || '',
+          directoryId: '',
+          createdAt: 0,
+          updatedAt: 0,
+        };
+        setCurrentNote(virtualNote);
+        setNoteTags([]);
+      }
+      return;
+    }
+
     const note = await knowledgeBaseService.getNoteById(id);
     setCurrentNote(note);
     if (note) {
       const tags = await knowledgeBaseService.getTagsForNote(note.id);
       setNoteTags(tags);
+      // 仅展开笔记所在目录，不激活目录（激活态互斥：选中笔记时目录不高亮）
+      setExpandedDirIds((prev) => {
+        const next = new Set(prev);
+        next.add(note.directoryId);
+        return next;
+      });
     }
-  }, []);
+  }, [directories, noteTagsMap]);
 
   const handleCreateNote = useCallback(async (directoryId: string) => {
-    // 生成不重复的默认标题
+    // 生成不重复的默认标题（Skill 目录使用「新Skill」，其他目录使用「新笔记」）
     const existingTitles = new Set(
       allNotes
         .filter(n => n.directoryId === directoryId)
         .map(n => n.title)
     );
-    
-    let title = '新笔记';
+    const dir = directories.find(d => d.id === directoryId);
+    const baseTitle = dir?.name === 'Skill' ? '新Skill' : '新笔记';
+    let title = baseTitle;
     let counter = 1;
     while (existingTitles.has(title)) {
-      title = `新笔记 ${counter}`;
+      title = `${baseTitle} ${counter}`;
       counter++;
     }
 
@@ -421,7 +484,7 @@ const KnowledgeBaseContent: React.FC = () => {
       return next;
     });
     handleSelectNote(note.id);
-  }, [refreshData, handleSelectNote, allNotes]);
+  }, [refreshData, handleSelectNote, allNotes, directories]);
 
   const handleUpdateNote = useCallback(
     async (id: string, updates: { title?: string; content?: string }) => {
@@ -464,6 +527,12 @@ const KnowledgeBaseContent: React.FC = () => {
   }, [refreshData]);
 
   const handleDeleteNote = useCallback(async (id: string) => {
+    // 系统内置 Skill 笔记不可删除
+    if (id.startsWith(SYSTEM_SKILL_NOTE_PREFIX)) {
+      MessagePlugin.warning('系统内置 Skill，不可删除');
+      return;
+    }
+
     const note = allNotes.find((n) => n.id === id);
     if (!note) return;
 
@@ -498,6 +567,44 @@ const KnowledgeBaseContent: React.FC = () => {
       initializedSelectionRef.current = true;
     }
   }, [filteredNotes, handleSelectNote]);
+
+  // 监听 kb:navigate 事件，支持从外部（如 SkillDropdown 的「添加 Skill」）定位到指定目录并新建笔记
+  useEffect(() => {
+    const handleNavigate = async (e: Event) => {
+      const { directoryName, autoCreateNote: shouldCreate } = (e as CustomEvent<{
+        directoryName?: string;
+        autoCreateNote?: boolean;
+      }>).detail;
+
+      if (!directoryName) return;
+
+      // 清除 pending navigation（避免组件重新挂载时重复处理）
+      if ((window as any).__kbPendingNavigation) {
+        (window as any).__kbPendingNavigation = null;
+      }
+
+      // 重新加载目录列表，确保数据最新
+      const dirs = await knowledgeBaseService.getAllDirectories();
+      const targetDir = dirs.find((d) => d.name === directoryName);
+      if (!targetDir) return;
+
+      // 选中目录并展开
+      setSelectedDirId(targetDir.id);
+      setExpandedDirIds((prev) => {
+        const next = new Set(prev);
+        next.add(targetDir.id);
+        return next;
+      });
+
+      // 如果需要自动新建笔记
+      if (shouldCreate) {
+        await handleCreateNote(targetDir.id);
+      }
+    };
+
+    window.addEventListener('kb:navigate', handleNavigate);
+    return () => window.removeEventListener('kb:navigate', handleNavigate);
+  }, [handleCreateNote]);
 
   // Tag handlers
   const handleSetNoteTags = useCallback(
@@ -753,7 +860,11 @@ const KnowledgeBaseContent: React.FC = () => {
             selectedDirId={selectedDirId}
             selectedNoteId={selectedNoteId}
             expandedDirIds={expandedDirIds}
-            onSelectDir={setSelectedDirId}
+            onSelectDir={(id) => {
+              setSelectedDirId(id);
+              setSelectedNoteId(null);
+              setCurrentNote(null);
+            }}
             onToggleExpand={handleToggleExpand}
             onCreateDir={handleCreateDir}
             onRenameDir={handleRenameDir}
@@ -786,6 +897,10 @@ const KnowledgeBaseContent: React.FC = () => {
             note={currentNote}
             allTags={allTags}
             noteTags={noteTags}
+            readOnly={!!(selectedNoteId && selectedNoteId.startsWith(SYSTEM_SKILL_NOTE_PREFIX))}
+            isSkillDirectory={
+              !!(currentNote && directories.find(d => d.id === currentNote.directoryId)?.name === 'Skill')
+            }
             onUpdateNote={handleUpdateNote}
             onSetNoteTags={handleSetNoteTags}
             onCreateTag={handleCreateTag}
