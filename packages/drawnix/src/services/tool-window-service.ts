@@ -26,6 +26,8 @@ interface OpenToolOptions {
   autoMaximize?: boolean;
   /** 是否自动设置为常驻 */
   autoPin?: boolean;
+  /** 传递给工具组件的额外 props（如 initialNoteId） */
+  componentProps?: Record<string, unknown>;
 }
 
 /**
@@ -175,7 +177,11 @@ class ToolWindowService {
     
     if (existingState) {
       if (existingState.status === 'open') {
-        // 已经打开，WinBox 自身处理聚焦
+        // 已经打开，更新 componentProps 并聚焦（WinBox 自身处理聚焦）
+        if (options?.componentProps !== undefined) {
+          existingState.componentProps = options.componentProps;
+          this.notify();
+        }
         return;
       }
       // 从最小化或关闭状态恢复
@@ -186,6 +192,10 @@ class ToolWindowService {
       if (options?.autoMaximize) {
         existingState.autoMaximize = true;
       }
+      // 更新 componentProps
+      if (options?.componentProps !== undefined) {
+        existingState.componentProps = options.componentProps;
+      }
       // 更新常驻状态
       existingState.isPinned = this.pinnedToolIds.has(tool.id);
     } else {
@@ -195,6 +205,7 @@ class ToolWindowService {
         status: 'open',
         isPinned: this.pinnedToolIds.has(tool.id),
         autoMaximize: options?.autoMaximize,
+        componentProps: options?.componentProps,
       };
       this.toolStates.set(tool.id, newState);
     }

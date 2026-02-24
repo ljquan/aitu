@@ -144,3 +144,44 @@
   color: #94a3b8;
   font-style: italic;
 }
+
+/* ===== Card 标签贴内嵌 MarkdownEditor 样式 ===== */
+
+/* Card 内嵌 MarkdownEditor：去掉边框和背景，紧凑布局 */
+.collimind-markdown-editor.card-markdown-viewer {
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  overflow: hidden;
+  height: 100%;
+}
+
+/* Card 内容区 ProseMirror：减小内边距 */
+.collimind-markdown-editor.card-markdown-viewer .ProseMirror {
+  padding: 8px 12px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+/* ---- 只读模式：隐藏工具栏，禁用交互 ---- */
+.collimind-markdown-editor.card-markdown-viewer[data-readonly="true"] .milkdown-block-handle,
+.collimind-markdown-editor.card-markdown-viewer[data-readonly="true"] .crepe-toolbar,
+.collimind-markdown-editor.card-markdown-viewer[data-readonly="true"] .milkdown-slash-menu {
+  display: none !important;
+}
+
+.collimind-markdown-editor.card-markdown-viewer[data-readonly="true"] .milkdown {
+  pointer-events: none;
+  user-select: none;
+}
+
+/* ---- 编辑模式：正常显示工具栏，开启交互 ---- */
+.collimind-markdown-editor.card-markdown-viewer[data-readonly="false"] {
+  cursor: text;
+}
+
+/* 编辑模式下工具栏需要能浮出 Card 边界 */
+.collimind-markdown-editor.card-markdown-viewer[data-readonly="false"] .crepe-toolbar,
+.collimind-markdown-editor.card-markdown-viewer[data-readonly="false"] .milkdown-slash-menu {
+  z-index: 9999;
+}

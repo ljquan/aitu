@@ -161,11 +161,11 @@ export const BatchImageGenerationAdapter: React.FC<any> = (props) => {
  * 知识库适配器
  * 用于 WinBox 和画布场景
  */
-export const KnowledgeBaseAdapter: React.FC<any> = () => {
+export const KnowledgeBaseAdapter: React.FC<{ initialNoteId?: string | null }> = ({ initialNoteId }) => {
   return (
     <div className="tool-adapter-container" style={containerStyle}>
       <Suspense fallback={<LoadingFallback message="加载知识库..." />}>
-        <KnowledgeBaseContent />
+        <KnowledgeBaseContent initialNoteId={initialNoteId} />
       </Suspense>
     </div>
   );

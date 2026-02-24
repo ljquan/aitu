@@ -30,6 +30,8 @@ import type {
   ImageFillConfig,
 } from '../types/fill.types';
 import { isFillConfig, computeFallbackColor, getGradientPrimaryColor } from '../types/fill.types';
+import { isCardElement } from '../types/card.types';
+import { getSelectedElements } from '@plait/core';
 
 /**
  * 从填充值中提取颜色字符串
@@ -835,4 +837,20 @@ export const setFillType = (board: PlaitBoard, fillType: FillType) => {
       }
     },
   });
+};
+
+/**
+ * 设置 Card 元素的填充颜色
+ * 遍历所有选中的 Card 元素，更新其 fillColor 字段
+ */
+export const setCardFillColor = (board: PlaitBoard, fillColor: string): void => {
+  const elements = getSelectedElements(board);
+  for (const element of elements) {
+    if (isCardElement(element)) {
+      const index = board.children.findIndex((el: any) => el.id === element.id);
+      if (index !== -1) {
+        Transforms.setNode(board, { fillColor } as any, [index]);
+      }
+    }
+  }
 };

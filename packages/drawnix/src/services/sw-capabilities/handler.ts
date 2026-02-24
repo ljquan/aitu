@@ -63,6 +63,9 @@ export class SWCapabilitiesHandler {
       case 'canvas_insert':
         return this.handleCanvasInsert(args as unknown as CanvasInsertParams);
 
+      case 'insert_to_canvas':
+        return this.handleInsertToCanvas(args as unknown as CanvasInsertParams);
+
       case 'insert_mermaid':
         return this.handleMermaid(args as unknown as MermaidParams);
 
@@ -127,6 +130,99 @@ export class SWCapabilitiesHandler {
     const sortedWorkZones = allWorkZones.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
     // console.log('[SWCapabilities] Using most recent WorkZone:', sortedWorkZones[0]?.id);
     return sortedWorkZones[0] || null;
+  }
+
+  /**
+   * Handle insert_to_canvas operation
+   * 支持 markdown 文本解析为 Card 标签贴，图片/视频直接插入
+   */
+  private async handleInsertToCanvas(params: CanvasInsertParams): Promise<CapabilityResult> {
+    const board = boardRef;
+    if (!board) {
+      return { success: false, error: '画布未初始化', type: 'error' };
+    }
+
+    const { items, startPoint, verticalGap = 50 } = params;
+
+    if (!items || items.length === 0) {
+      return { success: false, error: '没有要插入的内容', type: 'error' };
+    }
+
+    try {
+      // 动态导入 markdown 解析工具
+      const { parseMarkdownToCards } = await import('../../utils/markdown-to-cards');
+      const { insertCardsToCanvas } = await import('../../utils/insert-cards');
+
+      let currentPoint: Point = startPoint || this.getInsertionPoint(board);
+      let insertedCount = 0;
+
+      for (const item of items) {
+        const { type, content } = item;
+
+        switch (type) {
+          case 'text': {
+            // 尝试解析为 Markdown Card 块
+            const cardBlocks = parseMarkdownToCards(content);
+            if (cardBlocks && cardBlocks.length > 0) {
+              const cardWidth = Math.round(window.innerWidth * 0.5);
+              insertCardsToCanvas(board, cardBlocks, currentPoint, cardWidth);
+              const cols = Math.min(cardBlocks.length, 3);
+              const rows = Math.ceil(cardBlocks.length / 3);
+              currentPoint = [currentPoint[0], currentPoint[1] + rows * (120 + 20) + verticalGap] as Point;
+            } else {
+              DrawTransforms.insertText(board, currentPoint, content);
+              currentPoint = [currentPoint[0], currentPoint[1] + 100 + verticalGap] as Point;
+            }
+            insertedCount++;
+            break;
+          }
+
+          case 'image':
+            await insertImageFromUrl(board, content, currentPoint, false, { width: 400, height: 400 }, false, true);
+            currentPoint = [currentPoint[0], currentPoint[1] + 400 + verticalGap] as Point;
+            insertedCount++;
+            break;
+
+          case 'video':
+            await insertVideoFromUrl(board, content, currentPoint);
+            currentPoint = [currentPoint[0], currentPoint[1] + 300 + verticalGap] as Point;
+            insertedCount++;
+            break;
+
+          case 'svg': {
+            const dataUrl = this.svgToDataUrl(content);
+            const imageItem = { url: dataUrl, width: 400, height: 400 };
+            DrawTransforms.insertImage(board, imageItem, currentPoint);
+            currentPoint = [currentPoint[0], currentPoint[1] + 400 + verticalGap] as Point;
+            insertedCount++;
+            break;
+          }
+        }
+      }
+
+      // 滚动到插入位置
+      const firstPoint = startPoint || this.getInsertionPoint(board);
+      requestAnimationFrame(() => {
+        scrollToPointIfNeeded(board, firstPoint);
+      });
+
+      // 触发生成完成事件
+      window.dispatchEvent(new CustomEvent('ai-generation-complete', {
+        detail: { type: 'text', success: true }
+      }));
+
+      return {
+        success: true,
+        data: { insertedCount },
+        type: 'canvas',
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        error: error.message || '插入失败',
+        type: 'error',
+      };
+    }
   }
 
   /**

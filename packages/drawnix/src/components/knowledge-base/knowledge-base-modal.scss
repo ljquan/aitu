@@ -1,0 +1,73 @@
+@import '../../styles/z-index.scss';
+
+// 知识库弹窗遮罩
+.kb-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  z-index: $z-dialog;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  box-sizing: border-box;
+}
+
+// 知识库弹窗主体
+.kb-modal {
+  display: flex;
+  flex-direction: column;
+  width: 90vw;
+  max-width: 1200px;
+  height: 85vh;
+  max-height: 900px;
+  background: var(--td-bg-color-container, #fff);
+  border-radius: 8px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
+  overflow: hidden;
+
+  // 标题栏
+  &__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 16px;
+    height: 48px;
+    border-bottom: 1px solid var(--td-component-border, #e7e7e7);
+    flex-shrink: 0;
+    background: var(--td-bg-color-container, #fff);
+  }
+
+  &__title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--td-text-color-primary, #333);
+  }
+
+  &__close {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    color: var(--td-text-color-secondary, #666);
+    border-radius: 4px;
+    transition: background-color 0.15s;
+
+    &:hover {
+      background-color: var(--td-bg-color-container-hover, #f3f3f3);
+      color: var(--td-text-color-primary, #333);
+    }
+  }
+
+  // 内容区（撑满剩余高度）
+  &__body {
+    flex: 1;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+}

@@ -419,6 +419,43 @@ export class WorkflowEngine {
           }
           // 保存工作流状态（包含新步骤）
           await workflowStorageWriter.saveWorkflow(workflow);
+          // 通知 UI 有新步骤被添加
+          this.emitEvent({
+            type: 'steps_added',
+            workflowId: workflow.id,
+            steps: workflow.steps.filter(s => s.status === 'pending'),
+          });
+        } else if (analyzeResult.content && analyzeResult.content.trim()) {
+          // 路径 C（角色扮演模式）：AI 返回纯文本，没有工具调用
+          // 自动添加 insert_to_canvas 步骤，将文本以 markdown 方式插入画布
+          const insertStepId = `${step.id}-insert-text`;
+          if (!workflow.steps.find(s => s.id === insertStepId)) {
+            // 将用户输入的 rawInput 作为一级标题，拼接在 AI 回复内容前面
+            const rawInput = workflow.metadata?.rawInput || '';
+            const titlePrefix = rawInput.trim() ? `# ${rawInput.trim()}\n\n` : '';
+            const insertStep: WorkflowStep = {
+              id: insertStepId,
+              mcp: 'insert_to_canvas',
+              args: {
+                items: [
+                  {
+                    type: 'text',
+                    content: titlePrefix + analyzeResult.content,
+                  },
+                ],
+              },
+              description: '将 AI 回复插入画布',
+              status: 'pending',
+            };
+            workflow.steps.push(insertStep);
+            await workflowStorageWriter.saveWorkflow(workflow);
+            // 通知 UI 有新步骤被添加
+            this.emitEvent({
+              type: 'steps_added',
+              workflowId: workflow.id,
+              steps: [insertStep],
+            });
+          }
         }
         break;
       }

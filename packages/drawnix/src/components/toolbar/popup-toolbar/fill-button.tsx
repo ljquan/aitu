@@ -16,6 +16,7 @@ import {
   setGradientFill,
   setImageFill,
   setFillType,
+  setCardFillColor,
 } from '../../../transforms/property';
 import { FillPanel } from '../../fill-panel';
 import type {
@@ -98,6 +99,8 @@ export const PopupFillButton: React.FC<PopupFillButtonProps> = ({
   const handleSolidChange = useCallback(
     (color: string) => {
       setFillColor(board, color);
+      // 同时处理 Card 元素的填充颜色
+      setCardFillColor(board, color);
     },
     [board]
   );

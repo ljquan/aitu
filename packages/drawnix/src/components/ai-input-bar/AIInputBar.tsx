@@ -52,6 +52,7 @@ import {
 import { BUILT_IN_TOOLS } from '../../constants/built-in-tools';
 import { initializeMCP, mcpRegistry } from '../../mcp';
 import { setCanvasBoard } from '../../services/canvas-operations/canvas-insertion';
+import { setCanvasBoard as setMcpCanvasBoard } from '../../mcp/tools/canvas-insertion';
 import { setBoard } from '../../mcp/tools/shared';
 import { setCapabilitiesBoard } from '../../services/sw-capabilities/handler';
 import { initializeLongVideoChainService } from '../../services/long-video-chain-service';
@@ -193,6 +194,7 @@ const SelectionWatcher: React.FC<{
   // 设置 canvas board 引用给 MCP 工具使用
   useEffect(() => {
     setCanvasBoard(board);
+    setMcpCanvasBoard(board);
     setBoard(board);
     setCapabilitiesBoard(board);
     gridImageService.setBoard(board);
@@ -202,6 +204,7 @@ const SelectionWatcher: React.FC<{
     }
     return () => {
       setCanvasBoard(null);
+      setMcpCanvasBoard(null);
       setBoard(null);
       setCapabilitiesBoard(null);
       gridImageService.setBoard(null);
@@ -1370,6 +1373,8 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
       const executeStep = async (step: typeof workflow.steps[0]) => {
         console.log('[AIInputBar] Executing step:', step.mcp, 'with mode:', step.options?.mode);
         const stepStartTime = Date.now();
+        // 记录执行前的动态步骤数量，用于判断 ai_analyze 是否触发了 onAddSteps
+        const pendingStepsBeforeExec = pendingNewSteps.length;
 
         // 更新步骤为运行中
         workflowControl.updateStep(step.id, 'running');
@@ -1404,6 +1409,34 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
           } else if (currentStepStatus === 'running') {
             // 同步模式且未被回调更新：标记为完成
             workflowControl.updateStep(step.id, 'completed', result.data, undefined, Date.now() - stepStartTime);
+
+            // 路径 C（角色扮演模式）：ai_analyze 返回纯文本，onAddSteps 未被调用
+            // 自动添加 insert_to_canvas 步骤，将文本以 markdown 方式插入画布
+            if (step.mcp === 'ai_analyze') {
+              const responseText = (result.data as { response?: string })?.response;
+              // 只有当 onAddSteps 没有被调用（没有新增步骤）且有文本内容时才插入
+              if (responseText && responseText.trim() && pendingNewSteps.length === pendingStepsBeforeExec) {
+                const insertStepId = `${step.id}-insert-text`;
+                // 将用户输入的 prompt 作为一级标题，拼接在 AI 回复内容前面
+                const titlePrefix = prompt && prompt.trim() ? `# ${prompt.trim()}\n\n` : '';
+                const insertStep = {
+                  id: insertStepId,
+                  mcp: 'insert_to_canvas',
+                  args: {
+                    items: [
+                      {
+                        type: 'text',
+                        content: titlePrefix + responseText,
+                      },
+                    ],
+                  },
+                  description: '将 AI 回复插入画布',
+                  status: 'pending' as const,
+                };
+                workflowControl.addSteps([insertStep]);
+                pendingNewSteps.push(insertStep);
+              }
+            }
           }
 
           return true; // 返回成功
@@ -1682,6 +1715,8 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
     // 执行单个步骤
     const executeStep = async (step: typeof workflowDefinition.steps[0]) => {
       const stepStartTime = Date.now();
+      // 记录执行前的动态步骤数量，用于判断 ai_analyze 是否触发了 onAddSteps
+      const pendingStepsBeforeExec = pendingNewStepsForRetry.length;
       workflowControl.updateStep(step.id, 'running');
       syncRetryUpdates();
 
@@ -1709,6 +1744,35 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
           workflowControl.updateStep(step.id, 'running', { taskId: result.taskId });
         } else if (currentStepStatus === 'running') {
           workflowControl.updateStep(step.id, 'completed', result.data, undefined, Date.now() - stepStartTime);
+
+          // 路径 C（角色扮演模式）：ai_analyze 返回纯文本，onAddSteps 未被调用
+          // 自动添加 insert_to_canvas 步骤，将文本以 markdown 方式插入画布
+          if (step.mcp === 'ai_analyze') {
+            const responseText = (result.data as { response?: string })?.response;
+            // 只有当 onAddSteps 没有被调用（没有新增步骤）且有文本内容时才插入
+            if (responseText && responseText.trim() && pendingNewStepsForRetry.length === pendingStepsBeforeExec) {
+              const insertStepId = `${step.id}-insert-text`;
+              // 将用户输入的 prompt 作为一级标题，拼接在 AI 回复内容前面
+              const retryPrompt = retryContext?.aiContext?.rawInput || '';
+              const titlePrefix = retryPrompt && retryPrompt.trim() ? `# ${retryPrompt.trim()}\n\n` : '';
+              const insertStep = {
+                id: insertStepId,
+                mcp: 'insert_to_canvas',
+                args: {
+                  items: [
+                    {
+                      type: 'text',
+                      content: titlePrefix + responseText,
+                    },
+                  ],
+                },
+                description: '将 AI 回复插入画布',
+                status: 'pending' as const,
+              };
+              workflowControl.addSteps([insertStep]);
+              pendingNewStepsForRetry.push(insertStep);
+            }
+          }
         }
         return true;
       } catch (stepError) {

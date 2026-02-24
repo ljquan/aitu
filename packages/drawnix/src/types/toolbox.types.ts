@@ -153,4 +153,7 @@ export interface ToolWindowState {
 
   /** 是否自动最大化（仅在首次打开时生效） */
   autoMaximize?: boolean;
+
+  /** 传递给工具组件的额外 props（如 initialNoteId） */
+  componentProps?: Record<string, unknown>;
 }

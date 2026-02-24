@@ -42,7 +42,12 @@ import './knowledge-base-drawer.scss';
 
 type RightSidebarTab = 'related' | 'extraction';
 
-const KnowledgeBaseContent: React.FC = () => {
+interface KnowledgeBaseContentProps {
+  /** 初始打开的笔记 ID，组件挂载后自动定位到该笔记 */
+  initialNoteId?: string | null;
+}
+
+const KnowledgeBaseContent: React.FC<KnowledgeBaseContentProps> = ({ initialNoteId }) => {
   // Data state
   const [directories, setDirectories] = useState<KBDirectory[]>([]);
   const [allNotes, setAllNotes] = useState<KBNoteMeta[]>([]);
@@ -180,6 +185,12 @@ const KnowledgeBaseContent: React.FC = () => {
         const usage = await knowledgeBaseService.getStorageUsage();
         setStorageUsage(usage);
       } catch { /* ignore */ }
+
+      // 如果有 initialNoteId，优先定位到该笔记
+      if (initialNoteId) {
+        handleSelectNote(initialNoteId);
+        return;
+      }
 
       // 检查是否有待处理的导航意图（由 AIInputBar 的 handleAddSkill 设置）
       const pending = (window as any).__kbPendingNavigation;
@@ -499,6 +510,27 @@ const KnowledgeBaseContent: React.FC = () => {
           prev ? { ...prev, ...updates, updatedAt: Date.now() } : prev
         );
       }
+
+      // 同步更新画布中关联了该笔记的 Card 元素
+      try {
+        const board = (window as any).__drawnixBoard;
+        if (board && board.children) {
+          const { Transforms } = await import('@plait/core');
+          board.children.forEach((child: any, index: number) => {
+            if (child.noteId === id) {
+              const cardUpdates: Record<string, string> = {};
+              if (updates.title !== undefined) cardUpdates.title = updates.title;
+              if (updates.content !== undefined) cardUpdates.body = updates.content;
+              if (Object.keys(cardUpdates).length > 0) {
+                Transforms.setNode(board, cardUpdates, [index]);
+              }
+            }
+          });
+        }
+      } catch (err) {
+        // 同步失败不影响笔记保存
+        console.warn('[KB] Failed to sync note update to canvas card:', err);
+      }
     },
     [currentNote]
   );
@@ -515,6 +547,61 @@ const KnowledgeBaseContent: React.FC = () => {
     },
     [currentNote, handleUpdateNote]
   );
+
+  /** 将知识库笔记插入到画布（创建关联的 Card 元素） */
+  const handleInsertNoteToCanvas = useCallback(async (noteMeta: KBNoteMeta) => {
+    const board = (window as any).__drawnixBoard;
+    if (!board) {
+      MessagePlugin.warning('请先打开画布');
+      return;
+    }
+
+    try {
+      // 检查画布中是否已存在关联该笔记的 Card
+      const existingCard = board.children.find((child: any) => child.noteId === noteMeta.id);
+      if (existingCard) {
+        const confirmed = window.confirm(`画布中已存在关联该笔记的卡片，是否再次插入？`);
+        if (!confirmed) return;
+      }
+
+      // 获取笔记完整内容
+      const note = await knowledgeBaseService.getNoteById(noteMeta.id);
+      if (!note) {
+        MessagePlugin.error('获取笔记内容失败');
+        return;
+      }
+
+      // 计算插入位置（视口中央）
+      const { getViewportOrigination } = await import('@plait/core');
+      const origination = getViewportOrigination(board);
+      const viewportWidth = board.host?.clientWidth || 800;
+      const viewportHeight = board.host?.clientHeight || 600;
+      const cardWidth = Math.round(window.innerWidth * 0.5);
+      const cardHeight = 180;
+      const insertX = (origination?.[0] ?? 0) + viewportWidth / 2 - cardWidth / 2;
+      const insertY = (origination?.[1] ?? 0) + viewportHeight / 2 - cardHeight / 2;
+
+      // 构造 Card 元素并插入
+      const { Transforms } = await import('@plait/core');
+      const newCard = {
+        type: 'card',
+        id: `card-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        title: note.title || '无标题',
+        body: note.content || '',
+        noteId: note.id,
+        fillColor: '#FA8C16',
+        points: [
+          [insertX, insertY],
+          [insertX + cardWidth, insertY + cardHeight],
+        ],
+      };
+      Transforms.insertNode(board, newCard as any, [board.children.length]);
+      MessagePlugin.success('已插入到画布');
+    } catch (err: any) {
+      console.error('[KB] Failed to insert note to canvas:', err);
+      MessagePlugin.error(`插入失败: ${err.message}`);
+    }
+  }, []);
 
   const handleDuplicateNote = useCallback(async (id: string) => {
     try {
@@ -567,6 +654,18 @@ const KnowledgeBaseContent: React.FC = () => {
       initializedSelectionRef.current = true;
     }
   }, [filteredNotes, handleSelectNote]);
+
+  // 监听 kb:open-note 事件，支持从外部（如 popup-toolbar 的编辑按钮）定位到指定笔记
+  useEffect(() => {
+    const handleOpenNote = (e: Event) => {
+      const { noteId } = (e as CustomEvent<{ noteId: string }>).detail;
+      if (noteId) {
+        handleSelectNote(noteId);
+      }
+    };
+    window.addEventListener('kb:open-note', handleOpenNote);
+    return () => window.removeEventListener('kb:open-note', handleOpenNote);
+  }, [handleSelectNote]);
 
   // 监听 kb:navigate 事件，支持从外部（如 SkillDropdown 的「添加 Skill」）定位到指定目录并新建笔记
   useEffect(() => {
@@ -876,6 +975,7 @@ const KnowledgeBaseContent: React.FC = () => {
             onDuplicateNote={handleDuplicateNote}
             isCreatingDir={isCreatingDir}
             onCancelCreateDir={() => setIsCreatingDir(false)}
+            onInsertNoteToCanvas={handleInsertNoteToCanvas}
           />
 
           {/* 底部存储使用情况 */}

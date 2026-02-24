@@ -81,6 +81,7 @@ import { ImageEditor } from '../../image-editor';
 import { insertImageFromUrl } from '../../../data/image';
 import { calculateEditedImagePoints } from '../../../utils/image';
 import { isFrameElement } from '../../../types/frame.types';
+import { isCardElement } from '../../../types/card.types';
 import { duplicateFrame, focusFrame } from '../../../utils/frame-duplicate';
 import { isPlaitMind, findMindRootFromSelection } from '../../../services/ppt';
 
@@ -160,6 +161,7 @@ export const PopupToolbar = () => {
     hasDistribute?: boolean; // 是否显示间距按钮（多选时显示）
     hasBoolean?: boolean; // 是否显示布尔组合按钮（多选时显示）
     hasMindmapToPPT?: boolean; // 是否显示思维导图转PPT按钮
+    hasCardEdit?: boolean; // 是否显示 Card 编辑按钮（打开知识库）
   } = {
     fill: 'red',
   };
@@ -186,11 +188,15 @@ export const PopupToolbar = () => {
     // 检查是否选中了工具元素(内嵌网页)
     const hasToolSelected = selectedElements.some(element => isToolElement(element));
 
-    // 检查是否选中了包含图片的元素（单个或多个），但排除视频元素
+    // 检查是否选中了 Card 元素
+    const hasCardSelected = selectedElements.some(element => isCardElement(element));
+
+    // 检查是否选中了包含图片的元素（单个或多个），但排除视频元素和 Card 元素
     const hasAIVideo =
       selectedElements.length > 0 &&
       !hasVideoSelected &&
       !hasToolSelected &&
+      !hasCardSelected &&
       selectedElements.some(element =>
         PlaitDrawElement.isDrawElement(element) &&
         PlaitDrawElement.isImage(element)
@@ -203,8 +209,8 @@ export const PopupToolbar = () => {
       isVideoElement(selectedElements[0]) &&
       !PlaitBoard.hasBeenTextEditing(board);
 
-    // AI图片生成按钮：排除视频元素和工具元素(内嵌网页)
-    const hasAIImage = !hasVideoSelected && !hasToolSelected && !PlaitBoard.hasBeenTextEditing(board);
+    // AI图片生成按钮：排除视频元素、工具元素(内嵌网页)和 Card 元素
+    const hasAIImage = !hasVideoSelected && !hasToolSelected && !hasCardSelected && !PlaitBoard.hasBeenTextEditing(board);
 
     // 拆图按钮：只在选中单个图片元素且检测到分割线时显示
     // 排除SVG图片（SVG不能被智能拆分）
@@ -339,6 +345,12 @@ export const PopupToolbar = () => {
       !PlaitBoard.hasBeenTextEditing(board) &&
       !!findMindRootFromSelection(board, selectedElements);
 
+    // Card 编辑按钮：选中单个 Card 元素时显示
+    const hasCardEdit =
+      selectedElements.length === 1 &&
+      isCardElement(selectedElements[0]) &&
+      !PlaitBoard.hasBeenTextEditing(board);
+
     state = {
       ...getElementState(board),
       hasFill,
@@ -365,6 +377,7 @@ export const PopupToolbar = () => {
       hasDistribute,
       hasBoolean,
       hasMindmapToPPT,
+      hasCardEdit,
     };
   }
   useEffect(() => {
@@ -688,6 +701,61 @@ export const PopupToolbar = () => {
                   } catch (error: any) {
                     MessagePlugin.close(loadingInstance);
                     MessagePlugin.error(error.message || (language === 'zh' ? '转换失败' : 'Conversion failed'));
+                  }
+                }}
+              />
+            )}
+            {/* Card 编辑按钮 - 选中 Card 时显示，点击打开知识库 */}
+            {state.hasCardEdit && (
+              <ToolButton
+                className="card-edit"
+                key="card-edit"
+                type="icon"
+                icon={<Pencil size={15} />}
+                visible={true}
+                title={language === 'zh' ? '在知识库中编辑' : 'Edit in Knowledge Base'}
+                aria-label={language === 'zh' ? '在知识库中编辑' : 'Edit in Knowledge Base'}
+                data-track="toolbar_click_card_edit"
+                onPointerUp={async () => {
+                  const cardElement = selectedElements[0] as any;
+                  if (!cardElement) return;
+
+                  // 如果 Card 已关联笔记，直接打开知识库并定位
+                  if (cardElement.noteId) {
+                    window.dispatchEvent(new CustomEvent('kb:open', { detail: { noteId: cardElement.noteId } }));
+                    return;
+                  }
+
+                  // 否则先在知识库中创建新笔记，再关联
+                  try {
+                    const { knowledgeBaseService } = await import('../../../services/knowledge-base-service');
+                    await knowledgeBaseService.initialize();
+
+                    // 找到或创建"笔记"目录
+                    const dirs = await knowledgeBaseService.getAllDirectories();
+                    let noteDir = dirs.find((d: any) => d.name === '笔记');
+                    if (!noteDir) {
+                      noteDir = await knowledgeBaseService.createDirectory('笔记');
+                    }
+
+                    // 创建新笔记，标题取 Card title，内容取 Card body
+                    const title = cardElement.title || '新笔记';
+                    const content = cardElement.body || '';
+                    const note = await knowledgeBaseService.createNote(title, noteDir.id);
+                    if (content) {
+                      await knowledgeBaseService.updateNote(note.id, { content });
+                    }
+
+                    // 将 noteId 写回 Card 元素
+                    const elementIndex = board.children.findIndex((child: any) => child.id === cardElement.id);
+                    if (elementIndex >= 0) {
+                      Transforms.setNode(board, { noteId: note.id } as any, [elementIndex]);
+                    }
+
+                    // 打开知识库并定位到新笔记
+                    window.dispatchEvent(new CustomEvent('kb:open', { detail: { noteId: note.id } }));
+                  } catch (error) {
+                    console.error('Failed to create note for card:', error);
                   }
                 }}
               />
@@ -1430,6 +1498,10 @@ export const getElementState = (board: PlaitBoard) => {
   // 单选时使用原有逻辑
   if (selectedElements.length === 1) {
     const selectedElement = selectedElements[0];
+    // Card 元素返回 fillColor 作为 fill 值
+    if (isCardElement(selectedElement)) {
+      return { fill: selectedElement.fillColor, strokeColor: undefined };
+    }
     if (MindElement.isMindElement(board, selectedElement)) {
       return getMindElementState(board, selectedElement);
     }
@@ -1455,6 +1527,10 @@ const getMultiSelectElementState = (
   elements: PlaitElement[]
 ) => {
   const states = elements.map((element) => {
+    // Card 元素
+    if (isCardElement(element)) {
+      return { fill: element.fillColor as string | undefined, strokeColor: undefined };
+    }
     if (MindElement.isMindElement(board, element)) {
       return getMindElementState(board, element);
     }
@@ -1507,6 +1583,10 @@ export const getPenPathElementState = (
 };
 
 export const hasFillProperty = (board: PlaitBoard, element: PlaitElement) => {
+  // Card 元素支持填充颜色
+  if (isCardElement(element)) {
+    return true;
+  }
   if (MindElement.isMindElement(board, element)) {
     return true;
   }
