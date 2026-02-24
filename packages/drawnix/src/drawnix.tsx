@@ -17,7 +17,7 @@ import {
 } from '@plait/core';
 import React, { useState, useRef, useEffect, useMemo, useCallback, lazy, Suspense } from 'react';
 import { withGroup } from '@plait/common';
-import { withDraw } from '@plait/draw';
+import { withDraw, BasicShapes, DrawTransforms } from '@plait/draw';
 import { MindThemeColors, withMind } from '@plait/mind';
 import MobileDetect from 'mobile-detect';
 import { withMindExtend } from './plugins/with-mind-extend';
@@ -50,6 +50,7 @@ import { withTracking } from './plugins/tracking';
 import { withTool } from './plugins/with-tool';
 import { withToolFocus } from './plugins/with-tool-focus';
 import { withToolResize } from './plugins/with-tool-resize';
+import { withTextResize } from './plugins/with-text-resize';
 import { withMultiResize } from './plugins/with-multi-resize';
 import { withWorkZone } from './plugins/with-workzone';
 import { MultiSelectionHandles } from './components/multi-selection-handles';
@@ -556,6 +557,7 @@ export const Drawnix: React.FC<DrawnixProps> = ({
 
   const plugins: PlaitPlugin[] = [
     withDraw,
+    withTextResize, // 文本框等比缩放 - 角落手柄 + 字体缩放
     withGroup,
     withMind,
     withMindExtend,
@@ -827,6 +829,15 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
   const [quickToolbarVisible, setQuickToolbarVisible] = useState(false);
   const [quickToolbarPosition, setQuickToolbarPosition] = useState<[number, number] | null>(null);
 
+  // 浮动文本输入状态（文本工具双击画布时使用）
+  const [inlineTextInput, setInlineTextInput] = useState<{
+    screenX: number;
+    screenY: number;
+    worldPoint: Point;
+    zoom: number;
+  } | null>(null);
+  const inlineTextRef = useRef<HTMLDivElement>(null);
+
   // 媒体预览状态
   const [mediaPreviewVisible, setMediaPreviewVisible] = useState(false);
   const [mediaPreviewItems, setMediaPreviewItems] = useState<UnifiedMediaItem[]>([]);
@@ -992,6 +1003,26 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
     closePicker: closeAutoCompletePicker,
   } = useAutoCompleteShapePicker(board);
 
+  // 浮动文本输入：自动聚焦
+  useEffect(() => {
+    if (inlineTextInput && inlineTextRef.current) {
+      inlineTextRef.current.focus();
+    }
+  }, [inlineTextInput]);
+
+  // 浮动文本输入：提交文本到画布
+  const commitInlineText = useCallback(() => {
+    if (!board || !inlineTextInput || !inlineTextRef.current) {
+      setInlineTextInput(null);
+      return;
+    }
+    const text = inlineTextRef.current.textContent || '';
+    if (text.trim()) {
+      DrawTransforms.insertText(board, inlineTextInput.worldPoint, text);
+    }
+    setInlineTextInput(null);
+  }, [board, inlineTextInput]);
+
   // 监听双击事件 - 处理图片/视频预览和空白区域快捷工具栏
   useEffect(() => {
     if (!board) return;
@@ -1033,8 +1064,20 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
                                    target.closest('.plait-workzone-container') ||
                                    target.closest('foreignObject');
 
-      // 只有双击空白区域时才显示快速创建工具栏
+      // 只有双击空白区域时才处理
       if (!hitElement && !isInsideInteractive) {
+        // 文本工具激活时：显示浮动文本输入（只有光标，无文本框）
+        if (PlaitBoard.isPointer(board, BasicShapes.text)) {
+          setInlineTextInput({
+            screenX: event.clientX,
+            screenY: event.clientY,
+            worldPoint: viewBoxPoint,
+            zoom: board.viewport.zoom,
+          });
+          event.preventDefault();
+          event.stopPropagation();
+          return;
+        }
         const position: [number, number] = [event.clientX, event.clientY];
         setQuickToolbarPosition(position);
         setQuickToolbarVisible(true);
@@ -1208,6 +1251,38 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
             visible={quickToolbarVisible}
             onClose={() => setQuickToolbarVisible(false)}
           />
+          {/* 浮动文本输入 - 文本工具双击画布时出现 */}
+          {inlineTextInput && (
+            <div
+              ref={inlineTextRef}
+              contentEditable
+              suppressContentEditableWarning
+              style={{
+                position: 'fixed',
+                left: inlineTextInput.screenX,
+                top: inlineTextInput.screenY - 14 * inlineTextInput.zoom / 2,
+                minWidth: '2px',
+                minHeight: '1.5em',
+                outline: 'none',
+                border: 'none',
+                background: 'transparent',
+                fontSize: `${14 * inlineTextInput.zoom}px`,
+                lineHeight: '1.5',
+                color: '#333',
+                caretColor: '#333',
+                zIndex: 10000,
+                whiteSpace: 'pre-wrap',
+                fontFamily: 'inherit',
+              }}
+              onBlur={commitInlineText}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') {
+                  setInlineTextInput(null);
+                }
+                e.stopPropagation();
+              }}
+            />
+          )}
           {/* Media Viewer - 画布图片/视频预览（支持内置编辑模式） */}
           <UnifiedMediaViewer
             visible={mediaPreviewVisible}

@@ -239,7 +239,7 @@ export const buildDrawnixHotkeyPlugin = (
               t: BasicShapes.text,
             };
             if (keyToPointer[event.key] === BasicShapes.text) {
-              setCreationMode(board, BoardCreationMode.dnd);
+              setCreationMode(board, null as any);
             } else {
               setCreationMode(board, BoardCreationMode.drawing);
             }
