@@ -15,13 +15,15 @@ export const SKILL_AUTO_ID = 'auto';
 
 /** 系统内置 Skill 接口 */
 export interface SystemSkill {
-  /** 唯一标识，与 MCP 工具名一致 */
+  /** 唯一标识 */
   id: string;
   /** 中文名称，用于 UI 展示 */
   name: string;
-  /** 对应的 MCP 工具名称 */
-  mcpTool: string;
-  /** 功能说明，用于知识库笔记内容展示 */
+  /**
+   * 对应的 MCP 工具名称（可选，统一执行路径下不再直接使用）
+   */
+  mcpTool?: string;
+  /** 功能说明，用于知识库笔记内容展示；同时作为 Skill 执行路径的解析内容 */
   description: string;
   /** 类型标记 */
   type: typeof SKILL_TYPE_SYSTEM;
@@ -45,9 +47,14 @@ export const SYSTEM_SKILLS: SystemSkill[] = [
       '宫格图\n\n生成整齐排列的宫格图片墙，将多张主题相关图片按网格布局排列在画布上，适合产品展示、表情包制作等场景。\n\n**使用方式：** 在 AI 输入框中描述你的主题，选择「宫格图」Skill 后提交，AI 将直接生成宫格图并插入画布。\n\n**适用场景：** 产品展示墙、表情包制作、图片集合展示。\n\n**工作流：**\n\n调用 generate_grid_image\n- rows: 3\n- cols: 3\n- layoutStyle: scattered',
     type: SKILL_TYPE_SYSTEM,
   },
-];
-
-/** 根据 ID 查找系统内置 Skill */
+  {
+    id: 'role_chat_pm',
+    name: '产品经理',
+    description:
+      '你是一位拥有 10 年经验的资深产品经理，擅长将模糊的业务需求转化为清晰的产品文档。\n\n用户会描述一个功能需求或产品想法，请用以下结构回复：\n\n1. **需求背景**：简述该功能的业务价值（2-3句）\n2. **用户故事**：以"作为[用户]，我希望[功能]，以便[价值]"格式描述\n3. **功能要点**：列出 3-5 个核心功能点\n4. **验收标准**：列出可量化的验收条件\n\n请保持简洁专业，避免冗余描述。',
+    type: SKILL_TYPE_SYSTEM,
+  },
+];/** 根据 ID 查找系统内置 Skill */
 export function findSystemSkillById(id: string): SystemSkill | undefined {
   return SYSTEM_SKILLS.find((skill) => skill.id === id);
 }
