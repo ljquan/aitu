@@ -88,7 +88,7 @@ export const SettingsDialog = ({
                 API Key
               </label>
               <Tooltip
-                content={
+              content={
                   <div>
                     您可以从以下地址获取 API Key:
                     <br />
@@ -100,6 +100,12 @@ export const SettingsDialog = ({
                     >
                       api.tu-zi.com/token
                     </a>
+                    <br />
+                    <video
+                      src="https://cc-im-kefu-1256921685.7moor-fs1.com/im/4d2c3f00-7d4c-11e5-af15-41bf63ae4ea0/1440d4ac-7e9d-4ab2-8e80-4f0632796b3f/1.jpg"
+                      controls
+                      style={{ marginTop: 6, width: 240, display: 'block', borderRadius: 4 }}
+                    />
                   </div>
                 }
                 placement="top"
