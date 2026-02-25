@@ -84,6 +84,7 @@ import { isFrameElement } from '../../../types/frame.types';
 import { isCardElement } from '../../../types/card.types';
 import { duplicateFrame, focusFrame } from '../../../utils/frame-duplicate';
 import { isPlaitMind, findMindRootFromSelection } from '../../../services/ppt';
+import { openCardInKnowledgeBase } from '../../../utils/card-actions';
 
 export const PopupToolbar = () => {
   const board = useBoard();
@@ -733,44 +734,7 @@ export const PopupToolbar = () => {
                 onPointerUp={async () => {
                   const cardElement = selectedElements[0] as any;
                   if (!cardElement) return;
-
-                  // 如果 Card 已关联笔记，直接打开知识库并定位
-                  if (cardElement.noteId) {
-                    window.dispatchEvent(new CustomEvent('kb:open', { detail: { noteId: cardElement.noteId } }));
-                    return;
-                  }
-
-                  // 否则先在知识库中创建新笔记，再关联
-                  try {
-                    const { knowledgeBaseService } = await import('../../../services/knowledge-base-service');
-                    await knowledgeBaseService.initialize();
-
-                    // 找到或创建"笔记"目录
-                    const dirs = await knowledgeBaseService.getAllDirectories();
-                    let noteDir = dirs.find((d: any) => d.name === '笔记');
-                    if (!noteDir) {
-                      noteDir = await knowledgeBaseService.createDirectory('笔记');
-                    }
-
-                    // 创建新笔记，标题取 Card title，内容取 Card body
-                    const title = cardElement.title || '新笔记';
-                    const content = cardElement.body || '';
-                    const note = await knowledgeBaseService.createNote(title, noteDir.id);
-                    if (content) {
-                      await knowledgeBaseService.updateNote(note.id, { content });
-                    }
-
-                    // 将 noteId 写回 Card 元素
-                    const elementIndex = board.children.findIndex((child: any) => child.id === cardElement.id);
-                    if (elementIndex >= 0) {
-                      Transforms.setNode(board, { noteId: note.id } as any, [elementIndex]);
-                    }
-
-                    // 打开知识库并定位到新笔记
-                    window.dispatchEvent(new CustomEvent('kb:open', { detail: { noteId: note.id } }));
-                  } catch (error) {
-                    console.error('Failed to create note for card:', error);
-                  }
+                  await openCardInKnowledgeBase(board, cardElement, language as 'zh' | 'en');
                 }}
               />
             )}
@@ -1308,7 +1272,14 @@ export const PopupToolbar = () => {
               aria-label={t('general.duplicate')}
               data-track="toolbar_click_duplicate"
               onPointerUp={() => {
-                if (selectedElements.length === 1 && isCardElement(selectedElements[0])) {
+                const isCard = selectedElements.length === 1 && isCardElement(selectedElements[0]);
+                console.log('[PopupToolbar] Duplicate clicked', { 
+                  selectedCount: selectedElements.length, 
+                  firstType: selectedElements[0]?.type,
+                  isCard 
+                });
+
+                if (isCard) {
                   void copyCardText(selectedElements[0] as any, 'duplicate');
                   return;
                 }

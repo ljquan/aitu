@@ -98,6 +98,9 @@ import { withLassoSelection } from './plugins/with-lasso-selection';
 import { API_AUTH_ERROR_EVENT, ApiAuthErrorDetail } from './utils/api-auth-error-event';
 import { MessagePlugin } from 'tdesign-react';
 import { calculateEditedImagePoints } from './utils/image';
+import { isCardElement } from './types/card.types';
+import { openCardInKnowledgeBase } from './utils/card-actions';
+import { useI18n } from './i18n';
 import { safeReload } from './utils/active-tasks';
 import { CommandPalette } from './components/command-palette/command-palette';
 import { CanvasSearch } from './components/canvas-search/canvas-search';
@@ -841,6 +844,7 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
 }) => {
   const { chatDrawerRef } = useChatDrawer();
   const { setAppState: updateState } = useDrawnix();
+  const { language } = useI18n();
 
   // 画笔自定义光标
   usePencilCursor({ board, pointer: appState.pointer });
@@ -1052,6 +1056,14 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
       const viewBoxPoint = toViewBoxPoint(board, toHostPoint(board, event.clientX, event.clientY));
       const hitElement = getHitElementByPoint(board, viewBoxPoint);
 
+      // 如果双击了 Card 元素，打开知识库
+      if (hitElement && isCardElement(hitElement)) {
+        openCardInKnowledgeBase(board, hitElement as any, language as 'zh' | 'en');
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+
       // 如果双击了图片或视频元素，打开预览
       if (hitElement) {
         const url = (hitElement as any).url;
@@ -1092,7 +1104,7 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
         container.removeEventListener('dblclick', handleDoubleClick);
       }
     };
-  }, [board, containerRef, openMediaPreview]);
+  }, [board, containerRef, openMediaPreview, language]);
 
   // 监听画板点击事件，关闭项目抽屉和工具箱抽屉
   useEffect(() => {

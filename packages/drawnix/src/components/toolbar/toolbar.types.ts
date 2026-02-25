@@ -43,6 +43,10 @@ export interface UnifiedToolbarProps {
    * (可选) 云端同步设置打开回调
    */
   onOpenCloudSync?: () => void;
+  /**
+   * (可选) 知识库开关回调
+   */
+  onKnowledgeBaseToggle?: () => void;
 }
 
 /**
