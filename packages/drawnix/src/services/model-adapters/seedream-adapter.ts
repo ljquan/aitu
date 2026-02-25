@@ -5,7 +5,7 @@ import type {
 } from './types';
 import { registerModelAdapter } from './registry';
 
-const DEFAULT_SEEDREAM_MODEL = 'seedream-5.0';
+const DEFAULT_SEEDREAM_MODEL = 'doubao-seedream-5-0-260128';
 const SEEDREAM_MODELS = [
   'doubao-seedream-4-0-250828',
   'doubao-seedream-4-5-251128',
@@ -36,6 +36,25 @@ const ASPECT_RATIO_TO_SIZE_2K: Record<string, string> = {
   '9x16':  '1440x2560',
 };
 
+const ASPECT_RATIO_TO_SIZE_3K: Record<string, string> = {
+  '21:9':  '4704x2016',
+  '21x9':  '4704x2016',
+  '16:9':  '4096x2304',
+  '16x9':  '4096x2304',
+  '3:2':   '3744x2496',
+  '3x2':   '3744x2496',
+  '4:3':   '3456x2592',
+  '4x3':   '3456x2592',
+  '1:1':   '3072x3072',
+  '1x1':   '3072x3072',
+  '3:4':   '2592x3456',
+  '3x4':   '2592x3456',
+  '2:3':   '2496x3744',
+  '2x3':   '2496x3744',
+  '9:16':  '2304x4096',
+  '9x16':  '2304x4096',
+};
+
 const ASPECT_RATIO_TO_SIZE_4K: Record<string, string> = {
   '21:9':  '6197x2656',
   '21x9':  '6197x2656',
@@ -56,7 +75,7 @@ const ASPECT_RATIO_TO_SIZE_4K: Record<string, string> = {
 };
 
 /**
- * 将 size 参数（宽高比 token）+ quality(2k/4k) 解析为 Seedream 需要的像素尺寸
+ * 将 size 参数（宽高比 token）+ quality(2k/3k/4k) 解析为 Seedream 需要的像素尺寸
  */
 const resolveSeedreamSize = (
   size?: string,
@@ -64,8 +83,12 @@ const resolveSeedreamSize = (
 ): string | undefined => {
   if (!size || size === 'auto') return undefined;
 
-  const is4K = quality === '4k';
-  const sizeMap = is4K ? ASPECT_RATIO_TO_SIZE_4K : ASPECT_RATIO_TO_SIZE_2K;
+  const sizeMap =
+    quality === '4k'
+      ? ASPECT_RATIO_TO_SIZE_4K
+      : quality === '3k'
+        ? ASPECT_RATIO_TO_SIZE_3K
+        : ASPECT_RATIO_TO_SIZE_2K;
 
   // 先查比例映射表
   const mapped = sizeMap[size];
@@ -75,7 +98,11 @@ const resolveSeedreamSize = (
   if (/^\d+x\d+$/.test(size)) return size;
 
   // 默认 1:1
-  return is4K ? '4096x4096' : '2048x2048';
+  return quality === '4k'
+    ? '4096x4096'
+    : quality === '3k'
+      ? '3072x3072'
+      : '2048x2048';
 };
 
 const resolveBaseUrl = (context: AdapterContext): string => {

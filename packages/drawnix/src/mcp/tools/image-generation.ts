@@ -55,6 +55,8 @@ export interface ImageGenerationParams {
   batchTotal?: number;
   /** 全局索引 */
   globalIndex?: number;
+  /** 额外参数（如 seedream_quality） */
+  params?: Record<string, unknown>;
 }
 
 /**
@@ -138,10 +140,12 @@ async function executeAsync(params: ImageGenerationParams): Promise<MCPResult> {
  * 支持批量创建任务（通过 count 参数）
  */
 function executeQueue(params: ImageGenerationParams, options: MCPExecuteOptions): MCPTaskResult {
-  const { 
+  const {
     prompt, size, referenceImages, model, count = 1,
     // 批量参数（可能从工作流步骤传入）
     batchId: paramsBatchId, batchIndex: paramsBatchIndex, batchTotal: paramsBatchTotal, globalIndex: paramsGlobalIndex,
+    // 额外参数（如 seedream_quality）
+    params: extraParams,
   } = params;
 
   if (!prompt || typeof prompt !== 'string') {
@@ -195,6 +199,8 @@ function executeQueue(params: ImageGenerationParams, options: MCPExecuteOptions)
           globalIndex,
           // 自动插入画布
           autoInsertToCanvas: true,
+          // 额外参数（如 seedream_quality）
+          ...(extraParams ? { params: extraParams } : {}),
         },
         TaskType.IMAGE
       );
@@ -216,6 +222,8 @@ function executeQueue(params: ImageGenerationParams, options: MCPExecuteOptions)
             globalIndex: globalIndex ? globalIndex + i : i + 1,
             // 自动插入画布
             autoInsertToCanvas: true,
+            // 额外参数（如 seedream_quality）
+            ...(extraParams ? { params: extraParams } : {}),
           },
           TaskType.IMAGE
         );
