@@ -60,7 +60,7 @@ import { PopupDistributeButton } from './distribute-button';
 import { PopupBooleanButton } from './boolean-button';
 import { TextPropertyPanel } from './text-property-panel';
 import { AIImageIcon, AIVideoIcon, VideoFrameIcon, DuplicateIcon, TrashIcon, SplitImageIcon, DownloadIcon, MergeIcon, VideoMergeIcon } from '../../icons';
-import { Pencil, Presentation } from 'lucide-react';
+import { Pencil, Presentation, Copy } from 'lucide-react';
 import { useDrawnix, DialogType } from '../../../hooks/use-drawnix';
 import { useI18n } from '../../../i18n';
 import { ToolButton } from '../../tool-button';
@@ -144,7 +144,7 @@ export const PopupToolbar = () => {
     hasStrokeStyle?: boolean;
     hasStrokeWidth?: boolean; // 是否显示线宽设置
     strokeWidth?: number; // 当前线宽值
-    marks?: Omit<CustomText, 'text'>;
+    marks?: Record<string, any>;
     hasAIImage?: boolean; // 是否显示AI图像生成按钮
     hasAIVideo?: boolean; // 是否显示AI视频生成按钮
     hasVideoFrame?: boolean; // 是否显示视频帧选择按钮
@@ -380,6 +380,20 @@ export const PopupToolbar = () => {
       hasCardEdit,
     };
   }
+
+  const copyCardText = async (cardElement: any, source: string) => {
+    if (!cardElement) return;
+    const title = cardElement.title ? `# ${cardElement.title}\n\n` : '';
+    const body = cardElement.body || '';
+    const text = `${title}${body}`.trim();
+    try {
+      console.info('[CardCopy] Copy text from card', { source, id: cardElement.id });
+      await navigator.clipboard.writeText(text);
+      MessagePlugin.success(language === 'zh' ? '已复制到剪贴板' : 'Copied to clipboard', 2000);
+    } catch (err) {
+      MessagePlugin.error(language === 'zh' ? '复制失败' : 'Copy failed', 2000);
+    }
+  };
   useEffect(() => {
     if (open) {
       const hasSelected = selectedElements.length > 0;
@@ -760,6 +774,25 @@ export const PopupToolbar = () => {
                 }}
               />
             )}
+            {/* Card 复制按钮 - 选中 Card 时显示，点击复制卡片文本内容 */}
+            {state.hasCardEdit && (
+              <ToolButton
+                className="card-copy"
+                key="card-copy"
+                type="icon"
+                icon={<Copy size={15} />}
+                visible={true}
+                title={language === 'zh' ? '复制文本内容' : 'Copy text content'}
+                aria-label={language === 'zh' ? '复制文本内容' : 'Copy text content'}
+                data-track="toolbar_click_card_copy"
+                onPointerDown={({ event }) => {
+                  event.stopPropagation();
+                }}
+                onPointerUp={async () => {
+                  await copyCardText(selectedElements[0] as any, 'card-copy');
+                }}
+              />
+            )}
             {state.hasAIImage && (
               <ToolButton
                 className="ai-image"
@@ -909,7 +942,7 @@ export const PopupToolbar = () => {
                   try {
                     // 特殊处理 blob: URL（可能是从IndexedDB缓存的视频）
                     const { unifiedCacheService } = await import('../../../services/unified-cache-service');
-                    const { downloadFromBlob } = await import('../../../utils/download-utils');
+                    const { downloadFromBlob } = await import('@aitu/utils');
 
                     const processedItems: BatchDownloadItem[] = [];
 
@@ -1275,6 +1308,10 @@ export const PopupToolbar = () => {
               aria-label={t('general.duplicate')}
               data-track="toolbar_click_duplicate"
               onPointerUp={() => {
+                if (selectedElements.length === 1 && isCardElement(selectedElements[0])) {
+                  void copyCardText(selectedElements[0] as any, 'duplicate');
+                  return;
+                }
                 // 检查是否只选中了 Frame
                 const isOnlyFrameSelected =
                   selectedElements.length === 1 &&
@@ -1463,7 +1500,7 @@ export const getMindElementState = (
   board: PlaitBoard,
   element: MindElement
 ) => {
-  const marks = getTextMarksByElement(element);
+  const marks: Record<string, any> = getTextMarksByElement(element);
   return {
     // 使用 getElementFillValue 获取完整的填充信息（支持渐变/图片填充）
     fill: getElementFillValue(element),
@@ -1477,7 +1514,7 @@ export const getDrawElementState = (
   board: PlaitBoard,
   element: PlaitDrawElement
 ) => {
-  const marks: Omit<CustomText, 'text'> = getTextMarksByElement(element);
+  const marks: Record<string, any> = getTextMarksByElement(element);
   return {
     // 使用 getElementFillValue 获取完整的填充信息（支持渐变/图片填充）
     fill: getElementFillValue(element),
