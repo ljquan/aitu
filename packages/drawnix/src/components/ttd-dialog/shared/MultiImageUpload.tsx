@@ -126,6 +126,7 @@ export const MultiImageUpload: React.FC<MultiImageUploadProps> = ({
   // Handle image removal
   const handleRemove = useCallback((slot: number) => {
     const newImages = images.filter(img => img.slot !== slot);
+    setHoveredImage(null);
     onImagesChange(newImages);
   }, [images, onImagesChange]);
 
