@@ -48,6 +48,43 @@ export const SYSTEM_SKILLS: SystemSkill[] = [
     type: SKILL_TYPE_SYSTEM,
   },
   {
+    id: 'generate_video',
+    name: '视频创作',
+    mcpTool: 'generate_video',
+    description:
+      '视频创作\n\n根据描述生成短视频。\n\n**使用方式：** 在 AI 输入框中描述视频内容，选择「视频创作」Skill 后提交。\n\n**适用场景：** 动态画面生成、短视频创作。\n\n**工作流：**\n\n调用 generate_video',
+    type: SKILL_TYPE_SYSTEM,
+  },
+  {
+    id: 'generate_flowchart',
+    name: '流程图',
+    description:
+      '流程图\n\n你是一个流程图专家。请根据用户的描述，生成 Mermaid 格式的流程图代码，并调用 insert_mermaid 工具将其插入画布。\n\n**要求：**\n1. 分析用户需求，设计合理的流程结构。\n2. 使用 Mermaid 语法生成代码。\n3. 必须调用 insert_mermaid 工具。',
+    type: SKILL_TYPE_SYSTEM,
+  },
+  {
+    id: 'generate_mindmap',
+    name: '思维导图',
+    description:
+      '思维导图\n\n你是一个思维导图专家。请根据用户的描述，生成 Markdown 格式的思维导图内容，并调用 insert_mindmap 工具将其插入画布。\n\n**要求：**\n1. 使用 Markdown 列表语法（# 标题, - 列表项）。\n2. 结构清晰，层级分明。\n3. 必须调用 insert_mindmap 工具。',
+    type: SKILL_TYPE_SYSTEM,
+  },
+  {
+    id: 'generate_svg',
+    name: 'SVG矢量图',
+    description:
+      'SVG矢量图\n\n你是一个矢量图形设计师。请根据用户的描述，编写 SVG 代码，并调用 insert_svg 工具将其插入画布。\n\n**要求：**\n1. 生成标准 SVG 代码，包含 xmlns 和 viewBox。\n2. 代码简洁，适合作为图标或 Logo。\n3. 必须调用 insert_svg 工具。',
+    type: SKILL_TYPE_SYSTEM,
+  },
+  {
+    id: 'generate_ppt',
+    name: 'PPT演示',
+    mcpTool: 'generate_ppt',
+    description:
+      'PPT演示\n\n生成 PPT 演示文稿大纲并自动布局。\n\n**使用方式：** 输入 PPT 主题，选择「PPT演示」Skill 后提交。\n\n**适用场景：** 演示文稿、课件制作、汇报材料。\n\n**工作流：**\n\n调用 generate_ppt',
+    type: SKILL_TYPE_SYSTEM,
+  },
+  {
     id: 'role_chat_pm',
     name: '产品经理',
     description:
