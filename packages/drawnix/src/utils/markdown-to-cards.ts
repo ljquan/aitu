@@ -52,6 +52,10 @@ export function parseMarkdownToCards(text: string): CardBlock[] | null {
 
   const titleMatch = trimmed.match(/^#{1,2}\s+(.+)$/m);
   const title = titleMatch ? titleMatch[1].trim() : undefined;
+  // 若提取到标题，从 body 中去掉第一个标题行，避免正文中重复显示
+  const body = title && titleMatch
+    ? trimmed.replace(titleMatch[0], '').replace(/^\n+/, '').trim()
+    : trimmed;
 
-  return [{ title, body: trimmed }];
+  return [{ title, body }];
 }

@@ -43,7 +43,7 @@ export class CardGenerator {
     this.foreignObject.setAttribute('width', String(rect.width));
     this.foreignObject.setAttribute('height', String(rect.height));
     this.foreignObject.style.overflow = 'visible';
-    // 只读模式：不响应鼠标事件
+    // foreignObject 层允许鼠标事件穿透到 React 组件
     this.foreignObject.style.pointerEvents = 'none';
 
     // 创建 HTML 容器（XHTML 命名空间）

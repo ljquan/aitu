@@ -51,6 +51,8 @@ export const CardElement: React.FC<CardElementProps> = ({ element }) => {
             whiteSpace: 'nowrap',
             overflow: 'hidden',
             textOverflow: 'ellipsis',
+            cursor: 'move',
+            pointerEvents: 'auto',
           }}
         >
           {element.title}
@@ -59,9 +61,11 @@ export const CardElement: React.FC<CardElementProps> = ({ element }) => {
       <div
         style={{
           flex: 1,
-          overflow: 'hidden',
           minHeight: 0,
+          pointerEvents: 'auto',
         }}
+        onMouseDown={(e) => e.stopPropagation()}
+        onPointerDown={(e) => e.stopPropagation()}
       >
         <MarkdownEditor
           markdown={element.body}
