@@ -48,14 +48,6 @@ export const SYSTEM_SKILLS: SystemSkill[] = [
     type: SKILL_TYPE_SYSTEM,
   },
   {
-    id: 'generate_video',
-    name: '视频创作',
-    mcpTool: 'generate_video',
-    description:
-      '视频创作\n\n根据描述生成短视频。\n\n**使用方式：** 在 AI 输入框中描述视频内容，选择「视频创作」Skill 后提交。\n\n**适用场景：** 动态画面生成、短视频创作。\n\n**工作流：**\n\n调用 generate_video',
-    type: SKILL_TYPE_SYSTEM,
-  },
-  {
     id: 'generate_flowchart',
     name: '流程图',
     description:
