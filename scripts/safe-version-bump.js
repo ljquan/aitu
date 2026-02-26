@@ -308,10 +308,17 @@ function main() {
       console.log(`ℹ️  没有找到提交记录，跳过 CHANGELOG 更新`);
     }
 
+    // 同步 CHANGELOG.md → changelog.json
+    try {
+      require('./sync-changelog')();
+    } catch (error) {
+      console.warn(`⚠️  同步 changelog.json 失败:`, error.message);
+    }
+
     // 提交更改
     try {
       // 检查是否存在 package-lock.json 或 pnpm-lock.yaml
-      const filesToAdd = ['package.json', 'apps/web/public/version.json', 'CHANGELOG.md'];
+      const filesToAdd = ['package.json', 'apps/web/public/version.json', 'CHANGELOG.md', 'apps/web/public/changelog.json'];
       if (fs.existsSync('package-lock.json')) {
         filesToAdd.push('package-lock.json');
       } else if (fs.existsSync('pnpm-lock.yaml')) {
