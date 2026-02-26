@@ -24,7 +24,7 @@ export async function blobToBase64(blob: Blob): Promise<string> {
     reader.onloadend = () => {
       const result = reader.result as string;
       // 移除 data URL 前缀 (e.g., "data:image/png;base64,")
-      const base64Data = result.split(',')[1];
+      const base64Data = result.split(',')[1] || '';
       resolve(base64Data);
     };
 

@@ -49,14 +49,14 @@ class ShardedMediaSyncAdapter {
     }
 
     // 检查是否启用分片
-    this.shardingEnabled = await kvStorageService.get<boolean>(SHARD_SYSTEM_ENABLED_KEY) || false;
+    this.shardingEnabled = await kvStorageService.get<boolean>(SHARD_SYSTEM_ENABLED_KEY) ?? false;
 
     if (this.shardingEnabled) {
       await shardRouter.initialize();
     }
 
     this.initialized = true;
-    logDebug('ShardedMediaSyncAdapter] Initialized, sharding enabled:', this.shardingEnabled);
+    logDebug('ShardedMediaSyncAdapter] Initialized, sharding enabled:', this.shardingEnabled as any);
   }
 
   /**
@@ -123,7 +123,7 @@ class ShardedMediaSyncAdapter {
       await this.enableSharding();
 
       return { success: true };
-    } catch (error) {
+    } catch (error: any) {
       logError('ShardedMediaSyncAdapter] Setup failed:', error);
       return {
         success: false,

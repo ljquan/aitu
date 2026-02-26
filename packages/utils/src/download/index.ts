@@ -139,7 +139,7 @@ export async function processBatchWithConcurrency<T, R>(
     .map(async () => {
       while (currentIndex < items.length) {
         const index = currentIndex++;
-        const result = await handler(items[index], index);
+        const result = await handler(items[index]!, index);
         results[index] = result;
       }
     });

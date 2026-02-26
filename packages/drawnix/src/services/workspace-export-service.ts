@@ -107,7 +107,7 @@ class WorkspaceExportService {
         source: 'web',
         elements: board.elements || [],
         viewport: board.viewport || { zoom: 1 },
-        theme: board.theme,
+        theme: board.theme as any,
         boardMeta: {
           id: board.id,
           name: board.name,
@@ -133,7 +133,7 @@ class WorkspaceExportService {
         const totalAssets = assets.length;
         for (let i = 0; i < assets.length; i++) {
           const asset = assets[i];
-          const { blobData, ...metadata } = asset;
+        const { blobData, ...metadata } = asset as any;
           assetsFolder.file(`${asset.id}.meta.json`, JSON.stringify(metadata, null, 2));
           
           if (blobData) {
@@ -385,9 +385,9 @@ class WorkspaceExportService {
               name: boardName,
               folderId,
               order: boardMeta?.order ?? i,
-              elements: drawnixData.elements || [],
-              viewport: drawnixData.viewport,
-              theme: drawnixData.theme,
+            elements: (drawnixData.elements || []) as any,
+            viewport: drawnixData.viewport,
+            theme: drawnixData.theme as any,
               createdAt: boardMeta?.createdAt || Date.now(),
               updatedAt: boardMeta?.updatedAt || Date.now(),
             };

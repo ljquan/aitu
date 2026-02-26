@@ -215,7 +215,7 @@ export const withPenResize = (board: PlaitBoard) => {
   return withResize<PenPath, ResizeHandle>(board, {
     key: 'pen-path',
     canResize: () => canResize(board),
-    hitTest: (point: Point) => hitTest(board, point),
+    hitTest: ((point: Point) => hitTest(board, point)) as any,
     onResize: (resizeRef, resizeState) => onResize(board, resizeRef, resizeState),
   });
 };

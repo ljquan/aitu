@@ -343,6 +343,7 @@ export const FramePanel: React.FC = () => {
         document.removeEventListener('contextmenu', handleClick);
       };
     }
+    return undefined;
   }, [contextMenu?.visible, closeContextMenu]);
 
   const handleContextMenu = useCallback(
@@ -459,7 +460,7 @@ export const FramePanel: React.FC = () => {
           size: '16x9', // PPT 页面使用 16:9 比例
         });
 
-        if (result.success && result.data?.url) {
+        if (result.success && (result.data as any)?.url) {
           // 计算图片区域并插入
           const frameRect = RectangleClient.getRectangleByPoints(frameInfo.frame.points);
           const imgRegion = getImageRegion({
@@ -471,7 +472,7 @@ export const FramePanel: React.FC = () => {
           removePPTImagePlaceholder(board, frameId);
           await insertMediaIntoFrame(
             board,
-            result.data.url,
+            (result.data as any).url,
             'image',
             frameId,
             { width: frameInfo.width, height: frameInfo.height },
@@ -531,7 +532,7 @@ export const FramePanel: React.FC = () => {
             size: '16x9',
           });
 
-          if (result.success && result.data?.url) {
+          if (result.success && (result.data as any)?.url) {
             const frameRect = RectangleClient.getRectangleByPoints(frameInfo.frame.points);
             const imgRegion = getImageRegion({
               x: frameRect.x,
@@ -542,7 +543,7 @@ export const FramePanel: React.FC = () => {
             removePPTImagePlaceholder(board, frameId);
             await insertMediaIntoFrame(
               board,
-              result.data.url,
+              (result.data as any).url,
               'image',
               frameId,
               { width: frameInfo.width, height: frameInfo.height },

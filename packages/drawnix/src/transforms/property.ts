@@ -88,13 +88,13 @@ export const setFillColor = (board: PlaitBoard, fillColor: string) => {
       } else {
         if (
           isNullOrUndefined(currentOpacity) ||
-          isFullyOpaque(currentOpacity)
+          isFullyOpaque(currentOpacity!)
         ) {
           Transforms.setNode(board, { fill: fillColor }, path);
         } else {
           Transforms.setNode(
             board,
-            { fill: applyOpacityToHex(fillColor, currentOpacity) },
+          { fill: applyOpacityToHex(fillColor, currentOpacity!) },
             path
           );
         }
@@ -663,7 +663,7 @@ export const getTextAlign = (board: PlaitBoard): 'left' | 'center' | 'right' => 
             // 检查是否是段落元素（有 type 属性且为 'paragraph'，或者有 align 属性）
             const hasType = (n as any).type === 'paragraph';
             const hasAlign = 'align' in n;
-            const isElement = Editor.isBlock(editor, n);
+            const isElement = Editor.isBlock(editor, n as any);
             return isElement && (hasType || hasAlign);
           }
         }));

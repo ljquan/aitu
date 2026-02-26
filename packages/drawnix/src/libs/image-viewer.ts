@@ -95,7 +95,7 @@ export class ImageViewer {
       button: true,
       navbar: false,
       title: !!alt,
-      toolbar,
+      toolbar: toolbar as any,
       fullscreen: !isMobile, // 移动端禁用全屏按钮
       keyboard: this.options.enableKeyboard,
       backdrop: true,

@@ -487,6 +487,7 @@ export const PopupToolbar = () => {
       }, 50);
       return () => clearTimeout(timer);
     }
+    return undefined;
   }, [selectedElements.length, movingOrDragging]);
 
   useEffect(() => {

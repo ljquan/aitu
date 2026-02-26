@@ -133,7 +133,7 @@ export const WorkZoneContent: React.FC<WorkZoneContentProps> = ({
           return;
         }
         
-        const result = await swChannelClient.claimWorkflow(workflowId);
+        const result = await (swChannelClient as any).claimWorkflow(workflowId);
         
         if (result.success) {
           // 如果 SW 中的工作流已经是终态，通知 UI 更新

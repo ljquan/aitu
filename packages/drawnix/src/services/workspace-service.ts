@@ -985,9 +985,9 @@ class WorkspaceService {
     const board = this.loadedBoards.get(this.state.currentBoardId);
 
     if (!board) {
-      logDebug('[WorkspaceService]', 'getCurrentBoard: board not fully loaded, use switchBoard() first', {
+      logDebug('[WorkspaceService] getCurrentBoard: board not fully loaded, use switchBoard() first', {
         currentBoardId: this.state.currentBoardId
-      });
+      } as any);
     }
 
     return board || null;
@@ -1017,7 +1017,7 @@ class WorkspaceService {
     
     // 画板未加载，从存储中加载
     try {
-      board = await workspaceStorageService.loadBoard(boardId);
+      board = await workspaceStorageService.loadBoard(boardId) || undefined as any;
       if (!board) return true;
       
       // 缓存加载的画板

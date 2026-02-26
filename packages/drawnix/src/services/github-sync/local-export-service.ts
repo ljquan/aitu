@@ -217,7 +217,7 @@ class LocalExportService {
 
               result.stats.media++;
               result.stats.mediaSize += blob.size;
-            } catch (error) {
+            } catch (error: any) {
               logError(`LocalExportService] Failed to export media ${item.url}:`, error);
             }
           }
@@ -259,7 +259,7 @@ class LocalExportService {
       });
 
       return result;
-    } catch (error) {
+    } catch (error: any) {
       logError('LocalExportService] Export failed:', error);
       result.error = error instanceof Error ? error.message : '导出失败';
       return result;
@@ -339,7 +339,7 @@ class LocalExportService {
               boards.set(board.id, board);
               result.stats.boards++;
             }
-          } catch (error) {
+          } catch (error: any) {
             const filename = boardPath.split('/').pop() || boardPath;
             result.errors.push(`画板 "${filename}" 导入失败`);
           }
@@ -388,7 +388,7 @@ class LocalExportService {
                 result.stats.media++;
               }
             }
-          } catch (error) {
+          } catch (error: any) {
             const filename = mediaPath.split('/').pop() || mediaPath;
             result.errors.push(`媒体 "${filename}" 导入失败`);
           }
@@ -402,7 +402,7 @@ class LocalExportService {
       logDebug('LocalExportService] Import completed:', result.stats);
 
       return result;
-    } catch (error) {
+    } catch (error: any) {
       logError('LocalExportService] Import failed:', error);
       result.errors.push(error instanceof Error ? error.message : '导入失败');
       return result;

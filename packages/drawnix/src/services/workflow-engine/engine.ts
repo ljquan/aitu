@@ -431,7 +431,7 @@ export class WorkflowEngine {
           const insertStepId = `${step.id}-insert-text`;
           if (!workflow.steps.find(s => s.id === insertStepId)) {
             // 将用户输入的 rawInput 作为一级标题，拼接在 AI 回复内容前面
-            const rawInput = workflow.metadata?.rawInput || '';
+            const rawInput = (workflow as any).metadata?.rawInput || '';
             const titlePrefix = rawInput.trim() ? `# ${rawInput.trim()}\n\n` : '';
             const insertStep: WorkflowStep = {
               id: insertStepId,

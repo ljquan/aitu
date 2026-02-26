@@ -206,7 +206,7 @@ export const withFreehandResize = (board: PlaitBoard) => {
   return withResize<Freehand, ResizeHandle>(board, {
     key: 'freehand',
     canResize: () => canResize(board),
-    hitTest: (point: Point) => hitTest(board, point),
+    hitTest: ((point: Point) => hitTest(board, point)) as any,
     onResize: (resizeRef, resizeState) => onResize(board, resizeRef, resizeState),
   });
 };

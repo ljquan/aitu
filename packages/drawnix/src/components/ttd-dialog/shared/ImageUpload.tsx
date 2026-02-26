@@ -115,9 +115,9 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
       });
 
       if (multiple) {
-        onImagesChange([...images, ...newImages]);
+        onImagesChange([...images, ...newImages] as any);
       } else {
-        onImagesChange(newImages.slice(0, 1));
+        onImagesChange(newImages.slice(0, 1) as any);
       }
 
       if (newImages.length !== sizeValidFiles.length) {

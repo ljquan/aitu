@@ -71,7 +71,7 @@ class ShardManager {
       if (content) {
         manifest = JSON.parse(content);
       }
-    } catch (error) {
+    } catch (error: any) {
       logWarning(`ShardManager] Failed to get manifest for shard ${shardId}:`, error);
     }
 
@@ -124,7 +124,7 @@ class ShardManager {
           shard.gistId
         );
       }
-    } catch (error) {
+    } catch (error: any) {
       logWarning(`ShardManager] Failed to update shard manifest:`, error);
     }
 
@@ -208,7 +208,7 @@ class ShardManager {
     // 删除 Gist
     try {
       await gitHubApiService.deleteGist(shard.gistId);
-    } catch (error) {
+    } catch (error: any) {
       logError(`ShardManager] Failed to delete Gist ${shard.gistId}:`, error);
       // 即使删除 Gist 失败，也从索引中移除
     }
@@ -374,7 +374,7 @@ class ShardManager {
         await gitHubApiService.deleteGistFiles([file.filename], sourceShard.gistId);
 
         result.movedFiles++;
-      } catch (error) {
+      } catch (error: any) {
         logError(`ShardManager] Failed to move file ${file.url}:`, error);
         result.errors.push(`移动文件失败: ${file.url}`);
       }
@@ -419,7 +419,7 @@ class ShardManager {
       // 检查 Gist 是否存在
       try {
         await gitHubApiService.getGist(shard.gistId);
-      } catch (error) {
+      } catch (error: any) {
         if (error instanceof GitHubApiError && error.statusCode === 404) {
           issues.push({
             shardId: shard.alias,
@@ -472,7 +472,7 @@ class ShardManager {
             });
           }
         }
-      } catch (error) {
+      } catch (error: any) {
         logError(`ShardManager] Failed to validate shard ${shard.alias}:`, error);
       }
     }
@@ -537,7 +537,7 @@ class ShardManager {
         repaired++;
 
         logDebug(`ShardManager] Repaired orphan file: ${filename} -> ${url}`);
-      } catch (error) {
+      } catch (error: any) {
         logError(`ShardManager] Failed to repair orphan file ${filename}:`, error);
       }
     }

@@ -379,7 +379,7 @@ export const TaskItem: React.FC<TaskItemProps> = React.memo(({
                     rel="noopener noreferrer"
                     className="task-item__link"
                     data-track="task_click_open_link"
-                    onClick={(e) => e.stopPropagation()}
+                    onClick={(e: any) => e.stopPropagation()}
                   >
                     · 打开链接
                   </a>
@@ -490,9 +490,8 @@ export const TaskItem: React.FC<TaskItemProps> = React.memo(({
                     }
                     theme="light"
                     placement="bottom"
-                    onClick={(e) => e.stopPropagation()}
                   >
-                    <span className="task-item__error-details-link">[详情]</span>
+                    <span className="task-item__error-details-link" onClick={(e: any) => e.stopPropagation()}>[详情]</span>
                   </Tooltip>
                 )}
               </div>

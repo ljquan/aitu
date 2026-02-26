@@ -142,7 +142,7 @@ class WorkflowStatusSyncService {
         const currentStatus: WorkflowStatusData = {
           id: dbWorkflow.id,
           status: dbWorkflow.status as WorkflowStatusData['status'],
-          steps: dbWorkflow.steps.map(s => ({
+          steps: dbWorkflow.steps.map((s: any) => ({
             id: s.id,
             mcp: s.mcp,
             args: s.args,
@@ -198,7 +198,7 @@ class WorkflowStatusSyncService {
     return {
       id: dbWorkflow.id,
       status: dbWorkflow.status as WorkflowStatusData['status'],
-      steps: dbWorkflow.steps.map(s => ({
+      steps: dbWorkflow.steps.map((s: any) => ({
         id: s.id,
         mcp: s.mcp,
         args: s.args,
@@ -208,7 +208,7 @@ class WorkflowStatusSyncService {
         error: s.error,
         duration: s.duration,
         options: s.options,
-      })),
+      })) as any,
       error: dbWorkflow.error,
       completedAt: dbWorkflow.completedAt,
     };

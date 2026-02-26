@@ -220,7 +220,7 @@ export const MultiImageUpload: React.FC<MultiImageUploadProps> = ({
               disabled={disabled}
               onChange={(files) => {
                 if (files && files.length > 0) {
-                  const file = files[0];
+          const file = files[0] as any;
                   if (file.raw) {
                     handleUpload(slot, file.raw);
                   }

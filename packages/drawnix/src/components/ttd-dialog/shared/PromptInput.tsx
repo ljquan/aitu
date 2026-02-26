@@ -101,6 +101,7 @@ export const PromptInput: React.FC<PromptInputProps> = ({
         window.removeEventListener('resize', updateTooltipPosition);
       };
     }
+    return undefined;
   }, [isPresetOpen, updateTooltipPosition]);
 
   // 点击外部关闭弹窗
@@ -121,6 +122,7 @@ export const PromptInput: React.FC<PromptInputProps> = ({
       document.addEventListener('mousedown', handleClickOutside);
       return () => document.removeEventListener('mousedown', handleClickOutside);
     }
+    return undefined;
   }, [isPresetOpen]);
 
   // 选择提示词 - 接收 PromptItem 对象或字符串

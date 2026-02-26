@@ -599,8 +599,8 @@ class ShardRouter {
     this.masterIndex = null;
     this.masterGistId = null;
     this.initialized = false;
-    await kvStorageService.delete(MASTER_INDEX_KEY);
-    await kvStorageService.delete(MASTER_GIST_ID_KEY);
+    await kvStorageService.remove(MASTER_INDEX_KEY);
+    await kvStorageService.remove(MASTER_GIST_ID_KEY);
     logDebug('Cleared local cache');
   }
 

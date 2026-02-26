@@ -13,7 +13,7 @@ import {
   Layers,
 } from 'lucide-react';
 import { ImageUploadIcon, MediaLibraryIcon } from '../icons';
-import { AssetType } from '../../types/asset.types';
+import { AssetType, AssetSource } from '../../types/asset.types';
 import { MediaLibraryStorageBar } from './MediaLibraryStorageBar';
 import type { MediaLibrarySidebarProps } from '../../types/asset.types';
 import './MediaLibrarySidebar.scss';

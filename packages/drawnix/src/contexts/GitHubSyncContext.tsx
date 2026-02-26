@@ -487,8 +487,8 @@ export function GitHubSyncProvider({ children }: GitHubSyncProviderProps) {
     if (isSyncing) {
       return {
         success: false,
-        uploaded: { boards: 0, prompts: 0, tasks: 0, media: 0 },
-        downloaded: { boards: 0, prompts: 0, tasks: 0, media: 0 },
+        uploaded: { boards: 0, prompts: 0, tasks: 0, media: 0, knowledgeBase: 0 },
+        downloaded: { boards: 0, prompts: 0, tasks: 0, media: 0, knowledgeBase: 0 },
         conflicts: [],
         duration: 0,
       };
@@ -535,8 +535,8 @@ export function GitHubSyncProvider({ children }: GitHubSyncProviderProps) {
     if (isSyncing) {
       return {
         success: false,
-        uploaded: { boards: 0, prompts: 0, tasks: 0, media: 0 },
-        downloaded: { boards: 0, prompts: 0, tasks: 0, media: 0 },
+        uploaded: { boards: 0, prompts: 0, tasks: 0, media: 0, knowledgeBase: 0 },
+        downloaded: { boards: 0, prompts: 0, tasks: 0, media: 0, knowledgeBase: 0 },
         conflicts: [],
         duration: 0,
       };
@@ -567,8 +567,8 @@ export function GitHubSyncProvider({ children }: GitHubSyncProviderProps) {
     if (isSyncing) {
       return {
         success: false,
-        uploaded: { boards: 0, prompts: 0, tasks: 0, media: 0 },
-        downloaded: { boards: 0, prompts: 0, tasks: 0, media: 0 },
+        uploaded: { boards: 0, prompts: 0, tasks: 0, media: 0, knowledgeBase: 0 },
+        downloaded: { boards: 0, prompts: 0, tasks: 0, media: 0, knowledgeBase: 0 },
         conflicts: [],
         duration: 0,
       };

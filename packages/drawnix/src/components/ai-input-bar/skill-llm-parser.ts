@@ -134,7 +134,7 @@ export class SkillLLMParser {
       );
 
       const chatPromise = defaultGeminiClient.sendChat(
-        messages,
+        messages as any,
         (accumulatedContent) => {
           fullResponse = accumulatedContent;
         },

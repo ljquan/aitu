@@ -182,8 +182,8 @@ export class WorkZoneComponent extends CommonElementFlavour<PlaitWorkZone, Plait
     // 创建 React root
     this.reactRoot = createRoot(this.container);
     this.reactRoot.render(
-      React.createElement(ToolProviderWrapper, { board: this.board },
-        React.createElement(WorkZoneContent, {
+      React.createElement(ToolProviderWrapper as any, { board: this.board },
+        React.createElement(WorkZoneContent as any, {
           workflow: this.element.workflow,
           onDelete: this.handleDelete,
           onWorkflowStateChange: this.handleWorkflowStateChange,
@@ -220,8 +220,8 @@ export class WorkZoneComponent extends CommonElementFlavour<PlaitWorkZone, Plait
       // 重新渲染 React 内容（workflow 数据可能变化）
       if (this.reactRoot) {
         this.reactRoot.render(
-          React.createElement(ToolProviderWrapper, { board: this.board },
-            React.createElement(WorkZoneContent, {
+          React.createElement(ToolProviderWrapper as any, { board: this.board },
+            React.createElement(WorkZoneContent as any, {
               workflow: value.element.workflow,
               onDelete: this.handleDelete,
               onWorkflowStateChange: this.handleWorkflowStateChange,

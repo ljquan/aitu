@@ -92,7 +92,7 @@ export const PopupLayerControlButton: React.FC<PopupLayerControlButtonProps> = (
               disabled={!canMoveUp}
               title={language === 'zh' ? '置顶' : 'Bring to Front'}
             >
-              {BringToFrontIcon}
+              <BringToFrontIcon />
               <span>{language === 'zh' ? '置顶' : 'Front'}</span>
             </button>
             
@@ -102,7 +102,7 @@ export const PopupLayerControlButton: React.FC<PopupLayerControlButtonProps> = (
               disabled={!canMoveUp}
               title={language === 'zh' ? '上移一层' : 'Bring Forward'}
             >
-              {BringForwardIcon}
+              <BringForwardIcon />
               <span>{language === 'zh' ? '上移' : 'Forward'}</span>
             </button>
             
@@ -112,7 +112,7 @@ export const PopupLayerControlButton: React.FC<PopupLayerControlButtonProps> = (
               disabled={!canMoveDown}
               title={language === 'zh' ? '下移一层' : 'Send Backward'}
             >
-              {SendBackwardIcon}
+              <SendBackwardIcon />
               <span>{language === 'zh' ? '下移' : 'Backward'}</span>
             </button>
             
@@ -122,7 +122,7 @@ export const PopupLayerControlButton: React.FC<PopupLayerControlButtonProps> = (
               disabled={!canMoveDown}
               title={language === 'zh' ? '置底' : 'Send to Back'}
             >
-              {SendToBackIcon}
+              <SendToBackIcon />
               <span>{language === 'zh' ? '置底' : 'Back'}</span>
             </button>
 

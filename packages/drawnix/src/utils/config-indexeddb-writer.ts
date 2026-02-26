@@ -69,7 +69,7 @@ class ConfigIndexedDBWriter {
   async saveGeminiConfig(config: GeminiConfig): Promise<void> {
     // 使用队列确保写入顺序
     this.writeQueue = this.writeQueue.then(async () => {
-      await this.saveConfigInternal('gemini', config);
+      await this.saveConfigInternal('gemini', config as any);
     }).catch((error) => {
       console.error('[ConfigWriter] Failed to save gemini config:', error);
     });
@@ -81,7 +81,7 @@ class ConfigIndexedDBWriter {
    */
   async saveVideoConfig(config: VideoAPIConfig): Promise<void> {
     this.writeQueue = this.writeQueue.then(async () => {
-      await this.saveConfigInternal('video', config);
+      await this.saveConfigInternal('video', config as any);
     }).catch((error) => {
       console.error('[ConfigWriter] Failed to save video config:', error);
     });

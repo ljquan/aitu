@@ -349,6 +349,10 @@ export interface WorkflowStatusSummary<TStep extends BaseWorkflowStep = BaseWork
   status: 'pending' | 'running' | 'completed' | 'failed';
   /** Number of completed steps */
   completedSteps: number;
+  /** Number of failed steps */
+  failedSteps: number;
+  /** Number of pending steps */
+  pendingSteps: number;
   /** Total number of steps */
   totalSteps: number;
   /** Current step (running or next pending) */

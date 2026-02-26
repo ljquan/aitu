@@ -268,6 +268,7 @@ const ProjectDrawerContent: React.FC<{
         document.removeEventListener('contextmenu', handleClick);
       };
     }
+    return undefined;
   }, [contextMenu?.visible, closeContextMenu]);
 
   // 处理右键菜单

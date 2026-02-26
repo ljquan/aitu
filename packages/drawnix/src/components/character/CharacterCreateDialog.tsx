@@ -88,7 +88,7 @@ export const CharacterCreateDialog: React.FC<CharacterCreateDialogProps> = ({
       );
 
       MessagePlugin.success('角色创建任务已加入队列');
-      onCreateComplete?.(characterTask.id);
+      onCreateComplete?.(characterTask!.id);
       onClose();
     } catch (err) {
       console.error('Failed to create character task:', err);

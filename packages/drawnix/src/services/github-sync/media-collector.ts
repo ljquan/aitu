@@ -362,7 +362,7 @@ class MediaCollector {
           item.size = cacheInfo.size;
           item.mimeType = cacheInfo.metadata?.mimeType as string | undefined;
         }
-      } catch (error) {
+      } catch (error: any) {
         // 忽略错误，继续处理其他项
         logWarning(`MediaCollector] Failed to get metadata for ${item.url}:`, error);
       }

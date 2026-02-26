@@ -178,9 +178,9 @@ class ToolboxService {
       ...updates,
       id, // 确保 ID 不被修改
     };
-    this.validateToolDefinition(updatedTool);
+    this.validateToolDefinition(updatedTool as any);
 
-    this.customTools[toolIndex] = updatedTool;
+    this.customTools[toolIndex] = updatedTool as any;
     await this.saveCustomTools();
     return true;
   }

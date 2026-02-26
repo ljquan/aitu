@@ -199,7 +199,7 @@ export const withCard: PlaitPlugin = (board: PlaitBoard) => {
   };
 
   // 支持粘贴/复制 Card 元素（insertFragment）
-  board.insertFragment = (clipboardData: any, targetPoint: Point, operationType: WritableClipboardOperationType) => {
+  (board as any).insertFragment = (clipboardData: any, targetPoint: Point, operationType: WritableClipboardOperationType) => {
     if (clipboardData?.elements?.length) {
       const cardElements = clipboardData.elements.filter(isCardElement) as PlaitCard[];
       if (cardElements.length > 0) {

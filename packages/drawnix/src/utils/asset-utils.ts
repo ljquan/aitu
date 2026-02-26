@@ -43,7 +43,7 @@ export function validateMimeType(
     ...ASSET_CONSTANTS.ALLOWED_VIDEO_TYPES,
   ];
 
-  if (!allowedTypes.includes(mimeType)) {
+  if (!allowedTypes.includes(mimeType as any)) {
     return {
       valid: false,
       error: `不支持的文件类型: ${mimeType}。只支持图片（JPG, PNG, GIF, WebP）和视频（MP4, WebM, OGG）。`,

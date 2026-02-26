@@ -264,7 +264,7 @@ class AgentExecutor {
 
       if (externalMessages && externalMessages.length > 0) {
         // 路径 B/C：直接使用外部传入的消息，不调用 generateSystemPrompt()
-        messages = externalMessages.map(msg => ({
+        messages = externalMessages.map((msg: any) => ({
           role: msg.role,
           content: typeof msg.content === 'string'
             ? [{ type: 'text', text: msg.content }]

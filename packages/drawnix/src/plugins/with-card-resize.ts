@@ -155,7 +155,7 @@ export const withCardResize: PlaitPlugin = (board: PlaitBoard) => {
   return withResize<PlaitCard, ResizeHandle>(board, {
     key: 'card-elements',
     canResize: () => canResize(board),
-    hitTest: (point: Point) => hitTest(board, point),
+    hitTest: ((point: Point) => hitTest(board, point)) as any,
     onResize: (resizeRef, resizeState) => onResize(board, resizeRef, resizeState),
   });
 };

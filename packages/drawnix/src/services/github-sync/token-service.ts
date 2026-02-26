@@ -41,7 +41,7 @@ class TokenService {
       
       // 清除验证状态缓存
       localStorage.removeItem(TOKEN_VALIDATED_KEY);
-    } catch (error) {
+    } catch (error: any) {
       logError('TokenService] Failed to save token:', error);
       throw new Error('保存 Token 失败');
     }
@@ -66,7 +66,7 @@ class TokenService {
       const token = await CryptoUtils.decrypt(encryptedToken);
       this.cachedToken = token;
       return token;
-    } catch (error) {
+    } catch (error: any) {
       logError('TokenService] Failed to get token:', error);
       // 解密失败，可能是数据损坏，清除存储
       this.clearToken();
@@ -153,7 +153,7 @@ class TokenService {
       }
 
       return isValid;
-    } catch (error) {
+    } catch (error: any) {
       logError('TokenService] Token validation failed:', error);
       return false;
     }
@@ -208,7 +208,7 @@ class TokenService {
       }
 
       return { isValid: true, userInfo };
-    } catch (error) {
+    } catch (error: any) {
       logError('TokenService] Token validation failed:', error);
       return { isValid: false, userInfo: null };
     }
@@ -253,7 +253,7 @@ class TokenService {
 
       // 如果没有 scope 头，通过响应状态判断
       return response.ok;
-    } catch (error) {
+    } catch (error: any) {
       logError('TokenService] Failed to check gist scope:', error);
       return false;
     }

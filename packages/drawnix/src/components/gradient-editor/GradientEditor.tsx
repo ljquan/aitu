@@ -383,7 +383,7 @@ export const GradientEditor: React.FC<GradientEditorProps> = ({
   }, [language, presetCategories]);
 
   // 使用的预设列表（转换为统一格式）
-  const presets: GradientFillPreset[] = useMemo(() => {
+  const presets = useMemo(() => {
     if (!customPresets) return GRADIENT_FILL_PRESETS;
     
     // 检查是否为 CSS 字符串数组
@@ -447,7 +447,7 @@ export const GradientEditor: React.FC<GradientEditorProps> = ({
                 className={classNames('ge-quick-preset-item ge-quick-preset-item--custom', {
                   'ge-quick-preset-item--selected': isPresetSelected(presetCSS),
                 })}
-                onClick={() => applyPreset(preset)}
+                onClick={() => applyPreset(preset as any)}
                 title={language === 'zh' ? preset.nameZh : preset.name}
               >
                 <div
@@ -477,7 +477,7 @@ export const GradientEditor: React.FC<GradientEditorProps> = ({
                 className={classNames('ge-quick-preset-item', {
                   'ge-quick-preset-item--selected': isPresetSelected(presetCSS),
                 })}
-                onClick={() => applyPreset(preset)}
+                onClick={() => applyPreset(preset as any)}
                 title={language === 'zh' ? preset.nameZh : preset.name}
               >
                 <div

@@ -22,7 +22,9 @@ const useBoardEvent = (
       if (isFromViewportChange(board)) {
         setIsFromViewportChange(board, false);
       } else {
-        const { scrollLeft, scrollTop } = event.target as HTMLElement;
+        const target = event.target as HTMLElement;
+        if (!target) return;
+        const { scrollLeft, scrollTop } = target;
         updateViewportByScrolling(board, scrollLeft, scrollTop);
       }
     },

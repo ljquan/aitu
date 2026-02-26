@@ -189,7 +189,7 @@ ${this.loopDetector.generateHistorySummary()}`;
     if (recursionCheck.isHardLimit) {
       forceTerminateReason = 'Maximum iteration limit reached';
     } else if (loopCheck.loopDetected) {
-      forceTerminateReason = `Loop detected: ${loopCheck.description}`;
+      forceTerminateReason = `Loop detected: ${loopCheck.description || 'Loop detected'}`;
     }
 
     return {

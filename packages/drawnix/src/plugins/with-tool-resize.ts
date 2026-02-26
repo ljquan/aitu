@@ -197,7 +197,7 @@ export const withToolResize: PlaitPlugin = (board: PlaitBoard) => {
   return withResize<PlaitTool, ResizeHandle>(board, {
     key: 'tool-elements',
     canResize: () => canResize(board),
-    hitTest: (point: Point) => hitTest(board, point),
+    hitTest: ((point: Point) => hitTest(board, point)) as any,
     onResize: (resizeRef, resizeState) => onResize(board, resizeRef, resizeState),
   });
 };

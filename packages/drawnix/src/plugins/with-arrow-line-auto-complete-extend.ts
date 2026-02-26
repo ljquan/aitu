@@ -506,7 +506,7 @@ export const withArrowLineAutoCompleteExtend = (board: PlaitBoard) => {
     }
 
     const elementRef = PlaitElement.getElementRef(originElement);
-    const generator = elementRef?.getGenerator?.(ArrowLineAutoCompleteGenerator.key);
+    const generator = (elementRef as any)?.getGenerator?.(ArrowLineAutoCompleteGenerator.key);
     if (!generator) {
       return;
     }

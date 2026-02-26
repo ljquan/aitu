@@ -189,6 +189,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = React.memo(
           window.removeEventListener('scroll', updatePosition, true);
         };
       }
+      return undefined;
     }, [isOpen]);
 
     const renderMenu = () => {

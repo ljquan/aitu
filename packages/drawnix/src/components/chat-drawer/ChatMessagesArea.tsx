@@ -54,7 +54,7 @@ export const ChatMessagesArea: React.FC<ChatMessagesAreaProps> = ({
   const getMessageMarkdown = useCallback((message: Message) => {
     const parts = message.parts
       .filter((part) => part.type === 'text' && 'text' in part)
-      .map((part) => (typeof part.text === 'string' ? part.text : String(part.text ?? '')));
+      .map((part) => (typeof (part as any).text === 'string' ? (part as any).text : String((part as any).text ?? '')));
     return parts.join('');
   }, []);
 

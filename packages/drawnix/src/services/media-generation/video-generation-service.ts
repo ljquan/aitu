@@ -29,11 +29,11 @@ export async function generateVideo(
 ): Promise<VideoGenerationResult> {
   // 参数验证
   const params = { prompt, ...options };
-  const validation = validateGenerationParams(params, TaskType.VIDEO);
+  const validation = validateGenerationParams(params as any, TaskType.VIDEO);
   if (!validation.valid) {
     throw new Error(validation.errors.join(', '));
   }
-  const sanitizedParams = sanitizeGenerationParams(params);
+  const sanitizedParams = sanitizeGenerationParams(params as any);
 
   // 确保 API Key 已解密
   await settingsManager.waitForInitialization();

@@ -127,7 +127,7 @@ export const splitImageTool: MCPTool = {
     required: ['imageUrl'],
   },
 
-  supportedModes: ['direct'],
+  supportedModes: ['direct' as any],
 
   execute: async (
     params: Record<string, unknown>,

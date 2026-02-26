@@ -38,6 +38,7 @@ export const TTDDialogInput = ({
         textarea.removeEventListener(EVENT.KEYDOWN, handleKeyDown);
       };
     }
+    return undefined;
   }, []);
 
   return (
