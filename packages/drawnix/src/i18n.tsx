@@ -85,6 +85,7 @@ export interface Translations {
   'menu.more': string;
   'menu.commandPalette': string;
   'menu.userManual': string;
+  'menu.changelog': string;
   'menu.cleanInvalidLinks': string;
   'menu.cleanInvalidLinks.scanning': string;
   'menu.cleanInvalidLinks.success': string;
@@ -271,6 +272,7 @@ const translations: Record<Language, Translations> = {
     'menu.more': '更多',
     'menu.commandPalette': '快捷命令',
     'menu.userManual': '用户手册',
+    'menu.changelog': '版本日志',
     'menu.cleanInvalidLinks': '清除失效媒体',
     'menu.cleanInvalidLinks.scanning': '正在扫描失效媒体...',
     'menu.cleanInvalidLinks.success': '已清除 {count} 个失效媒体',
@@ -454,6 +456,7 @@ const translations: Record<Language, Translations> = {
     'menu.more': 'More',
     'menu.commandPalette': 'Commands',
     'menu.userManual': 'User Manual',
+    'menu.changelog': 'Changelog',
     'menu.cleanInvalidLinks': 'Clean Invalid Media',
     'menu.cleanInvalidLinks.scanning': 'Scanning invalid media...',
     'menu.cleanInvalidLinks.success': 'Cleaned {count} invalid media',

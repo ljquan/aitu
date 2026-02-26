@@ -74,6 +74,26 @@ function updateHtmlWithVersion(version) {
   console.log(`✅ HTML updated with version ${version}`);
 }
 
+// 检查 changelog.json 是否包含当前版本
+function checkChangelog(version) {
+  const changelogPath = path.join(__dirname, '../apps/web/public/changelog.json');
+  if (!fs.existsSync(changelogPath)) {
+    console.log(`⚠️  changelog.json not found, skipping changelog check`);
+    return;
+  }
+  try {
+    const changelog = JSON.parse(fs.readFileSync(changelogPath, 'utf8'));
+    const hasEntry = (changelog.versions || []).some(v => v.version === version);
+    if (!hasEntry) {
+      console.log(`⚠️  Version ${version} has no entry in changelog.json — consider adding one`);
+    } else {
+      console.log(`✅ changelog.json has entry for ${version}`);
+    }
+  } catch (e) {
+    console.log(`⚠️  Failed to parse changelog.json: ${e.message}`);
+  }
+}
+
 // 主函数
 function main() {
   const version = getCurrentVersion();
@@ -83,6 +103,7 @@ function main() {
   // updateServiceWorkerVersion(version);
   createVersionFile(version);
   updateHtmlWithVersion(version);
+  checkChangelog(version);
   
   console.log(`🎉 Version update completed: ${version}`);
 }

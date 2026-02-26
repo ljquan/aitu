@@ -292,21 +292,30 @@ export const UserManual = () => {
 };
 UserManual.displayName = 'UserManual';
 
+export const ChangeLog = () => {
+  const { t } = useI18n();
+  return (
+    <MenuItem
+      icon={<BookOpenIcon />}
+      data-track="toolbar_click_menu_changelog"
+      onSelect={() => {
+        window.open('./versions.html', '_blank');
+      }}
+      aria-label={t('menu.changelog')}
+    >
+      {t('menu.changelog')}
+    </MenuItem>
+  );
+};
+ChangeLog.displayName = 'ChangeLog';
+
 export const VersionInfo = () => {
   const { t } = useI18n();
   // 从 HTML meta 标签获取版本号
   const version = document.querySelector('meta[name="app-version"]')?.getAttribute('content') || '0.0.0';
   
-  // 根据域名决定跳转地址
-  const getVersionsUrl = () => {
-    const hostname = window.location.hostname;
-    // unpkg.com 或 cdn.jsdelivr.net 域名使用内置版本选择页面
-    if (hostname.includes('unpkg.com') || hostname.includes('jsdelivr.net')) {
-      return './versions.html';
-    }
-    // 其他域名跳转到官方发布页面
-    return 'https://release.opentu.ai/';
-  };
+  // 跳转到 release 站点查看所有版本
+  const getVersionsUrl = () => 'https://release.opentu.ai/';
   
   return (
     <MenuItem

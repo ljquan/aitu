@@ -363,7 +363,9 @@ if [ -f "${releasesDir}/$VERSION/version.json" ] && [ -d "${releasesDir}/$VERSIO
 else
   echo "解压验证失败"
   exit 1
-fi`;
+fi
+cp "${releasesDir}/$VERSION/versions.html" "${releasesDir}/versions.html" 2>/dev/null || true
+cp "${releasesDir}/$VERSION/changelog.json" "${releasesDir}/changelog.json" 2>/dev/null || true`;
     
     // 将脚本编码为 base64，避免引号转义问题
     const encodedScript = Buffer.from(extractScript).toString('base64');

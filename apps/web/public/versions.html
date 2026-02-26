@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>OpenTu - 版本选择</title>
+    <title>OpenTu - 版本日志</title>
     <style>
       :root {
         --primary-color: #f39c12;
@@ -13,6 +13,7 @@
         --text-color: #333;
         --text-secondary: #666;
         --border-color: #e0e0e0;
+        --details-bg: #fafafa;
       }
 
       @media (prefers-color-scheme: dark) {
@@ -22,407 +23,265 @@
           --text-color: #e0e0e0;
           --text-secondary: #999;
           --border-color: #444;
+          --details-bg: #242424;
         }
       }
 
-      * {
-        box-sizing: border-box;
-        margin: 0;
-        padding: 0;
-      }
+      * { box-sizing: border-box; margin: 0; padding: 0; }
 
       body {
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
-          'Helvetica Neue', Arial, sans-serif;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
         background: var(--bg-color);
         color: var(--text-color);
         min-height: 100vh;
         padding: 20px;
       }
 
-      .container {
-        max-width: 800px;
-        margin: 0 auto;
-      }
+      .container { max-width: 800px; margin: 0 auto; }
 
-      header {
-        text-align: center;
-        margin-bottom: 30px;
-      }
+      header { text-align: center; margin-bottom: 30px; }
 
       h1 {
-        font-size: 28px;
-        margin-bottom: 8px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 10px;
+        font-size: 28px; margin-bottom: 8px;
+        display: flex; align-items: center; justify-content: center; gap: 10px;
       }
+      h1 .icon { font-size: 32px; }
+      .subtitle { color: var(--text-secondary); font-size: 14px; }
 
-      h1 .icon {
-        font-size: 32px;
-      }
-
-      .subtitle {
-        color: var(--text-secondary);
-        font-size: 14px;
-      }
-
-      .current-info {
-        background: var(--card-bg);
-        border-radius: 12px;
-        padding: 20px;
-        margin-bottom: 20px;
-        border: 1px solid var(--border-color);
-      }
-
-      .current-info h2 {
-        font-size: 16px;
-        color: var(--text-secondary);
-        margin-bottom: 8px;
-      }
-
-      .current-version {
-        font-size: 24px;
-        font-weight: bold;
-        color: var(--primary-color);
-      }
-
-      .loading {
-        text-align: center;
-        padding: 40px;
-        color: var(--text-secondary);
-      }
-
+      .loading { text-align: center; padding: 40px; color: var(--text-secondary); }
       .loading .spinner {
-        width: 40px;
-        height: 40px;
-        border: 3px solid var(--border-color);
-        border-top-color: var(--primary-color);
-        border-radius: 50%;
-        animation: spin 1s linear infinite;
-        margin: 0 auto 15px;
+        width: 40px; height: 40px; border: 3px solid var(--border-color);
+        border-top-color: var(--primary-color); border-radius: 50%;
+        animation: spin 1s linear infinite; margin: 0 auto 15px;
       }
-
-      @keyframes spin {
-        to {
-          transform: rotate(360deg);
-        }
-      }
+      @keyframes spin { to { transform: rotate(360deg); } }
 
       .error {
-        background: #fff0f0;
-        border: 1px solid #ffccc7;
-        color: #cf1322;
-        padding: 20px;
-        border-radius: 12px;
-        text-align: center;
+        background: #fff0f0; border: 1px solid #ffccc7; color: #cf1322;
+        padding: 20px; border-radius: 12px; text-align: center;
+      }
+      @media (prefers-color-scheme: dark) {
+        .error { background: #3a2020; border-color: #5a3030; color: #ff7875; }
       }
 
-      .version-list {
-        display: flex;
-        flex-direction: column;
-        gap: 12px;
+      .version-group { margin-bottom: 24px; }
+      .group-title {
+        font-size: 18px; font-weight: 600; margin-bottom: 12px;
+        padding-bottom: 8px; border-bottom: 2px solid var(--primary-color);
+        color: var(--primary-color);
       }
+      .version-list { display: flex; flex-direction: column; gap: 10px; }
 
       .version-card {
-        background: var(--card-bg);
-        border: 1px solid var(--border-color);
-        border-radius: 12px;
-        padding: 16px 20px;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        transition: all 0.2s ease;
-        cursor: pointer;
-        text-decoration: none;
-        color: inherit;
+        background: var(--card-bg); border: 1px solid var(--border-color);
+        border-radius: 12px; transition: all 0.2s ease; overflow: hidden;
       }
-
       .version-card:hover {
         border-color: var(--primary-color);
-        transform: translateY(-2px);
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
       }
-
-      .version-card.current {
-        border-color: var(--primary-color);
-        background: linear-gradient(
-          135deg,
-          rgba(243, 156, 18, 0.1) 0%,
-          rgba(230, 126, 34, 0.05) 100%
-        );
+      .version-header {
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 14px 20px; cursor: pointer; user-select: none;
       }
-
-      .version-info {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-      }
-
-      .version-number {
-        font-size: 18px;
-        font-weight: 600;
-      }
-
+      .version-meta { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+      .version-number { font-size: 17px; font-weight: 600; }
+      .version-date { font-size: 13px; color: var(--text-secondary); }
       .version-tag {
-        font-size: 12px;
-        padding: 2px 8px;
-        border-radius: 4px;
-        background: var(--primary-color);
-        color: white;
+        font-size: 11px; padding: 2px 8px; border-radius: 4px;
+        background: var(--primary-color); color: white;
+      }
+      .version-tag.major { background: #722ed1; }
+      .version-tag.minor { background: #1890ff; }
+
+      .version-highlights {
+        font-size: 13px; color: var(--text-secondary);
+        margin-top: 4px; line-height: 1.4;
       }
 
-      .version-tag.latest {
-        background: #52c41a;
+      .version-right { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+      .expand-btn {
+        background: none; border: none; cursor: pointer; padding: 4px;
+        color: var(--text-secondary); transition: transform 0.2s ease;
+        font-size: 18px; line-height: 1;
+      }
+      .expand-btn.expanded { transform: rotate(180deg); }
+
+      .version-details {
+        max-height: 0; overflow: hidden; transition: max-height 0.3s ease;
+        border-top: none;
+      }
+      .version-details.open {
+        max-height: 5000px; border-top: 1px solid var(--border-color);
+      }
+      .version-details-inner { padding: 14px 20px; background: var(--details-bg); }
+
+      .change-category { margin-bottom: 12px; }
+      .change-category:last-child { margin-bottom: 0; }
+      .change-category-title {
+        font-size: 13px; font-weight: 600; margin-bottom: 6px;
+        display: flex; align-items: center; gap: 6px;
+      }
+      .change-category-title .emoji { font-size: 14px; }
+      .change-list {
+        list-style: none; padding: 0; margin: 0;
+        font-size: 13px; line-height: 1.8;
+      }
+      .change-list li { padding-left: 16px; position: relative; }
+      .change-list li::before {
+        content: '•'; position: absolute; left: 4px; color: var(--text-secondary);
       }
 
-      .version-tag.current {
-        background: var(--primary-color);
+      .load-more {
+        display: block; width: 100%; padding: 12px; margin-top: 16px;
+        background: var(--card-bg); border: 1px solid var(--border-color);
+        border-radius: 8px; color: var(--primary-color); font-size: 14px;
+        cursor: pointer; transition: all 0.2s;
       }
-
-      .version-action {
-        color: var(--primary-color);
-        font-size: 14px;
-        display: flex;
-        align-items: center;
-        gap: 4px;
-      }
-
-      .version-action svg {
-        width: 16px;
-        height: 16px;
-      }
+      .load-more:hover { border-color: var(--primary-color); background: rgba(243,156,18,0.05); }
 
       .footer {
-        margin-top: 30px;
-        text-align: center;
-        color: var(--text-secondary);
-        font-size: 13px;
+        margin-top: 30px; text-align: center; color: var(--text-secondary); font-size: 13px;
       }
-
-      .footer a {
-        color: var(--primary-color);
-        text-decoration: none;
-      }
-
-      .footer a:hover {
-        text-decoration: underline;
-      }
-
-      .cdn-links {
-        margin-top: 20px;
-        padding: 15px;
-        background: var(--card-bg);
-        border-radius: 12px;
-        border: 1px solid var(--border-color);
-      }
-
-      .cdn-links h3 {
-        font-size: 14px;
-        color: var(--text-secondary);
-        margin-bottom: 10px;
-      }
-
-      .cdn-link {
-        display: block;
-        padding: 8px 12px;
-        background: var(--bg-color);
-        border-radius: 6px;
-        margin-bottom: 8px;
-        font-family: monospace;
-        font-size: 13px;
-        word-break: break-all;
-        color: var(--text-color);
-        text-decoration: none;
-      }
-
-      .cdn-link:hover {
-        background: rgba(243, 156, 18, 0.1);
-      }
-
-      .cdn-link:last-child {
-        margin-bottom: 0;
-      }
+      .footer a { color: var(--primary-color); text-decoration: none; }
+      .footer a:hover { text-decoration: underline; }
     </style>
   </head>
   <body>
     <div class="container">
       <header>
         <h1>
-          <span class="icon">🎨</span>
-          OpenTu - 版本选择
+          <span class="icon">📋</span>
+          OpenTu - 版本日志
         </h1>
-        <p class="subtitle">选择要使用的版本</p>
+        <p class="subtitle">点击展开查看更新详情</p>
       </header>
-
-      <div class="current-info">
-        <h2>当前版本</h2>
-        <div class="current-version" id="currentVersion">加载中...</div>
-      </div>
 
       <div id="versionList" class="loading">
         <div class="spinner"></div>
-        <p>正在加载版本列表...</p>
-      </div>
-
-      <div class="cdn-links">
-        <h3>CDN 访问链接</h3>
-        <a class="cdn-link" id="unpkgLink" href="#" target="_blank"
-          >unpkg: 加载中...</a
-        >
-        <a class="cdn-link" id="jsdelivrLink" href="#" target="_blank"
-          >jsdelivr: 加载中...</a
-        >
+        <p>正在加载版本日志...</p>
       </div>
 
       <footer class="footer">
         <p>
           <a href="https://github.com/ljquan/aitu" target="_blank">GitHub</a> ·
-          <a href="https://opentu.ai" target="_blank">官网</a> ·
-          <a href="https://release.opentu.ai" target="_blank">更多版本</a>
+          <a href="https://opentu.ai" target="_blank">官网</a>
         </p>
       </footer>
     </div>
-
     <script>
-      const PACKAGE_NAME = 'aitu-app';
-      const NPM_REGISTRY = 'https://registry.npmjs.org';
-
-      // 获取当前版本
-      function getCurrentVersion() {
-        // 从 URL 路径中提取版本号
-        const match = window.location.pathname.match(/@([^/]+)/);
-        if (match) {
-          return match[1];
+      function groupByMinor(versions) {
+        const groups = {};
+        for (const v of versions) {
+          const parts = v.version.split('.');
+          const key = parts[0] + '.' + parts[1];
+          if (!groups[key]) groups[key] = [];
+          groups[key].push(v);
         }
-        // 从 meta 标签获取
-        const meta = document.querySelector('meta[name="app-version"]');
-        if (meta) {
-          return meta.getAttribute('content');
-        }
-        return null;
+        return groups;
       }
 
-      // 获取当前 CDN 类型
-      function getCdnType() {
-        const hostname = window.location.hostname;
-        if (hostname.includes('unpkg.com')) return 'unpkg';
-        if (hostname.includes('jsdelivr.net')) return 'jsdelivr';
-        return 'unpkg'; // 默认
-      }
-
-      // 生成版本链接
-      function getVersionUrl(version, cdnType) {
-        if (cdnType === 'jsdelivr') {
-          return `https://cdn.jsdelivr.net/npm/${PACKAGE_NAME}@${version}/index.html`;
+      function renderChangeDetails(changelog) {
+        if (!changelog || !changelog.changes) return '';
+        const categories = [
+          { key: 'features', emoji: '✨', label: '新功能' },
+          { key: 'fixes', emoji: '🐛', label: '修复' },
+          { key: 'improvements', emoji: '💡', label: '优化' },
+        ];
+        let html = '';
+        for (const cat of categories) {
+          const items = changelog.changes[cat.key];
+          if (!items || items.length === 0) continue;
+          html += '<div class="change-category">' +
+            '<div class="change-category-title">' +
+            '<span class="emoji">' + cat.emoji + '</span>' + cat.label +
+            '</div><ul class="change-list">' +
+            items.map(function(item) { return '<li>' + item + '</li>'; }).join('') +
+            '</ul></div>';
         }
-        return `https://unpkg.com/${PACKAGE_NAME}@${version}/index.html`;
+        return html;
       }
 
-      // 获取版本列表
-      async function fetchVersions() {
-        try {
-          const response = await fetch(`${NPM_REGISTRY}/${PACKAGE_NAME}`);
-          if (!response.ok) {
-            throw new Error('Failed to fetch package info');
+      function toggleDetails(cardId) {
+        var details = document.getElementById('details-' + cardId);
+        var btn = document.getElementById('btn-' + cardId);
+        if (!details || !btn) return;
+        details.classList.toggle('open');
+        btn.classList.toggle('expanded');
+      }
+
+      var PAGE_SIZE = 30;
+      var allVersions = [];
+
+      function renderVersionList(versions) {
+        var container = document.getElementById('versionList');
+        var groups = groupByMinor(versions);
+        var isFirst = true;
+        var html = '';
+
+        for (var groupKey in groups) {
+          var groupVersions = groups[groupKey];
+          html += '<div class="version-group">' +
+            '<div class="group-title">v' + groupKey + '.x</div>' +
+            '<div class="version-list">';
+
+          for (var i = 0; i < groupVersions.length; i++) {
+            var entry = groupVersions[i];
+            var hasDetails = entry.changes && Object.values(entry.changes).some(function(a) { return a && a.length > 0; });
+            var cardId = entry.version.replace(/\./g, '-');
+            var tags = '';
+            if (entry.type === 'major') tags += '<span class="version-tag major">大版本</span>';
+            else if (entry.type === 'minor') tags += '<span class="version-tag minor">新版本</span>';
+
+            var dateStr = entry.date || '';
+            var highlights = entry.highlights || '';
+            var detailsHtml = hasDetails ? renderChangeDetails(entry) : '';
+            var defaultOpen = isFirst && hasDetails;
+
+            html += '<div class="version-card">' +
+              '<div class="version-header"' + (hasDetails ? ' onclick="toggleDetails(\'' + cardId + '\')"' : '') + '>' +
+              '<div>' +
+              '<div class="version-meta">' +
+              '<span class="version-number">v' + entry.version + '</span>' +
+              tags +
+              (dateStr ? '<span class="version-date">' + dateStr + '</span>' : '') +
+              '</div>' +
+              (highlights ? '<div class="version-highlights">' + highlights + '</div>' : '') +
+              '</div>' +
+              '<div class="version-right">' +
+              (hasDetails ? '<button class="expand-btn' + (defaultOpen ? ' expanded' : '') + '" id="btn-' + cardId + '" onclick="event.stopPropagation();toggleDetails(\'' + cardId + '\')">▾</button>' : '') +
+              '</div>' +
+              '</div>' +
+              (hasDetails ? '<div class="version-details' + (defaultOpen ? ' open' : '') + '" id="details-' + cardId + '"><div class="version-details-inner">' + detailsHtml + '</div></div>' : '') +
+              '</div>';
+
+            isFirst = false;
           }
-          const data = await response.json();
-          return {
-            versions: Object.keys(data.versions).reverse(),
-            latest:
-              data['dist-tags']?.latest || Object.keys(data.versions).pop(),
-          };
-        } catch (error) {
-          console.error('Error fetching versions:', error);
-          throw error;
+          html += '</div></div>';
+        }
+        container.innerHTML = html;
+
+        // 显示"加载更多"按钮
+        if (versions.length < allVersions.length) {
+          var btn = document.createElement('button');
+          btn.className = 'load-more';
+          btn.textContent = '加载更多（共 ' + allVersions.length + ' 个版本）';
+          btn.onclick = function() { renderVersionList(allVersions); };
+          container.appendChild(btn);
         }
       }
 
-      // 渲染版本列表
-      function renderVersionList(
-        versions,
-        latestVersion,
-        currentVersion,
-        cdnType
-      ) {
-        const container = document.getElementById('versionList');
-
-        // 只显示最近 20 个版本
-        const displayVersions = versions.slice(0, 20);
-
-        const html = displayVersions
-          .map((version) => {
-            const isCurrent = version === currentVersion;
-            const isLatest = version === latestVersion;
-            const url = getVersionUrl(version, cdnType);
-
-            let tags = '';
-            if (isLatest) {
-              tags += '<span class="version-tag latest">最新</span>';
-            }
-            if (isCurrent) {
-              tags += '<span class="version-tag current">当前</span>';
-            }
-
-            return `
-          <a href="${url}" class="version-card ${isCurrent ? 'current' : ''}" ${
-              isCurrent ? '' : ''
-            }>
-            <div class="version-info">
-              <span class="version-number">v${version}</span>
-              ${tags}
-            </div>
-            <div class="version-action">
-              ${isCurrent ? '当前版本' : '使用此版本'}
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M9 18l6-6-6-6"/>
-              </svg>
-            </div>
-          </a>
-        `;
-          })
-          .join('');
-
-        container.innerHTML = `<div class="version-list">${html}</div>`;
-      }
-
-      // 更新 CDN 链接
-      function updateCdnLinks(latestVersion) {
-        const unpkgLink = document.getElementById('unpkgLink');
-        const jsdelivrLink = document.getElementById('jsdelivrLink');
-
-        unpkgLink.href = `https://unpkg.com/${PACKAGE_NAME}@${latestVersion}/index.html`;
-        unpkgLink.textContent = `unpkg: https://unpkg.com/${PACKAGE_NAME}@${latestVersion}/`;
-
-        jsdelivrLink.href = `https://cdn.jsdelivr.net/npm/${PACKAGE_NAME}@${latestVersion}/index.html`;
-        jsdelivrLink.textContent = `jsdelivr: https://cdn.jsdelivr.net/npm/${PACKAGE_NAME}@${latestVersion}/`;
-      }
-
-      // 初始化
       async function init() {
-        const currentVersion = getCurrentVersion();
-        const cdnType = getCdnType();
-
-        // 显示当前版本
-        document.getElementById('currentVersion').textContent = currentVersion
-          ? `v${currentVersion}`
-          : '未知';
-
         try {
-          const { versions, latest } = await fetchVersions();
-          renderVersionList(versions, latest, currentVersion, cdnType);
-          updateCdnLinks(latest);
+          var response = await fetch('./changelog.json');
+          if (!response.ok) throw new Error('Failed to fetch changelog');
+          var data = await response.json();
+          allVersions = data.versions || [];
+          renderVersionList(allVersions.slice(0, PAGE_SIZE));
         } catch (error) {
-          document.getElementById('versionList').innerHTML = `
-          <div class="error">
-            <p>加载版本列表失败</p>
-            <p style="margin-top: 10px; font-size: 13px;">请检查网络连接或访问 
-              <a href="https://www.npmjs.com/package/${PACKAGE_NAME}?activeTab=versions" target="_blank">npm</a> 
-              查看所有版本
-            </p>
-          </div>
-        `;
+          document.getElementById('versionList').innerHTML =
+            '<div class="error"><p>加载版本日志失败</p>' +
+            '<p style="margin-top:10px;font-size:13px;">请检查网络连接</p></div>';
         }
       }
 
