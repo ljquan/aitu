@@ -186,7 +186,7 @@ export const geminiVideoAdapter: VideoModelAdapter = {
     return {
       url,
       format: 'mp4',
-      duration: parseInt(result.seconds || seconds, 10),
+      duration: parseInt(result.seconds || seconds || '0', 10),
       raw: result,
     };
   },
