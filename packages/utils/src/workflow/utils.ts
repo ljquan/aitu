@@ -138,6 +138,8 @@ export function getWorkflowStatus<
   return {
     status,
     completedSteps,
+    failedSteps,
+    pendingSteps,
     totalSteps: steps.length,
     currentStep: runningStep || steps.find((s) => normalizeStatus(s.status) === 'pending'),
   };

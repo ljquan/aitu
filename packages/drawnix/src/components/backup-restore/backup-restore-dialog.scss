@@ -43,7 +43,7 @@
 
     &--active {
       background: white;
-      color: #1890ff;
+      color: var(--td-brand-color);
       box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
     }
 
@@ -81,8 +81,8 @@
       transition: all 0.2s;
 
       &:hover {
-        border-color: #1890ff;
-        background: rgba(24, 144, 255, 0.02);
+        border-color: var(--td-brand-color);
+        background: var(--td-brand-color-light);
       }
     }
 
@@ -123,8 +123,8 @@
     margin-bottom: 20px;
 
     &:hover {
-      border-color: #1890ff;
-      background: rgba(24, 144, 255, 0.02);
+      border-color: var(--td-brand-color);
+      background: var(--td-brand-color-light);
     }
   }
 
@@ -147,7 +147,7 @@
     }
 
     .t-progress__inner {
-      background: linear-gradient(135deg, #1890ff 0%, #096dd9 100%);
+      background: linear-gradient(135deg, var(--td-brand-color) 0%, var(--td-brand-color-6) 100%);
     }
   }
 
@@ -226,11 +226,11 @@
     }
 
     &--primary {
-      background: linear-gradient(135deg, #1890ff 0%, #096dd9 100%);
+      background: linear-gradient(135deg, var(--td-brand-color) 0%, var(--td-brand-color-6) 100%);
       color: white;
 
       &:hover:not(:disabled) {
-        background: linear-gradient(135deg, #40a9ff 0%, #1890ff 100%);
+        background: linear-gradient(135deg, var(--td-brand-color-4) 0%, var(--td-brand-color) 100%);
       }
     }
   }

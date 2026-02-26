@@ -155,6 +155,7 @@ export const CharacterTimeRangeSelector: React.FC<CharacterTimeRangeSelectorProp
       }, 100);
       return () => clearTimeout(timer);
     }
+    return undefined;
   }, [isVideoReady, duration, frameStrip.length, isGeneratingStrip, generateFrameStrip]);
 
   // Generate frame image

@@ -102,10 +102,10 @@ export const CanvasSearch: React.FC<CanvasSearchProps> = ({ open, onClose, board
       if (!match) return;
 
       try {
-        const rect = getRectangleByElements(board, [match.element], false);
+        const rect = getRectangleByElements(board!, [match.element], false);
         const centerX = rect.x + rect.width / 2;
         const centerY = rect.y + rect.height / 2;
-        scrollToPoint(board, [centerX, centerY]);
+        scrollToPoint(board!, [centerX, centerY]);
       } catch {
         // 静默处理
       }

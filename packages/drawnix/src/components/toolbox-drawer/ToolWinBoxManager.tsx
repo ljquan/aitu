@@ -213,7 +213,7 @@ export const ToolWinBoxManager: React.FC = () => {
                     {language === 'zh' ? '加载中...' : 'Loading...'}
                   </div>
                 }>
-                  <InternalComponent />
+                  <InternalComponent {...(state.componentProps || {})} />
                 </Suspense>
               ) : tool.url ? (
                 <iframe

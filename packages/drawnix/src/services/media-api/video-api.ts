@@ -49,7 +49,7 @@ export async function submitVideoGeneration(
   const baseUrl = normalizeApiBase(config.baseUrl);
   const model = params.model || config.defaultModel || 'veo3';
   // seconds can come from duration (number/string) or explicit seconds
-  const secondsParam = params.duration ?? params.seconds;
+  const secondsParam = params.duration ?? (params as any).seconds;
 
   // 构建 FormData
   const formData = new FormData();

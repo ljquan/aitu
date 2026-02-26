@@ -15,7 +15,7 @@ export const Island = React.forwardRef<HTMLDivElement, IslandProps>(
   ({ children, padding, className, style, ...restProps }, ref) => (
     <div
       className={classNames('island', className)}
-      style={{ '--padding': padding, ...style }}
+      style={{ '--padding': padding, ...style } as React.CSSProperties}
       ref={ref}
       {...restProps}
     >

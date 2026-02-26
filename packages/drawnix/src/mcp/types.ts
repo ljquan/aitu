@@ -287,4 +287,13 @@ export interface AgentExecuteOptions {
   signal?: AbortSignal;
   /** 最大工具调用轮数 */
   maxIterations?: number;
+  /**
+   * 预构建的消息数组（优先级高于内部生成的 messages）
+   * 传入时直接使用，跳过 generateSystemPrompt() 的调用
+   * 用于 Skill 路径 B（Agent 精准注入）和路径 C（角色扮演）
+   */
+  messages?: Array<{
+    role: 'system' | 'user' | 'assistant';
+    content: string | Array<{ type: string; text?: string }>;
+  }>;
 }

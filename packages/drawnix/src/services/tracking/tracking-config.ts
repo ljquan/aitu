@@ -52,6 +52,8 @@ export const DEFAULT_TRACK_CONFIG: TrackConfig = {
   devMode: false,
 };
 
+declare const __APP_VERSION__: string;
+
 /**
  * Get version from environment variable or fallback
  */

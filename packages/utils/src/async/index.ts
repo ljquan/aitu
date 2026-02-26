@@ -130,7 +130,7 @@ export const processBatched = async <T, R>(
 ): Promise<R[]> => {
   const results: R[] = [];
   for (let i = 0; i < items.length; i++) {
-    results.push(await processor(items[i], i));
+    results.push(await processor(items[i]!, i));
     if ((i + 1) % batchSize === 0) {
       await yieldToMain();
     }

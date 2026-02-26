@@ -47,9 +47,10 @@
       "executor": "nx:run-commands",
       "options": {
         "commands": [
-        "nx run web:build-app",
-        "nx run web:build-sw"
-      ],
+          "nx run web:typecheck",
+          "nx run web:build-app",
+          "nx run web:build-sw"
+        ],
         "parallel": false
       }
     },
@@ -70,7 +71,7 @@
     "typecheck": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "tsc --noEmit",
+        "command": "tsc -p tsconfig.app.json --noEmit",
         "cwd": "apps/web"
       }
     }

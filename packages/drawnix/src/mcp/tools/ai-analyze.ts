@@ -10,7 +10,7 @@
  * - onUpdateStep: 更新步骤状态
  */
 
-import type { MCPTool, MCPResult, MCPExecuteOptions, AgentExecutionContext, WorkflowStepInfo } from '../types';
+import type { MCPTool, MCPResult, MCPExecuteOptions, AgentExecutionContext, WorkflowStepInfo, AgentExecuteOptions } from '../types';
 import { getModelType, IMAGE_MODELS } from '../types';
 import { agentExecutor } from '../../services/agent';
 import { geminiSettings } from '../../utils/settings-manager';
@@ -23,6 +23,15 @@ export interface AIAnalyzeParams {
   context: AgentExecutionContext;
   /** 使用的文本模型 */
   textModel?: string;
+  /**
+   * 预构建的消息数组（优先级高于 agentExecutor 内部生成的 messages）
+   * 用于 Skill 路径 B（Agent 精准注入）和路径 C（角色扮演）
+   * 传入时直接使用，不再调用 generateSystemPrompt()
+   */
+  messages?: Array<{
+    role: 'system' | 'user' | 'assistant';
+    content: string | Array<{ type: string; text?: string }>;
+  }>;
 }
 
 /**
@@ -65,6 +74,10 @@ export const aiAnalyzeTool: MCPTool = {
         type: 'string',
         description: '使用的文本模型 ID',
       },
+      messages: {
+        type: 'array',
+        description: '预构建的消息数组，传入时直接使用，不再生成默认系统提示词（用于 Skill 角色扮演/精准工具注入）',
+      },
     },
     required: ['context'],
   },
@@ -72,7 +85,7 @@ export const aiAnalyzeTool: MCPTool = {
   supportedModes: ['async'],
 
   execute: async (params: Record<string, unknown>, options?: MCPExecuteOptions): Promise<MCPResult> => {
-    const { context, textModel } = params as unknown as AIAnalyzeParams;
+    const { context, textModel, messages } = params as unknown as AIAnalyzeParams;
 
     if (!context) {
       return {
@@ -90,10 +103,12 @@ export const aiAnalyzeTool: MCPTool = {
         userInstruction: context.userInstruction?.substring(0, 50),
         model: context.model,
         textModel,
+        hasCustomMessages: !!messages,
       });
 
       const result = await agentExecutor.execute(context, {
         model: textModel || context.model.id,
+        messages: messages as AgentExecuteOptions['messages'],
         onChunk: (chunk) => {
           // console.log('[AIAnalyzeTool] Chunk:', chunk);
           // 使用标准回调

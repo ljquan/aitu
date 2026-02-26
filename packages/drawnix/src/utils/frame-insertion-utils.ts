@@ -58,7 +58,7 @@ export function setPPTImagePlaceholderStatus(
 export function removePPTImagePlaceholder(board: PlaitBoard, frameId: string): void {
   const hit = findPPTImagePlaceholder(board, frameId);
   if (!hit) return;
-  Transforms.removeNodes(board, { at: [hit.index] });
+  Transforms.removeNode(board, [hit.index]);
 }
 
 export function insertPPTImagePlaceholder(

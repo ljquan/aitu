@@ -5,6 +5,7 @@
 import type { Folder, BoardMetadata, Board } from '../../types/workspace.types';
 import type { PromptHistoryItem, VideoPromptHistoryItem, ImagePromptHistoryItem } from '../prompt-storage-service';
 import type { Task } from '../../types/task.types';
+import type { KBExportData } from '../kb-import-export-service';
 
 // ====================================
 // 同步状态
@@ -197,6 +198,9 @@ export interface TasksData {
   /** 已完成的任务列表 */
   completedTasks: Task[];
 }
+
+/** 知识库数据 - knowledge-base.json */
+export type KnowledgeBaseData = KBExportData;
 
 // ====================================
 // 任务分页同步类型 (新格式)
@@ -613,6 +617,7 @@ export interface SyncResult {
     prompts: number;
     tasks: number;
     media: number;
+    knowledgeBase: number;
   };
   /** 下载的项目数量 */
   downloaded: {
@@ -620,6 +625,7 @@ export interface SyncResult {
     prompts: number;
     tasks: number;
     media: number;
+    knowledgeBase: number;
   };
   /** 删除的项目数量（本地删除，远程标记 tombstone） */
   deleted?: {
@@ -866,6 +872,7 @@ export const SYNC_FILES = {
   // 注意：tasks.json 已废弃，改用分页格式 (task-index.json + tasks_p{n}.json)
   SETTINGS: 'settings.json',
   CUSTOM_TOOLS: 'custom-tools.json',
+  KNOWLEDGE_BASE: 'knowledge-base.json',
   boardFile: (id: string) => `board_${id}.json`,
   /** 基于 URL 的媒体文件名（使用 hash 编码，固定长度） */
   mediaFile: (url: string) => `media_${encodeUrlToFilename(url)}.json`,
@@ -942,7 +949,7 @@ export function encodeUrlToFilename(url: string): string {
  * URL 应从 shard-manifest.json 或 fileIndex 中查找。
  * 此函数仅用于兼容性，返回 null 表示需要从 manifest 查找。
  */
-export function decodeFilenameToUrl(filename: string): string | null {
+export function decodeFilenameToUrl(_filename: string): string | null {
   // Hash 是单向的，无法直接解码
   // URL 需要从 shard-manifest.json 或 MasterIndex.fileIndex 中查找
   return null;

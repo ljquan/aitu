@@ -1,7 +1,9 @@
 /**
  * With Text Paste Plugin
  *
- * 处理文本粘贴到画布，自动控制文本宽度避免过长
+ * 处理文本粘贴到画布：
+ * - 包含 Markdown 特征的文本 → 解析为 Card 标签贴插入
+ * - 普通文本 → 自动控制文本宽度避免过长
  */
 
 import {
@@ -11,6 +13,8 @@ import {
   WritableClipboardOperationType,
 } from '@plait/core';
 import { DrawTransforms } from '@plait/draw';
+import { parseMarkdownToCards } from '../utils/markdown-to-cards';
+import { insertCardsToCanvas } from '../utils/insert-cards';
 
 /**
  * 文本宽度配置
@@ -119,17 +123,20 @@ export const withTextPastePlugin = (board: PlaitBoard) => {
       const text = extractText(clipboardData!);
 
       if (text && text.trim()) {
-        // 处理文本：自动换行
-        const wrappedText = wrapLongText(text.trim());
+        const trimmedText = text.trim();
 
-        // 插入文本到画布
+        // 尝试解析为 Markdown Card 块
+        const cardBlocks = parseMarkdownToCards(trimmedText);
+        if (cardBlocks && cardBlocks.length > 0) {
+          // 有 Markdown 特征 → 插入为 Card 标签贴（宽度与知识库插入保持一致：50% 屏幕宽度）
+          const cardWidth = Math.round(window.innerWidth * 0.5);
+          insertCardsToCanvas(board, cardBlocks, targetPoint, cardWidth);
+          return;
+        }
+
+        // 普通文本 → 自动换行后插入
+        const wrappedText = wrapLongText(trimmedText);
         DrawTransforms.insertText(board, targetPoint, wrappedText);
-
-        // console.log('[TextPaste] Inserted text with auto-wrap:', {
-        //   originalLength: text.length,
-        //   wrappedLines: wrappedText.split('\n').length,
-        // });
-
         return;
       }
     }

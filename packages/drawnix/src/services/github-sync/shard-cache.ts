@@ -104,7 +104,7 @@ class ShardCache {
       }
 
       return manifest;
-    } catch (error) {
+    } catch (error: any) {
       logError(`ShardCache] Failed to fetch shard manifest for ${shardId}:`, error);
       return null;
     }
@@ -137,7 +137,7 @@ class ShardCache {
     this.manifestCache.delete(shardId);
 
     if (this.persistentCacheEnabled) {
-      await kvStorageService.delete(`${SHARD_MANIFEST_CACHE_PREFIX}${shardId}`);
+      await kvStorageService.remove(`${SHARD_MANIFEST_CACHE_PREFIX}${shardId}`);
     }
 
     logDebug(`ShardCache] Invalidated cache for shard ${shardId}`);
@@ -195,7 +195,7 @@ class ShardCache {
       }
 
       return index;
-    } catch (error) {
+    } catch (error: any) {
       logError('ShardCache] Failed to fetch master index:', error);
       return null;
     }
@@ -297,7 +297,7 @@ class ShardCache {
       if (entry.expiresAt <= now) {
         this.manifestCache.delete(shardId);
         if (this.persistentCacheEnabled) {
-          await kvStorageService.delete(`${SHARD_MANIFEST_CACHE_PREFIX}${shardId}`);
+          await kvStorageService.remove(`${SHARD_MANIFEST_CACHE_PREFIX}${shardId}`);
         }
         cleaned++;
       }
@@ -307,7 +307,7 @@ class ShardCache {
     if (this.masterIndexCache && this.masterIndexCache.expiresAt <= now) {
       this.masterIndexCache = null;
       if (this.persistentCacheEnabled) {
-        await kvStorageService.delete(MASTER_INDEX_CACHE_KEY);
+        await kvStorageService.remove(MASTER_INDEX_CACHE_KEY);
       }
       cleaned++;
     }
@@ -331,9 +331,9 @@ class ShardCache {
     // 清除持久化缓存
     if (this.persistentCacheEnabled) {
       for (const shardId of shardIds) {
-        await kvStorageService.delete(`${SHARD_MANIFEST_CACHE_PREFIX}${shardId}`);
+        await kvStorageService.remove(`${SHARD_MANIFEST_CACHE_PREFIX}${shardId}`);
       }
-      await kvStorageService.delete(MASTER_INDEX_CACHE_KEY);
+      await kvStorageService.remove(MASTER_INDEX_CACHE_KEY);
     }
 
     logDebug('ShardCache] Cleared all cache');

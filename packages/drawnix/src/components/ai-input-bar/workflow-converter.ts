@@ -16,6 +16,12 @@ import {
   generateReferenceImagesPrompt,
   buildStructuredUserMessage,
 } from '../../services/agent';
+import { mcpRegistry } from '../../mcp/registry';
+import type { SystemSkill } from '../../constants/skills';
+import { SKILL_AUTO_ID, isSystemSkillId, findSystemSkillById } from '../../constants/skills';
+import { SkillDSLParser } from './skill-dsl-parser';
+import { SkillLLMParser } from './skill-llm-parser';
+import type { SkillDSLVariables } from './skill-dsl.types';
 
 /**
  * 工作流步骤执行选项（批量参数等）
@@ -68,7 +74,9 @@ export interface WorkflowDefinition {
   /** 工作流描述 */
   description: string;
   /** 场景类型 */
-  scenarioType: 'direct_generation' | 'agent_flow';
+  scenarioType: 'direct_generation' | 'agent_flow' | 'skill_flow';
+  /** 选中的 Skill ID（skill_flow 时有值） */
+  skillId?: string;
   /** 生成类型 */
   generationType: GenerationType;
   /** 工作流状态 */
@@ -99,6 +107,8 @@ export interface WorkflowDefinition {
     referenceImages?: string[];
     /** 选中元素的分类信息 */
     selection: SelectionInfo;
+    /** 解析方式标记（用于调试和数据分析） */
+    parseMethod?: 'regex' | 'llm' | 'agent_fallback';
   };
   /** 创建时间 */
   createdAt: number;
@@ -373,6 +383,289 @@ export function convertAgentFlowToWorkflow(
       duration,
       referenceImages: referenceImages.length > 0 ? referenceImages : undefined,
       selection,
+    },
+    createdAt: Date.now(),
+  };
+}
+
+/**
+ * 根据提取到的工具名列表，生成精准过滤后的工具描述字符串
+ *
+ * 只包含 Skill 笔记中实际引用的工具描述，减少无关上下文干扰。
+ * 若工具名在 registry 中不存在，则跳过（容错）。
+ *
+ * @param toolNames - 从 Skill 笔记中提取的工具名列表
+ * @returns 精准工具描述字符串（Markdown 格式）
+ */
+function generateFilteredToolsDescription(toolNames: string[]): string {
+  const descriptions: string[] = [];
+
+  for (const name of toolNames) {
+    const tool = mcpRegistry.getTool(name);
+    if (!tool) continue;
+
+    const params = tool.inputSchema.properties || {};
+    const required = tool.inputSchema.required || [];
+    const guidance = tool.promptGuidance;
+
+    const paramDescriptions = Object.entries(params)
+      .map(([pName, schema]) => {
+        const isRequired = required.includes(pName);
+        const reqStr = isRequired ? '（必填）' : '（可选）';
+        const details: string[] = [];
+        if (schema.type) details.push(`类型: ${schema.type}`);
+        if (schema.enum && Array.isArray(schema.enum)) {
+          details.push(`可选值: ${schema.enum.map((v: unknown) => `"${v}"`).join(' | ')}`);
+        }
+        if (schema.default !== undefined) details.push(`默认: "${schema.default}"`);
+        const detailStr = details.length > 0 ? ` [${details.join(', ')}]` : '';
+        const paramGuidance = guidance?.parameterGuidance?.[pName];
+        const guidanceStr = paramGuidance ? `\n    💡 ${paramGuidance}` : '';
+        return `  - **${pName}**${reqStr}: ${schema.description || '无描述'}${detailStr}${guidanceStr}`;
+      })
+      .join('\n');
+
+    let toolDesc = `### ${tool.name}\n${tool.description}\n\n**参数:**\n${paramDescriptions || '  无参数'}`;
+    if (guidance?.whenToUse) toolDesc += `\n\n**使用场景:** ${guidance.whenToUse}`;
+    descriptions.push(toolDesc);
+  }
+
+  return descriptions.length > 0 ? descriptions.join('\n\n---\n\n') : '';
+}
+
+/**
+ * 场景5: 将 Skill 流程转换为工作流定义
+ *
+ * 系统内置 Skill 和用户自定义 Skill 统一走以下三条路径：
+ *
+ * - 路径 A（DSL 正则解析）：Skill 笔记内容能被正则解析器成功提取出工具名和参数
+ *   → 直接构建 WorkflowStep 执行 MCP 工具，用户输入自动注入主要文本参数
+ *
+ * - 路径 B（Agent 精准注入）：正则解析失败，但笔记中包含工具名引用
+ *   → 只注入相关工具描述 + Skill 笔记作为前置上下文，走 ai_analyze
+ *
+ * - 路径 C（角色扮演）：正则解析失败且笔记中无工具名引用
+ *   → Skill 笔记直接作为 systemPrompt，用户输入作为 userMessage，直接调用 LLM
+ *
+ * @param params - 解析后的生成参数
+ * @param skill - Skill 定义（系统内置或用户自定义）
+ * @param referenceImages - 参考图片 URL 列表
+ * @param onLLMParsing - LLM 解析路径触发时的回调（用于 UI 显示加载状态）
+ */
+export async function convertSkillFlowToWorkflow(
+  params: ParsedGenerationParams,
+  skill: SystemSkill | { id: string; name: string; type: 'user'; content: string },
+  referenceImages: string[] = [],
+  onLLMParsing?: () => void
+): Promise<WorkflowDefinition> {
+  const {
+    generationType,
+    modelId,
+    isModelExplicit,
+    prompt,
+    userInstruction,
+    rawInput,
+    count,
+    size,
+    duration,
+    selection,
+  } = params;
+
+  const workflowId = generateWorkflowId();
+
+  // 统一获取 Skill 内容：系统 Skill 使用 description，自定义 Skill 使用 content
+  const skillId = skill.id;
+  const skillName = skill.name;
+  const skillContent = skill.type === 'system'
+    ? (skill as SystemSkill).description
+    : (skill as { id: string; name: string; type: 'user'; content: string }).content;
+
+  // 用户输入文本（用于自动注入到工具的主要文本参数）
+  const userInputText = userInstruction || prompt || rawInput;
+
+  // 构建 DSL 变量（保留兼容性）
+  const dslVariables: SkillDSLVariables = {
+    input: userInputText,
+    count,
+    size,
+    model: modelId,
+  };
+
+  // ─── 路径 A：正则解析（SkillDSLParser）───────────────────────────────────
+  // 传入 userInputText，解析器会自动将其注入到缺失的主要文本参数（theme/prompt 等）
+  const regexResult = SkillDSLParser.parse(skillContent, dslVariables, workflowId, userInputText);
+  if (regexResult) {
+    return {
+      id: workflowId,
+      name: skillName,
+      description: `使用「${skillName}」Skill 生成内容`,
+      scenarioType: 'skill_flow',
+      skillId,
+      generationType,
+      steps: regexResult.steps,
+      metadata: {
+        prompt,
+        userInstruction,
+        rawInput,
+        modelId,
+        isModelExplicit,
+        count,
+        size,
+        duration,
+        referenceImages: referenceImages.length > 0 ? referenceImages : undefined,
+        selection,
+        parseMethod: 'regex',
+      },
+      createdAt: Date.now(),
+    };
+  }
+
+  // ─── 路径 B / C 公共变量 ──────────────────────────────────────────────────
+  const allReferenceImages = [
+    ...(selection.images || []),
+    ...(selection.graphics || []),
+  ];
+
+  const agentContext = {
+    userInstruction,
+    rawInput,
+    model: {
+      id: modelId,
+      type: generationType as 'image' | 'video',
+      isExplicit: isModelExplicit,
+    },
+    params: { count, size, duration },
+    selection,
+    finalPrompt: prompt,
+  };
+
+  // 从 Skill 笔记中提取工具名引用，用于判断走路径 B 还是路径 C
+  const referencedToolNames = SkillDSLParser.extractToolNamesFromContent(skillContent);
+  // 过滤出在 registry 中实际存在的工具名
+  const validToolNames = referencedToolNames.filter(name => mcpRegistry.hasTool(name));
+
+  // ─── 路径 B：Agent 模式，精准注入相关工具描述 ─────────────────────────────
+  if (validToolNames.length > 0) {
+    // 只注入 Skill 笔记中引用的工具描述
+    const filteredToolsDesc = generateFilteredToolsDescription(validToolNames);
+
+    // Skill 笔记内容作为前置上下文，工具描述紧随其后
+    let systemPrompt = `## 当前激活的 Skill：${skillName}\n\n${skillContent}`;
+    if (filteredToolsDesc) {
+      systemPrompt += `\n\n## 可用工具\n\n${filteredToolsDesc}`;
+    }
+    if (allReferenceImages.length > 0) {
+      systemPrompt += generateReferenceImagesPrompt(
+        allReferenceImages.length,
+        selection.imageDimensions
+      );
+    }
+
+    // 添加响应格式约束（与 generateSystemPrompt 保持一致）
+    systemPrompt += `\n\n## 响应格式（严格遵守）\n\n你的响应必须是一个有效的 JSON 对象：\n{"content": "你的分析内容", "next": [{"mcp": "工具名称", "args": {"参数名": "参数值"}}]}`;
+
+    const userMessage = buildStructuredUserMessage(agentContext);
+
+    const messages = [
+      { role: 'system' as const, content: systemPrompt },
+      { role: 'user' as const, content: userMessage },
+    ];
+
+    const steps: WorkflowStep[] = [
+      {
+        id: `${workflowId}-step-analyze`,
+        mcp: 'ai_analyze',
+        args: {
+          context: agentContext,
+          messages,
+          referenceImages: allReferenceImages.length > 0 ? allReferenceImages : undefined,
+          textModel: modelId,
+        },
+        options: { mode: 'async' },
+        description: `AI 分析用户意图（Skill: ${skillName}）`,
+        status: 'pending',
+      },
+    ];
+
+    return {
+      id: workflowId,
+      name: skillName,
+      description: `使用「${skillName}」Skill 生成内容`,
+      scenarioType: 'skill_flow',
+      skillId,
+      generationType,
+      steps,
+      metadata: {
+        prompt,
+        userInstruction,
+        rawInput,
+        modelId,
+        isModelExplicit,
+        count,
+        size,
+        duration,
+        referenceImages: referenceImages.length > 0 ? referenceImages : undefined,
+        selection,
+        parseMethod: 'agent_fallback',
+      },
+      createdAt: Date.now(),
+    };
+  }
+
+  // ─── 路径 C：角色扮演模式，Skill 笔记直接作为 systemPrompt ────────────────
+  // 正则解析失败且笔记中无工具名引用 → 纯 LLM 角色扮演，不注入任何 MCP 工具描述
+  let roleSystemPrompt = skillContent || '';
+  if (allReferenceImages.length > 0) {
+    roleSystemPrompt += generateReferenceImagesPrompt(
+      allReferenceImages.length,
+      selection.imageDimensions
+    );
+  }
+
+  // 用户输入直接作为 userMessage（不经过 buildStructuredUserMessage，避免注入工具上下文）
+  const roleUserMessage = userInputText;
+
+  const roleMessages = [
+    { role: 'system' as const, content: roleSystemPrompt },
+    { role: 'user' as const, content: roleUserMessage },
+  ];
+
+  const roleSteps: WorkflowStep[] = [
+    {
+      id: `${workflowId}-step-analyze`,
+      mcp: 'ai_analyze',
+      args: {
+        context: agentContext,
+        messages: roleMessages,
+        referenceImages: allReferenceImages.length > 0 ? allReferenceImages : undefined,
+        textModel: modelId,
+      },
+      options: { mode: 'async' },
+      description: `AI 以「${skillName}」角色回复`,
+      status: 'pending',
+    },
+  ];
+
+  return {
+    id: workflowId,
+    name: skillName,
+    description: `使用「${skillName}」Skill 生成内容`,
+    scenarioType: 'skill_flow',
+    skillId,
+    generationType,
+    steps: roleSteps,
+    metadata: {
+      prompt,
+      userInstruction,
+      rawInput,
+      modelId,
+      isModelExplicit,
+      count,
+      size,
+      duration,
+      referenceImages: referenceImages.length > 0 ? referenceImages : undefined,
+      selection,
+      parseMethod: 'agent_fallback',
     },
     createdAt: Date.now(),
   };

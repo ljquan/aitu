@@ -240,6 +240,7 @@ class AgentExecutor {
       onToolCall,
       signal,
       maxIterations = 3,
+      messages: externalMessages,
     } = options;
 
     const startTime = Date.now();
@@ -255,47 +256,50 @@ class AgentExecutor {
     });
 
     try {
-      // console.log('[AgentExecutor] Starting execution with context:', context.userInstruction.substring(0, 100));
-
       // 收集所有参考图片 URL
       const allReferenceImages = [...context.selection.images, ...context.selection.graphics];
-      
-      // console.log('[AgentExecutor] Reference images collected:', {
-        // fromImages: context.selection.images.length,
-        // fromGraphics: context.selection.graphics.length,
-        // total: allReferenceImages.length,
-      // });
 
-      // 生成系统提示词（自动从 registry 获取工具描述）
-      let systemPrompt = generateSystemPrompt();
+      // 构建消息数组：优先使用外部传入的 messages（Skill 路径 B/C），否则内部生成
+      let messages: GeminiMessage[];
 
-      // 如果有参考图片，添加补充说明（使用占位符方式，包含尺寸信息）
-      if (allReferenceImages.length > 0) {
-        systemPrompt += generateReferenceImagesPrompt(
-          allReferenceImages.length,
-          context.selection.imageDimensions
-        );
+      if (externalMessages && externalMessages.length > 0) {
+        // 路径 B/C：直接使用外部传入的消息，不调用 generateSystemPrompt()
+        messages = externalMessages.map((msg: any) => ({
+          role: msg.role,
+          content: typeof msg.content === 'string'
+            ? [{ type: 'text', text: msg.content }]
+            : msg.content,
+        }));
+      } else {
+        // 默认 Agent 路径：内部生成系统提示词
+        let systemPrompt = generateSystemPrompt();
+
+        // 如果有参考图片，添加补充说明（使用占位符方式，包含尺寸信息）
+        if (allReferenceImages.length > 0) {
+          systemPrompt += generateReferenceImagesPrompt(
+            allReferenceImages.length,
+            context.selection.imageDimensions
+          );
+        }
+
+        // 构建结构化用户消息
+        const userMessage = buildStructuredUserMessage(context);
+
+        messages = [
+          {
+            role: 'system',
+            content: [
+              { type: 'text', text: systemPrompt },
+            ],
+          },
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: userMessage },
+            ],
+          },
+        ];
       }
-
-      // 构建结构化用户消息
-      const userMessage = buildStructuredUserMessage(context);
-      // console.log('[AgentExecutor] Structured user message:\n', userMessage);
-
-      // 构建消息（不传递实际图片给文本大模型）
-      const messages: GeminiMessage[] = [
-        {
-          role: 'system',
-          content: [
-            { type: 'text', text: systemPrompt },
-          ],
-        },
-        {
-          role: 'user',
-          content: [
-            { type: 'text', text: userMessage },
-          ],
-        },
-      ];
 
       // 执行循环
       let iterations = 0;

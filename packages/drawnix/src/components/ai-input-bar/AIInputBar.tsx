@@ -53,13 +53,17 @@ import {
 import { BUILT_IN_TOOLS } from '../../constants/built-in-tools';
 import { initializeMCP, mcpRegistry } from '../../mcp';
 import { setCanvasBoard } from '../../services/canvas-operations/canvas-insertion';
+import { setCanvasBoard as setMcpCanvasBoard } from '../../mcp/tools/canvas-insertion';
 import { setBoard } from '../../mcp/tools/shared';
 import { setCapabilitiesBoard } from '../../services/sw-capabilities/handler';
 import { initializeLongVideoChainService } from '../../services/long-video-chain-service';
 import { gridImageService } from '../../services/photo-wall';
 import type { MCPTaskResult } from '../../mcp/types';
 import { parseAIInput, type GenerationType } from '../../utils/ai-input-parser';
-import { convertToWorkflow, type WorkflowDefinition, type WorkflowStepOptions } from './workflow-converter';
+import { convertToWorkflow, convertSkillFlowToWorkflow, type WorkflowDefinition, type WorkflowStepOptions } from './workflow-converter';
+import { SkillDropdown } from './SkillDropdown';
+import { SKILL_AUTO_ID, findSystemSkillById } from '../../constants/skills';
+import { knowledgeBaseService } from '../../services/knowledge-base-service';
 import { useWorkflowControl } from '../../contexts/WorkflowContext';
 import { geminiSettings } from '../../utils/settings-manager';
 import { promptForApiKey } from '../../utils/gemini-api/auth';
@@ -191,6 +195,7 @@ const SelectionWatcher: React.FC<{
   // 设置 canvas board 引用给 MCP 工具使用
   useEffect(() => {
     setCanvasBoard(board);
+    setMcpCanvasBoard(board);
     setBoard(board);
     setCapabilitiesBoard(board);
     gridImageService.setBoard(board);
@@ -200,6 +205,7 @@ const SelectionWatcher: React.FC<{
     }
     return () => {
       setCanvasBoard(null);
+      setMcpCanvasBoard(null);
       setBoard(null);
       setCapabilitiesBoard(null);
       gridImageService.setBoard(null);
@@ -363,6 +369,8 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
   const [isCanvasEmpty, setIsCanvasEmpty] = useState<boolean | null>(null); // null=加载中, true=空, false=有内容
   // 当前选中的生成类型（图片、视频、Agent）
   const [generationType, setGenerationType] = useState<GenerationType>('image');
+  // 当前选中的 Skill ID（仅在 Agent/text 模式下有效）
+  const [selectedSkillId, setSelectedSkillId] = useState<string>(SKILL_AUTO_ID);
   // 当前选中的图片/视频/文本模型
   const [selectedModel, setSelectedModel] = useState(getDefaultImageModel);
   // 当前选中的参数映射 (id -> value)
@@ -425,6 +433,10 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
       setSelectedParams({
         size: getDefaultSizeForModel(defaultModelId)
       });
+    }
+    // 切换离开 text 模式时重置 Skill 选择
+    if (generationType !== 'text') {
+      setSelectedSkillId(SKILL_AUTO_ID);
     }
     // Agent 模式通常只需要 1 个结果
     if (generationType === 'text') {
@@ -747,6 +759,26 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
     }
     
     inputRef.current?.focus();
+  }, []);
+
+  // 处理添加 Skill：打开知识库并定位到 Skill 目录，自动新建笔记
+  const handleAddSkill = useCallback(() => {
+    const tool = BUILT_IN_TOOLS.find(t => t.id === 'knowledge-base');
+    if (!tool) return;
+
+    // 先存储待处理的导航意图（防止组件还未挂载时事件丢失）
+    (window as any).__kbPendingNavigation = { directoryName: 'Skill', autoCreateNote: true };
+
+    toolWindowService.openTool(tool);
+
+    // 同时尝试直接发送事件（如果组件已挂载则立即响应）
+    setTimeout(() => {
+      window.dispatchEvent(
+        new CustomEvent('kb:navigate', {
+          detail: { directoryName: 'Skill', autoCreateNote: true },
+        })
+      );
+    }, 300);
   }, []);
 
   // 处理打开提示词工具（香蕉提示词）- 通过 WinBox 弹窗方式打开
@@ -1086,7 +1118,47 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
       const referenceImages = [...selection.images, ...selection.graphics];
 
       // 创建工作流定义（仅用于 WorkZone 显示，实际工作流由 submitWorkflowToSW 创建）
-      const workflow = convertToWorkflow(parsedParams, referenceImages);
+      let workflow: WorkflowDefinition;
+      if (generationType === 'text' && selectedSkillId !== SKILL_AUTO_ID) {
+        // Skill 模式：根据 skillId 决定使用系统内置 Skill 还是用户自定义 Skill
+        const systemSkill = findSystemSkillById(selectedSkillId);
+        if (systemSkill) {
+          // 系统内置 Skill：直接转换，失败时降级到通用工作流
+          try {
+            workflow = await convertSkillFlowToWorkflow(parsedParams, systemSkill, referenceImages);
+          } catch (e) {
+            console.warn('[AIInputBar] 系统 Skill 工作流转换失败，降级到通用工作流:', e);
+            workflow = convertToWorkflow(parsedParams, referenceImages);
+          }
+        } else {
+          // 用户自定义 Skill：从知识库读取笔记内容
+          try {
+            const userNote = await knowledgeBaseService.getNoteById(selectedSkillId);
+            if (userNote) {
+              workflow = await convertSkillFlowToWorkflow(
+                parsedParams,
+                { id: userNote.id, name: userNote.title, type: 'user', content: userNote.content },
+                referenceImages,
+                () => {
+                  // LLM 解析路径触发时，通知 UI 显示加载状态
+                  console.log('[AIInputBar] AI 正在解析工作流...');
+                }
+              );
+            } else {
+              workflow = convertToWorkflow(parsedParams, referenceImages);
+            }
+          } catch {
+            workflow = convertToWorkflow(parsedParams, referenceImages);
+          }
+        }
+        // 兜底：若上述所有路径均未赋值（理论上不应发生），降级到通用工作流
+        if (!workflow) {
+          console.warn('[AIInputBar] Skill 工作流未能生成，降级到通用工作流');
+          workflow = convertToWorkflow(parsedParams, referenceImages);
+        }
+      } else {
+        workflow = convertToWorkflow(parsedParams, referenceImages);
+      }
 
       // 在画布上创建 WorkZone 显示工作流进度
       console.log('[AIInputBar][handleGenerate] 即将创建 WorkZone, workflow.steps:', workflow.steps.length);
@@ -1374,6 +1446,8 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
       const executeStep = async (step: typeof workflow.steps[0]) => {
         console.log('[AIInputBar] Executing step:', step.mcp, 'with mode:', step.options?.mode);
         const stepStartTime = Date.now();
+        // 记录执行前的动态步骤数量，用于判断 ai_analyze 是否触发了 onAddSteps
+        const pendingStepsBeforeExec = pendingNewSteps.length;
 
         // 更新步骤为运行中
         workflowControl.updateStep(step.id, 'running');
@@ -1408,6 +1482,34 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
           } else if (currentStepStatus === 'running') {
             // 同步模式且未被回调更新：标记为完成
             workflowControl.updateStep(step.id, 'completed', result.data, undefined, Date.now() - stepStartTime);
+
+            // 路径 C（角色扮演模式）：ai_analyze 返回纯文本，onAddSteps 未被调用
+            // 自动添加 insert_to_canvas 步骤，将文本以 markdown 方式插入画布
+            if (step.mcp === 'ai_analyze') {
+              const responseText = (result.data as { response?: string })?.response;
+              // 只有当 onAddSteps 没有被调用（没有新增步骤）且有文本内容时才插入
+              if (responseText && responseText.trim() && pendingNewSteps.length === pendingStepsBeforeExec) {
+                const insertStepId = `${step.id}-insert-text`;
+                // 将用户输入的 prompt 作为一级标题，拼接在 AI 回复内容前面
+                const titlePrefix = prompt && prompt.trim() ? `# ${prompt.trim()}\n\n` : '';
+                const insertStep = {
+                  id: insertStepId,
+                  mcp: 'insert_to_canvas',
+                  args: {
+                    items: [
+                      {
+                        type: 'text',
+                        content: titlePrefix + responseText,
+                      },
+                    ],
+                  },
+                  description: '将 AI 回复插入画布',
+                  status: 'pending' as const,
+                };
+                workflowControl.addSteps([insertStep]);
+                pendingNewSteps.push(insertStep);
+              }
+            }
           }
 
           return true; // 返回成功
@@ -1686,6 +1788,8 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
     // 执行单个步骤
     const executeStep = async (step: typeof workflowDefinition.steps[0]) => {
       const stepStartTime = Date.now();
+      // 记录执行前的动态步骤数量，用于判断 ai_analyze 是否触发了 onAddSteps
+      const pendingStepsBeforeExec = pendingNewStepsForRetry.length;
       workflowControl.updateStep(step.id, 'running');
       syncRetryUpdates();
 
@@ -1713,6 +1817,35 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
           workflowControl.updateStep(step.id, 'running', { taskId: result.taskId });
         } else if (currentStepStatus === 'running') {
           workflowControl.updateStep(step.id, 'completed', result.data, undefined, Date.now() - stepStartTime);
+
+          // 路径 C（角色扮演模式）：ai_analyze 返回纯文本，onAddSteps 未被调用
+          // 自动添加 insert_to_canvas 步骤，将文本以 markdown 方式插入画布
+          if (step.mcp === 'ai_analyze') {
+            const responseText = (result.data as { response?: string })?.response;
+            // 只有当 onAddSteps 没有被调用（没有新增步骤）且有文本内容时才插入
+            if (responseText && responseText.trim() && pendingNewStepsForRetry.length === pendingStepsBeforeExec) {
+              const insertStepId = `${step.id}-insert-text`;
+              // 将用户输入的 prompt 作为一级标题，拼接在 AI 回复内容前面
+              const retryPrompt = retryContext?.aiContext?.rawInput || '';
+              const titlePrefix = retryPrompt && retryPrompt.trim() ? `# ${retryPrompt.trim()}\n\n` : '';
+              const insertStep = {
+                id: insertStepId,
+                mcp: 'insert_to_canvas',
+                args: {
+                  items: [
+                    {
+                      type: 'text',
+                      content: titlePrefix + responseText,
+                    },
+                  ],
+                },
+                description: '将 AI 回复插入画布',
+                status: 'pending' as const,
+              };
+              workflowControl.addSteps([insertStep]);
+              pendingNewStepsForRetry.push(insertStep);
+            }
+          }
         }
         return true;
       } catch (stepError) {
@@ -1950,6 +2083,16 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
             onSelect={setGenerationType}
             disabled={isSubmitting}
           />
+
+          {/* Skill 下拉框：仅在 Agent 模式下显示 */}
+          {generationType === 'text' && (
+            <SkillDropdown
+              value={selectedSkillId}
+              onSelect={setSelectedSkillId}
+              onAddSkill={handleAddSkill}
+              disabled={isSubmitting}
+            />
+          )}
 
           <ModelDropdown
             selectedModel={selectedModel}

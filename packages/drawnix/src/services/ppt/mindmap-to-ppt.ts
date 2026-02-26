@@ -61,7 +61,7 @@ export function extractTextFromMindData(data: MindElement['data']): string {
 
   // 如果 data 直接是字符串
   if (typeof data === 'string') {
-    return data.trim();
+    return (data as any).trim();
   }
 
   return '';

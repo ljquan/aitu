@@ -61,12 +61,12 @@ export const Image: React.FC<ImageProps> = (props: ImageProps) => {
         size: '16x9',
       });
 
-      if (result.success && result.data?.url) {
+      if (result.success && (result.data as any)?.url) {
         removePPTImagePlaceholder(props.board, pptFrameId);
 
         const frame = props.board.children.find((el: any) => el.id === pptFrameId);
         if (frame) {
-          const frameRect = RectangleClient.getRectangleByPoints(frame.points);
+          const frameRect = RectangleClient.getRectangleByPoints(frame.points!);
           const imgRegion = getImageRegion({
             x: frameRect.x,
             y: frameRect.y,
@@ -75,7 +75,7 @@ export const Image: React.FC<ImageProps> = (props: ImageProps) => {
           });
           await insertMediaIntoFrame(
             props.board,
-            result.data.url,
+            (result.data as any).url,
             'image',
             pptFrameId,
             { width: frameRect.width, height: frameRect.height },

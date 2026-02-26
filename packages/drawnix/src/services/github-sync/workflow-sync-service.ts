@@ -70,7 +70,7 @@ function compactStep(step: WorkflowStep): CompactWorkflowStep {
     result: compactResult,
     error: step.error,
     duration: step.duration,
-    dependsOn: step.dependsOn,
+    dependsOn: (step as any).dependsOn,
     // 省略 args 大字段
   };
 }
@@ -85,7 +85,7 @@ function compactWorkflow(workflow: WorkflowDefinition, syncVersion: number): Com
       userInput: workflow.context.userInput?.substring(0, PAGED_SYNC_CONFIG.PROMPT_PREVIEW_LENGTH),
       model: workflow.context.model,
       params: workflow.context.params,
-      textModel: workflow.context.textModel,
+      textModel: (workflow.context as any).textModel,
       // 省略 selection, referenceImages 等大字段
     };
   }
@@ -348,7 +348,7 @@ class WorkflowSyncService {
       );
 
       return JSON.parse(decrypted) as WorkflowIndex;
-    } catch (error) {
+    } catch (error: any) {
       logWarning('WorkflowSyncService: Failed to download remote workflow index', error);
       return null;
     }
@@ -378,7 +378,7 @@ class WorkflowSyncService {
       );
 
       return JSON.parse(decrypted) as WorkflowPage;
-    } catch (error) {
+    } catch (error: any) {
       logWarning(`WorkflowSyncService: Failed to download workflow page ${pageId}`, error);
       return null;
     }

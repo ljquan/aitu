@@ -315,9 +315,9 @@ export const TaskQueuePanel: React.FC<TaskQueuePanelProps> = ({
     setSyncProgress(0);
     
     try {
-      const result = await mediaSyncService.syncMultipleTasks(
+      const result = await (mediaSyncService as any).syncMultipleTasks(
         syncableSelectedIds,
-        (current, total) => {
+        (current: any, total: any) => {
           setSyncProgress(Math.round((current / total) * 100));
         }
       );

@@ -302,7 +302,7 @@ export class ToolGenerator {
 
     if (root) {
       root.render(
-        React.createElement(ToolProviderWrapper, { board: this.board }, 
+        React.createElement(ToolProviderWrapper as any, { board: this.board }, 
           React.createElement(Suspense, {
             fallback: React.createElement('div', { 
               style: { padding: 20, textAlign: 'center', color: '#999' } 
@@ -564,7 +564,7 @@ export class ToolGenerator {
     this.setupLoadTimeout(element.id);
 
     // 处理模板变量（如 ${apiKey}），在渲染时动态替换
-    const { url: processedUrl, missingVariables } = processToolUrl(element.url);
+    const { url: processedUrl, missingVariables } = processToolUrl(element.url!);
     
     if (missingVariables.length > 0) {
       console.warn(`[ToolGenerator] URL contains missing variables: ${missingVariables.join(', ')}`);

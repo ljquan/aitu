@@ -85,6 +85,7 @@ export const BottomActionsSection: React.FC<BottomActionsSectionProps> = ({
         />
       )}
 
+      {/* 任务队列按钮
       {/* 任务队列按钮 - 使用 ToolButton + Badge */}
       <div className="bottom-actions-section__task-wrapper">
         <Badge

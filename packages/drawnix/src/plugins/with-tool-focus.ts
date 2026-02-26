@@ -133,7 +133,7 @@ export const withToolFocus: PlaitPlugin = (board: PlaitBoard) => {
   const { pointerDown, globalPointerUp, dblClick } = board;
 
   // 处理双击事件 - 进入编辑模式
-  board.dblClick = (event: PointerEvent) => {
+  board.dblClick = (event: MouseEvent) => {
     const selectedElements = getSelectedElements(board);
 
     // 检查是否双击了工具元素

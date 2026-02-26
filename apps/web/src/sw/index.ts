@@ -3009,7 +3009,7 @@ async function handleVideoRequest(request: Request): Promise<Response> {
       }
 
       // 使用缓存的blob响应Range请求
-      return createVideoResponse(videoBlob, rangeHeader, requestId);
+      return createVideoResponse(videoBlob as Blob, rangeHeader, requestId);
     }
 
     // 检查是否已有缓存的视频Blob（内存缓存）

@@ -1,0 +1,470 @@
+@import '../../styles/common-variables';
+
+// ============================================================================
+// Knowledge Base Extraction Chat
+// Reuses styles from chat-drawer for consistency
+// ============================================================================
+
+.kb-extraction-chat {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--td-bg-color-container);
+  position: relative;
+
+  &__header {
+    padding: $spacing-md;
+    border-bottom: 1px solid var(--td-component-border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: var(--td-bg-color-container);
+    flex-shrink: 0;
+  }
+
+  &__title {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--td-text-color-primary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+
+    svg {
+      color: var(--td-brand-color);
+    }
+  }
+
+  &__actions {
+    display: flex;
+    gap: 8px;
+  }
+
+  &__action-btn {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 12px;
+    border-radius: 6px;
+    border: 1px solid var(--td-component-border);
+    background: var(--td-bg-color-container);
+    color: var(--td-text-color-primary);
+    cursor: pointer;
+    font-size: 13px;
+    transition: all 0.2s;
+
+    &:hover:not(:disabled) {
+      background: var(--td-bg-color-secondarycontainer);
+      color: var(--td-brand-color);
+      border-color: var(--td-brand-color);
+    }
+
+    &:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    
+    svg {
+      width: 14px;
+      height: 14px;
+    }
+  }
+
+  // Messages Area
+  &__messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: $spacing-md;
+    display: flex;
+    flex-direction: column;
+    gap: $spacing-lg;
+    background: var(--td-bg-color-page);
+    
+    // Custom scrollbar
+    &::-webkit-scrollbar {
+      width: 6px;
+    }
+    
+    &::-webkit-scrollbar-thumb {
+      background-color: var(--td-scrollbar-color);
+      border-radius: 3px;
+    }
+  }
+
+  // Input Area
+  &__input-area {
+    padding: $spacing-md;
+    border-top: 1px solid var(--td-component-border);
+    background: var(--td-bg-color-container);
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  &__input-wrapper {
+    display: flex;
+    align-items: flex-end;
+    gap: $spacing-md;
+    padding: 12px;
+    background: var(--td-bg-color-secondarycontainer);
+    border-radius: 12px;
+    border: 1px solid var(--td-component-border);
+    transition: border-color 0.2s ease;
+
+    &:focus-within {
+      border-color: var(--td-brand-color);
+      background: var(--td-bg-color-container);
+    }
+  }
+
+  &__input-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 0 4px;
+  }
+
+  &__left-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  &__model-selector {
+    position: relative;
+    display: flex;
+    align-items: center;
+    // ModelSelector component handles its own styling
+  }
+
+  &__icon-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    background: transparent;
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    color: var(--td-text-color-secondary);
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+
+    &:hover:not(:disabled) {
+      background: rgba(243, 156, 18, 0.1);
+      color: var(--td-brand-color);
+    }
+
+    &:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    
+    svg {
+      width: 15px;
+      height: 15px;
+    }
+  }
+
+  &__textarea {
+    flex: 1;
+    min-height: 24px;
+    max-height: 120px;
+    padding: 0;
+    background: transparent;
+    border: none;
+    outline: none;
+    resize: none;
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--td-text-color-primary);
+
+    &::placeholder {
+      color: var(--td-text-color-placeholder);
+    }
+  }
+
+  &__send-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    background: transparent;
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    color: var(--td-text-color-secondary);
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+
+    &:hover:not(:disabled) {
+      background: rgba(243, 156, 18, 0.1);
+      color: var(--td-brand-color);
+    }
+
+    &:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    &--active {
+      background: linear-gradient(135deg, #F39C12 0%, #E67E22 100%);
+      color: white;
+      
+      &:hover:not(:disabled) {
+        transform: scale(1.05);
+        box-shadow: 0 4px 12px rgba(243, 156, 18, 0.3);
+        color: white;
+      }
+    }
+  }
+}
+
+// Message Bubbles
+.kb-message {
+  display: flex;
+  gap: $spacing-md;
+  max-width: 90%;
+
+  &--user {
+    flex-direction: row-reverse;
+    align-self: flex-end;
+
+    .kb-message__content {
+      background: linear-gradient(135deg, #F39C12 0%, #E67E22 100%);
+      color: white;
+      border-radius: 12px 12px 4px 12px;
+      box-shadow: 0 4px 12px rgba(243, 156, 18, 0.2);
+    }
+    
+    .kb-message__avatar {
+      background: rgba(243, 156, 18, 0.1);
+      color: var(--td-brand-color);
+    }
+  }
+
+  &--model {
+    align-self: flex-start;
+
+    .kb-message__content {
+      background: #ffffff;
+      color: var(--td-text-color-primary);
+      border-radius: 12px 12px 12px 4px;
+      border: 1px solid var(--td-component-border);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+    }
+  }
+
+  &__avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--td-bg-color-secondarycontainer);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    color: var(--td-text-color-secondary);
+    border: 1px solid var(--td-component-border);
+    
+    svg {
+      width: 18px;
+      height: 18px;
+    }
+  }
+
+  &__content {
+    padding: 12px 16px;
+    font-size: 14px;
+    line-height: 1.6;
+    word-break: break-word;
+    min-width: 0; // Ensure content can shrink
+    overflow: hidden; // Prevent inner content from overflowing
+    
+    p {
+      margin: 0 0 8px 0;
+      &:last-child { margin-bottom: 0; }
+    }
+    
+    ul, ol {
+      margin: 8px 0;
+      padding-left: 20px;
+    }
+    
+    li {
+      margin-bottom: 4px;
+    }
+  }
+  
+  &__text {
+    white-space: pre-wrap;
+  }
+
+  &__body {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  &__actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 2px;
+    opacity: 0;
+    transition: opacity 0.2s;
+    padding-left: 2px;
+  }
+
+  &:hover &__actions {
+    opacity: 1;
+  }
+
+  &__action-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    color: var(--td-text-color-secondary);
+    transition: all 0.2s;
+
+    &:hover {
+      background: var(--td-bg-color-component-hover);
+      color: var(--td-brand-color);
+    }
+    
+    svg {
+      width: 14px;
+      height: 14px;
+    }
+  }
+}
+
+// Extraction Result Card
+.kb-extraction-result-card {
+  width: 100%;
+  max-width: 100%; // Ensure it doesn't exceed container
+  min-width: 0; // Removed min-width to allow shrinking
+  background: var(--td-bg-color-container);
+  border: 1px solid var(--td-component-border);
+  border-radius: 8px;
+  overflow: hidden;
+  margin-top: 8px;
+  box-sizing: border-box; // Ensure padding/border doesn't add to width
+  
+  &__header {
+    padding: 12px 16px;
+    background: var(--td-bg-color-secondarycontainer);
+    border-bottom: 1px solid var(--td-component-border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--td-text-color-primary);
+  }
+  
+  &__content {
+    padding: 16px;
+    // Remove max-height to show full content as requested
+    // max-height: 300px;
+    // overflow-y: auto;
+  }
+  
+  &__item {
+    margin-bottom: 12px;
+    padding-bottom: 12px;
+    border-bottom: 1px dashed var(--td-component-border);
+    
+    &:last-child {
+      margin-bottom: 0;
+      padding-bottom: 0;
+      border-bottom: none;
+    }
+  }
+  
+  &__item-title {
+    font-weight: 600;
+    margin-bottom: 4px;
+    color: var(--td-text-color-primary);
+    word-break: break-word; // Ensure long titles wrap
+  }
+  
+  &__item-desc {
+    font-size: 13px;
+    color: var(--td-text-color-secondary);
+    line-height: 1.5;
+    word-break: break-word; // Ensure long descriptions wrap
+  }
+  
+  &__footer {
+    padding: 12px 16px;
+    border-top: 1px solid var(--td-component-border);
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+}
+
+.kb-loading-dots {
+  font-style: italic;
+  color: var(--td-text-color-secondary);
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0% { opacity: 0.5; }
+  50% { opacity: 1; }
+  100% { opacity: 0.5; }
+}
+
+
+// Markdown Editor overrides for chat bubbles
+.kb-extraction-markdown {
+  background: transparent !important;
+  border: none !important;
+  overflow-y: hidden;
+  
+  .milkdown {
+    padding: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    min-height: auto !important;
+    height: auto !important;
+    overflow: visible !important;
+
+    // Remove inner editor padding
+    .editor {
+      padding: 0 !important;
+    }
+
+    // Remove ProseMirror padding if any
+    .ProseMirror {
+      padding: 0 !important;
+    }
+  }
+  
+  // Ensure the prose wrapper also doesn't scroll
+  .prose {
+    max-width: none !important;
+    overflow: visible !important;
+  }
+
+  // Ensure headings are not too large in chat
+  h1 { font-size: 1.5em; }
+  h2 { font-size: 1.3em; }
+  h3 { font-size: 1.1em; }
+}

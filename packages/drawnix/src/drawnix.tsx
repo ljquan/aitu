@@ -84,6 +84,10 @@ import { useToolFromUrl } from './hooks/useToolFromUrl';
 import { withArrowLineAutoCompleteExtend } from './plugins/with-arrow-line-auto-complete-extend';
 import { withFlowchartShortcut } from './plugins/with-flowchart-shortcut';
 import { withFrame } from './plugins/with-frame';
+import { withCard } from './plugins/with-card';
+import { withCardResize } from './plugins/with-card-resize';
+import { toolWindowService } from './services/tool-window-service';
+import { BUILT_IN_TOOLS } from './constants/built-in-tools';
 import { AutoCompleteShapePicker } from './components/auto-complete-shape-picker';
 import { useAutoCompleteShapePicker } from './hooks/useAutoCompleteShapePicker';
 import { ToolWinBoxManager } from './components/toolbox-drawer/ToolWinBoxManager';
@@ -94,6 +98,9 @@ import { withLassoSelection } from './plugins/with-lasso-selection';
 import { API_AUTH_ERROR_EVENT, ApiAuthErrorDetail } from './utils/api-auth-error-event';
 import { MessagePlugin } from 'tdesign-react';
 import { calculateEditedImagePoints } from './utils/image';
+import { isCardElement } from './types/card.types';
+import { openCardInKnowledgeBase } from './utils/card-actions';
+import { useI18n } from './i18n';
 import { safeReload } from './utils/active-tasks';
 import { CommandPalette } from './components/command-palette/command-palette';
 import { CanvasSearch } from './components/canvas-search/canvas-search';
@@ -173,13 +180,45 @@ export const Drawnix: React.FC<DrawnixProps> = ({
   // 使用 ref 来保存 board 的最新引用,避免 useCallback 依赖问题
   const boardRef = useRef<DrawnixBoard | null>(null);
 
-  // 关闭所有抽屉
+  // 关闭所有抄屉
   const closeAllDrawers = useCallback(() => {
     setProjectDrawerOpen(false);
     setToolboxDrawerOpen(false);
     setTaskPanelExpanded(false);
     setMediaLibraryOpen(false);
   }, []);
+  // 获取知识库工具定义
+  const kbTool = BUILT_IN_TOOLS.find(t => t.id === 'knowledge-base')!;
+
+  // 处理知识库切换（通过 WinBox 打开）
+  const handleKnowledgeBaseToggle = useCallback(() => {
+    const state = toolWindowService.getToolState('knowledge-base');
+    if (state && state.status === 'open') {
+      toolWindowService.closeTool('knowledge-base');
+    } else {
+      toolWindowService.openTool(kbTool);
+    }
+  }, [kbTool]);
+
+  // 监听 kb:open 事件，支持从 popup-toolbar 等外部打开知识库并定位到指定笔记
+  useEffect(() => {
+    const handleKBOpen = (e: Event) => {
+      const { noteId } = (e as CustomEvent<{ noteId?: string }>).detail;
+      const isAlreadyOpen = toolWindowService.isToolOpen(kbTool.id);
+      toolWindowService.openTool(kbTool, {
+        componentProps: noteId ? { initialNoteId: noteId } : {},
+      });
+      // 如果知识库已经打开，initialNoteId prop 不会触发重新定位
+      // 需要额外发送 kb:open-note 事件让已挂载的组件动态定位
+      if (isAlreadyOpen && noteId) {
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('kb:open-note', { detail: { noteId } }));
+        }, 50);
+      }
+    };
+    window.addEventListener('kb:open', handleKBOpen);
+    return () => window.removeEventListener('kb:open', handleKBOpen);
+  }, [kbTool]);
 
   // 处理项目抽屉切换（互斥逻辑）
   const handleProjectDrawerToggle = useCallback(() => {
@@ -575,6 +614,8 @@ export const Drawnix: React.FC<DrawnixProps> = ({
     withFlowchartShortcut, // 流程图快速创建 - 方向键创建连接节点，Tab 导航
     withFrame, // Frame 容器 - 分组管理画布元素
     withFrameResize, // Frame 缩放 - 拖拽缩放 Frame 容器
+    withCard, // Card 标签贴 - Markdown 粘贴和 Agent 输出的卡片展示
+    withCardResize, // Card 缩放 - 拖拽缩放 Card 标签贴
     withDefaultFill, // 默认填充 - 让新创建的图形有白色填充，方便双击编辑
     withGradientFill, // 渐变填充 - 支持渐变和图片填充渲染
     withLassoSelection, // 套索选择 - 自由路径框选元素
@@ -693,6 +734,7 @@ export const Drawnix: React.FC<DrawnixProps> = ({
                       onTabSyncNeeded={onTabSyncNeeded}
                       handleProjectDrawerToggle={handleProjectDrawerToggle}
                       handleToolboxDrawerToggle={handleToolboxDrawerToggle}
+                      handleKnowledgeBaseToggle={handleKnowledgeBaseToggle}
                       handleTaskPanelToggle={handleTaskPanelToggle}
                       setProjectDrawerOpen={setProjectDrawerOpen}
                       setToolboxDrawerOpen={setToolboxDrawerOpen}
@@ -750,6 +792,7 @@ interface DrawnixContentProps {
   onTabSyncNeeded?: () => void;
   handleProjectDrawerToggle: () => void;
   handleToolboxDrawerToggle: () => void;
+  handleKnowledgeBaseToggle: () => void;
   handleTaskPanelToggle: () => void;
   setProjectDrawerOpen: React.Dispatch<React.SetStateAction<boolean>>;
   setToolboxDrawerOpen: React.Dispatch<React.SetStateAction<boolean>>;
@@ -788,6 +831,7 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
   onTabSyncNeeded,
   handleProjectDrawerToggle,
   handleToolboxDrawerToggle,
+  handleKnowledgeBaseToggle,
   handleTaskPanelToggle,
   setProjectDrawerOpen,
   setToolboxDrawerOpen,
@@ -800,6 +844,7 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
 }) => {
   const { chatDrawerRef } = useChatDrawer();
   const { setAppState: updateState } = useDrawnix();
+  const { language } = useI18n();
 
   // 画笔自定义光标
   usePencilCursor({ board, pointer: appState.pointer });
@@ -1011,6 +1056,14 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
       const viewBoxPoint = toViewBoxPoint(board, toHostPoint(board, event.clientX, event.clientY));
       const hitElement = getHitElementByPoint(board, viewBoxPoint);
 
+      // 如果双击了 Card 元素，打开知识库
+      if (hitElement && isCardElement(hitElement)) {
+        openCardInKnowledgeBase(board, hitElement as any, language as 'zh' | 'en');
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+
       // 如果双击了图片或视频元素，打开预览
       if (hitElement) {
         const url = (hitElement as any).url;
@@ -1051,7 +1104,7 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
         container.removeEventListener('dblclick', handleDoubleClick);
       }
     };
-  }, [board, containerRef, openMediaPreview]);
+  }, [board, containerRef, openMediaPreview, language]);
 
   // 监听画板点击事件，关闭项目抽屉和工具箱抽屉
   useEffect(() => {
@@ -1114,6 +1167,8 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
           <Board
             afterInit={(board) => {
               setBoard(board as DrawnixBoard);
+              // 挂载 board 实例到 window，供知识库等外部模块访问
+              (window as any).__drawnixBoard = board;
               // 设置测试助手的 board 实例（仅开发环境）
               if (process.env.NODE_ENV === 'development') {
                 toolTestHelper.setBoard(board);
@@ -1148,6 +1203,7 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
             onTaskPanelToggle={handleTaskPanelToggle}
             onOpenBackupRestore={() => setBackupRestoreOpen(true)}
             onOpenCloudSync={() => setCloudSyncOpen(true)}
+            onKnowledgeBaseToggle={handleKnowledgeBaseToggle}
           />
 
           <PopupToolbar></PopupToolbar>
@@ -1262,6 +1318,7 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
           elements={board?.children || value}
         />
         <ChatDrawer ref={chatDrawerRef} />
+        {/* 知识库通过 ToolWinBoxManager 以 WinBox 方式打开 */}
         <Suspense fallback={null}>
           <ProjectDrawer
             isOpen={projectDrawerOpen}

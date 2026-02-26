@@ -83,7 +83,7 @@ export class ToolCommunicationService {
           timeoutId,
         });
 
-        iframe.contentWindow.postMessage(message, '*');
+        iframe.contentWindow!.postMessage(message, '*');
       });
     } else {
       // 不期待回复，直接发送

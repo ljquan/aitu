@@ -267,7 +267,7 @@ function finishPath(board: PlaitBoard, closed: boolean = false) {
  */
 export function isPenPointerType(board: PlaitBoard): boolean {
   const pointerType = PlaitBoard.getPointer(board);
-  return pointerType === PenShape.pen;
+  return (pointerType as string) === PenShape.pen;
 }
 
 /**

@@ -55,7 +55,8 @@ export const withPinchZoom = (board: PlaitBoard) => {
           pointerRecords.length === 2 &&
           pointerRecords.every((r) => r.hasMoved)
         ) {
-          const [p1, p2] = pointerRecords;
+          const p1 = pointerRecords[0]!;
+          const p2 = pointerRecords[1]!;
           const pinchCenter = getPointBetween(
             ...p1.lastPoint,
             ...p2.lastPoint

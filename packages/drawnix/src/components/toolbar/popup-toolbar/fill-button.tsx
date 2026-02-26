@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useMemo, lazy, Suspense } from 'react';
 import { ToolButton } from '../../tool-button';
 import classNames from 'classnames';
-import { ATTACHED_ELEMENT_CLASS_NAME } from '@plait/core';
+import { ATTACHED_ELEMENT_CLASS_NAME, PlaitBoard } from '@plait/core';
 import { Island } from '../../island';
 import {
   hexAlphaToOpacity,
@@ -16,6 +16,7 @@ import {
   setGradientFill,
   setImageFill,
   setFillType,
+  setCardFillColor,
 } from '../../../transforms/property';
 import { FillPanel } from '../../fill-panel';
 import type {
@@ -98,6 +99,8 @@ export const PopupFillButton: React.FC<PopupFillButtonProps> = ({
   const handleSolidChange = useCallback(
     (color: string) => {
       setFillColor(board, color);
+      // 同时处理 Card 元素的填充颜色
+      setCardFillColor(board, color);
     },
     [board]
   );

@@ -17,9 +17,12 @@
 // Note: TaskType is an enum used as a value, so it cannot be type-only import
 import {
   TaskType,
+  TaskStatus,
+  GenerationParams,
+  TaskResult,
+  TaskError,
+  TaskExecutionPhase,
 } from '../../../../../packages/drawnix/src/types/shared/core.types';
-
-import { TaskStatus } from '@drawnix/drawnix';
 
 export * from '../../../../../packages/drawnix/src/types/shared/core.types';
 

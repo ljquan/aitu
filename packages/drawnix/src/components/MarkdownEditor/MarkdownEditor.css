@@ -1,0 +1,186 @@
+/* Milkdown 编辑器样式 - 仅包含 Crepe 主题未覆盖的自定义样式 */
+
+/*
+ * WinBox 的 .wb-body 有 contain:strict（含 paint），
+ * paint containment 会改变 position:fixed 的参考系（从 viewport 变为 .wb-body），
+ * 导致 Milkdown drop indicator（position:fixed + transform）定位偏移。
+ * 移除 paint 恢复 position:fixed 的正常 viewport 参考系。
+ */
+.wb-body:has(.collimind-markdown-editor) {
+  contain: size layout style !important;
+}
+
+/* 根容器布局 */
+.collimind-markdown-editor {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background-color: #ffffff;
+  position: relative;
+  overflow-y: auto;
+}
+
+/*
+ * .milkdown 自带 position: relative（Crepe 主题），
+ * 是 ProseMirror 的 offsetParent，drop cursor 挂载于此。
+ * 滚动必须放在这里，让 offsetParent.scrollTop 与实际滚动一致。
+ */
+.collimind-markdown-editor .milkdown {
+  flex: 1;
+  min-height: 0;
+  overscroll-behavior: contain;
+}
+
+/* 覆盖 Crepe 默认 padding（原 60px 120px 太大） */
+.collimind-markdown-editor .ProseMirror {
+  padding: 12px 16px 12px 40px;
+}
+
+/* 隐藏拖动手柄，保留 + 号按钮 */
+.collimind-markdown-editor .milkdown-block-handle .operation-item:last-child {
+  display: none;
+}
+
+.collimind-markdown-editor .milkdown-block-handle .operation-item {
+  width: 24px;
+  height: 24px;
+  padding: 2px;
+}
+
+.collimind-markdown-editor .milkdown-block-handle .operation-item svg {
+  width: 20px;
+  height: 20px;
+}
+
+/* drop cursor 蓝色高亮，始终可见 */
+.collimind-markdown-editor .crepe-drop-cursor {
+  background-color: #fdba74 !important;
+  opacity: 1 !important;
+}
+
+/* 只读模式光标 */
+.collimind-markdown-editor[data-readonly="true"] .ProseMirror {
+  cursor: default;
+}
+
+
+/* 模式切换按钮 */
+.collimind-markdown-editor-mode-switch {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 10;
+  display: flex;
+  gap: 2px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 2px;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.collimind-markdown-editor:hover .collimind-markdown-editor-mode-switch,
+.collimind-markdown-editor-mode-switch:hover {
+  opacity: 1;
+}
+
+.collimind-markdown-editor-mode-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  color: #64748b;
+  transition: all 0.15s ease;
+}
+
+.collimind-markdown-editor-mode-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+.collimind-markdown-editor-mode-btn:hover {
+  background: #e2e8f0;
+  color: #334155;
+}
+
+.collimind-markdown-editor-mode-btn.active {
+  background: #fed7aa;
+  color: #c2410c;
+}
+
+.collimind-markdown-editor-mode-btn.active:hover {
+  background: #fdba74;
+  color: #c2410c;
+}
+
+/* 源码编辑器 */
+.collimind-markdown-editor-source {
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  padding: 12px 16px;
+  border: none;
+  outline: none;
+  resize: none;
+  font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.7;
+  color: #334155;
+  background-color: #ffffff;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.collimind-markdown-editor-source::placeholder {
+  color: #94a3b8;
+  font-style: italic;
+}
+
+/* ===== Card 标签贴内嵌 MarkdownEditor 样式 ===== */
+
+/* Card 内嵌 MarkdownEditor：去掉边框和背景，紧凑布局 */
+.collimind-markdown-editor.card-markdown-viewer {
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  height: 100%;
+}
+
+/* Card 内容区 ProseMirror：减小内边距 */
+.collimind-markdown-editor.card-markdown-viewer .ProseMirror {
+  padding: 8px 12px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+/* ---- 只读模式：隐藏工具栏，禁用交互 ---- */
+.collimind-markdown-editor.card-markdown-viewer[data-readonly="true"] .milkdown-block-handle,
+.collimind-markdown-editor.card-markdown-viewer[data-readonly="true"] .crepe-toolbar,
+.collimind-markdown-editor.card-markdown-viewer[data-readonly="true"] .milkdown-slash-menu {
+  display: none !important;
+}
+
+.collimind-markdown-editor.card-markdown-viewer[data-readonly="true"] .milkdown {
+  pointer-events: none;
+  user-select: none;
+}
+
+/* ---- 编辑模式：正常显示工具栏，开启交互 ---- */
+.collimind-markdown-editor.card-markdown-viewer[data-readonly="false"] {
+  cursor: text;
+}
+
+/* 编辑模式下工具栏需要能浮出 Card 边界 */
+.collimind-markdown-editor.card-markdown-viewer[data-readonly="false"] .crepe-toolbar,
+.collimind-markdown-editor.card-markdown-viewer[data-readonly="false"] .milkdown-slash-menu {
+  z-index: 9999;
+}

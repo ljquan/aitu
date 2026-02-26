@@ -1,0 +1,525 @@
+@import 'tdesign-react/es/style/index.css';
+
+.kb-drawer {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--td-bg-color-container, #fff);
+
+  &__body {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+    position: relative; // For absolute positioning if needed, though flex is better here
+  }
+
+  // Left Sidebar
+  &__sidebar {
+    // width: 280px; // Removed fixed width, controlled by JS
+    display: flex;
+    flex-direction: column;
+    // border-right: 1px solid var(--td-component-border, #e7e7e7); // Border handled by resizer or kept?
+    background-color: var(--td-bg-color-secondarycontainer, #f5f5f5);
+    flex-shrink: 0; // Prevent shrinking
+  }
+
+  &__toolbar {
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--td-component-border, #e7e7e7);
+    background-color: var(--td-bg-color-container, #fff);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  &__search-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+
+  &__menu-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    color: var(--td-text-color-secondary, #666);
+    border-radius: 4px;
+    margin-left: 4px;
+
+    &:hover {
+      background-color: var(--td-bg-color-container-hover, #f3f3f3);
+    }
+  }
+
+  &__storage-bar {
+    padding: 8px 12px;
+    border-top: 1px solid var(--td-component-border, #e7e7e7);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--td-text-color-placeholder, #999);
+    font-size: 11px;
+    background-color: var(--td-bg-color-container, #fff);
+  }
+
+  // Editor Area
+  &__editor {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    position: relative;
+    background-color: var(--td-bg-color-container, #fff);
+    min-width: 400px; // Ensure editor doesn't get too small
+  }
+
+
+
+
+  // Right Sidebar
+  &__right-sidebar {
+    // width: 300px; // Removed fixed width, controlled by JS
+    display: flex;
+    flex-direction: column;
+    // border-left: 1px solid var(--td-component-border, #e7e7e7);
+    background-color: var(--td-bg-color-container, #fff);
+    flex-shrink: 0; // Prevent shrinking
+  }
+
+  &__right-toggle {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    z-index: 10;
+    width: 32px;
+    height: 32px;
+    border-radius: 4px;
+    border: 1px solid var(--td-component-border, #e7e7e7);
+    background-color: var(--td-bg-color-container, #fff);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: var(--td-text-color-secondary, #666);
+    
+    &:hover {
+      background-color: var(--td-bg-color-container-hover, #f3f3f3);
+    }
+  }
+  
+  &__right-header {
+    height: 48px;
+    border-bottom: 1px solid var(--td-component-border, #e7e7e7);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 12px;
+  }
+  
+  &__right-tabs {
+    display: flex;
+    gap: 4px;
+  }
+  
+  &__right-tab {
+    padding: 6px 12px;
+    border: none;
+    background: transparent;
+    border-radius: 4px;
+    cursor: pointer;
+    color: var(--td-text-color-secondary, #666);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    
+    &:hover {
+      background-color: var(--td-bg-color-container-hover, #f3f3f3);
+    }
+    
+    &--active {
+      color: var(--td-brand-color, #0052d9);
+      background-color: var(--td-brand-color-light, #ecf2fe);
+      
+      &:hover {
+        background-color: var(--td-brand-color-light, #ecf2fe);
+      }
+    }
+  }
+  
+  &__right-collapse-btn {
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    color: var(--td-text-color-secondary, #666);
+    padding: 4px;
+    border-radius: 4px;
+    display: flex;
+    
+    &:hover {
+      background-color: var(--td-bg-color-container-hover, #f3f3f3);
+    }
+  }
+  
+  &__right-content {
+    flex: 1;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+}
+
+// Resizer styles
+.kb-resizer {
+  width: 1px;
+  background-color: var(--td-component-border, #e7e7e7);
+  cursor: col-resize;
+  position: relative;
+  flex-shrink: 0;
+  z-index: 10;
+  transition: background-color 0.2s;
+  
+  &::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: -4px;
+    right: -4px;
+    z-index: 1;
+  }
+
+  &:hover, &--active {
+    background-color: var(--td-brand-color, #0052d9);
+    width: 2px; // Make it slightly visible on hover
+  }
+}
+
+// Tree styles
+.kb-tree {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+
+  &__list {
+    flex: 1;
+    padding: 8px 0;
+  }
+
+  &__create-row {
+    display: flex;
+    align-items: center;
+    padding: 4px 12px;
+    gap: 4px;
+    background-color: var(--td-bg-color-container-active, #eef2ff);
+  }
+
+  &__input {
+    flex: 1;
+    height: 28px;
+    padding: 0 8px;
+    border: 1px solid var(--td-component-border, #dcdcdc);
+    border-radius: 4px;
+    font-size: 13px;
+    outline: none;
+    
+    &:focus {
+      border-color: var(--td-brand-color, #0052d9);
+    }
+
+    &--inline {
+      height: 24px;
+      padding: 0 4px;
+      font-size: 13px;
+    }
+  }
+
+  &__icon-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    color: var(--td-text-color-secondary, #666);
+    border-radius: 4px;
+
+    &:hover {
+      background-color: var(--td-bg-color-container-hover, #f3f3f3);
+      color: var(--td-text-color-primary, #333);
+    }
+
+    &--danger:hover {
+      color: var(--td-error-color, #d54941);
+      background-color: var(--td-error-color-1, #fdecee);
+    }
+  }
+
+  // Directory Row
+  &__dir {
+    display: flex;
+    flex-direction: column;
+  }
+
+  &__dir-row {
+    display: flex;
+    align-items: center;
+    padding: 6px 12px 6px 4px;
+    cursor: pointer;
+    color: var(--td-text-color-primary, #333);
+    user-select: none;
+    height: 32px;
+    
+    &:hover {
+      background-color: var(--td-bg-color-container-hover, #f3f3f3);
+      
+      .kb-tree__dir-actions {
+        opacity: 1;
+      }
+    }
+  }
+
+  &__dir--selected > &__dir-row {
+    background-color: var(--td-warning-color-1, #fff3e8);
+    color: var(--td-warning-color, #ed7b2f);
+  }
+
+  &__expand-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    color: inherit;
+    margin-right: 2px;
+  }
+
+  &__dir-name {
+    flex: 1;
+    margin-left: 6px;
+    font-size: 13px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-weight: 500;
+  }
+
+  &__dir-count {
+    font-size: 12px;
+    color: var(--td-text-color-placeholder, #999);
+    margin: 0 8px;
+  }
+
+  &__dir-actions {
+    display: flex;
+    gap: 2px;
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+
+  // Notes List
+  &__notes {
+    display: flex;
+    flex-direction: column;
+  }
+
+  &__notes-empty {
+    padding: 8px 12px 8px 32px;
+    font-size: 12px;
+    color: var(--td-text-color-placeholder, #999);
+  }
+
+  &__note-row {
+    display: flex;
+    align-items: flex-start;
+    padding: 8px 12px 8px 28px;
+    cursor: pointer;
+    border-bottom: 1px solid transparent;
+    position: relative;
+    
+    &:hover {
+      background-color: var(--td-bg-color-container-hover, #f3f3f3);
+      
+      .kb-tree__note-delete {
+        opacity: 1;
+      }
+    }
+    
+    &--selected {
+      background-color: var(--td-warning-color-1, #fff3e8);
+      
+      &::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 3px;
+        background-color: var(--td-warning-color, #ed7b2f);
+      }
+    }
+  }
+
+  &__note-icon {
+    margin-top: 3px;
+    margin-right: 8px;
+    color: var(--td-text-color-secondary, #666);
+    flex-shrink: 0;
+  }
+
+  &__note-content {
+    flex: 1;
+    min-width: 0;
+  }
+
+  &__note-title {
+    font-size: 13px;
+    color: var(--td-text-color-primary, #333);
+    margin-bottom: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 20px;
+  }
+
+  &__note-domain {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    color: var(--td-text-color-placeholder, #999);
+    margin-bottom: 2px;
+  }
+
+  &__favicon {
+    width: 12px;
+    height: 12px;
+    border-radius: 2px;
+  }
+
+  &__note-meta {
+    display: flex;
+    align-items: center;
+    min-height: 16px;
+  }
+
+  &__note-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  &__tag-badge {
+    padding: 0 4px;
+    border-radius: 2px;
+    font-size: 10px;
+    height: 16px;
+    line-height: 16px;
+  }
+
+  &__tag-more {
+    font-size: 10px;
+    color: var(--td-text-color-placeholder, #999);
+  }
+
+  &__note-time {
+    font-size: 11px;
+    color: var(--td-text-color-placeholder, #999);
+  }
+
+  &__note-delete {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    color: var(--td-text-color-placeholder, #999);
+    padding: 4px;
+    border-radius: 4px;
+    opacity: 0;
+    transition: opacity 0.2s;
+
+    &:hover {
+      background-color: var(--td-error-color-1, #fdecee);
+      color: var(--td-error-color, #d54941);
+    }
+  }
+
+  // 系统内置 Skill 虚拟笔记行
+  &__note-row--system {
+    background-color: var(--td-bg-color-secondarycontainer, #f5f5f5);
+
+    .kb-tree__note-icon {
+      color: var(--td-warning-color, #ed7b2f);
+    }
+
+    &:hover {
+      background-color: var(--td-bg-color-container-hover, #f3f3f3);
+    }
+
+    &.kb-tree__note-row--selected {
+      background-color: var(--td-warning-color-1, #fff3e8);
+    }
+  }
+
+  // 系统 badge
+  &__system-badge {
+    display: inline-block;
+    margin-left: 6px;
+    padding: 0 5px;
+    height: 16px;
+    line-height: 16px;
+    font-size: 10px;
+    border-radius: 3px;
+    background-color: var(--td-warning-color-1, #fff3e8);
+    color: var(--td-warning-color, #ed7b2f);
+    border: 1px solid var(--td-warning-color-3, #fac18a);
+    vertical-align: middle;
+    font-weight: 500;
+  }
+}
+
+// Context Menu
+.kb-context-menu {
+  position: fixed;
+  background: var(--td-bg-color-container, #fff);
+  border: 1px solid var(--td-component-border, #e7e7e7);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border-radius: 4px;
+  padding: 4px 0;
+  min-width: 120px;
+
+  &__item {
+    padding: 6px 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--td-text-color-primary, #333);
+    cursor: pointer;
+
+    &:hover {
+      background-color: var(--td-bg-color-container-hover, #f3f3f3);
+    }
+
+    &--danger {
+      color: var(--td-error-color, #d54941);
+      
+      &:hover {
+        background-color: var(--td-error-color-1, #fdecee);
+      }
+    }
+  }
+}

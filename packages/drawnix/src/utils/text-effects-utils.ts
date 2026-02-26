@@ -428,7 +428,7 @@ export async function loadCustomFont(
   
   try {
     const loadedFont = await fontFace.load();
-    document.fonts.add(loadedFont);
+    (document.fonts as any).add(loadedFont);
   } catch (error) {
     console.error(`Failed to load custom font: ${family}`, error);
     throw error;

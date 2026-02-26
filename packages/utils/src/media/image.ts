@@ -135,6 +135,7 @@ export async function createCanvasFromImage(
     throw new Error('Failed to get canvas context');
   }
 
+  // const { width, height } = canvas;
   ctx.drawImage(img, 0, 0);
 
   return { canvas, ctx, img };
@@ -157,19 +158,19 @@ export async function createCanvasFromImage(
  */
 export function getCompressionStrategy(fileSizeMB: number): CompressionStrategy {
   if (fileSizeMB < 10) {
-    return COMPRESSION_STRATEGIES.small;
+    return COMPRESSION_STRATEGIES.small!;
   }
   if (fileSizeMB < 15) {
-    return COMPRESSION_STRATEGIES.medium;
+    return COMPRESSION_STRATEGIES.medium!;
   }
   if (fileSizeMB < 20) {
-    return COMPRESSION_STRATEGIES.large;
+    return COMPRESSION_STRATEGIES.large!;
   }
   if (fileSizeMB <= 25) {
-    return COMPRESSION_STRATEGIES.veryLarge;
+    return COMPRESSION_STRATEGIES.veryLarge!;
   }
   // >25MB 将由调用者处理
-  return COMPRESSION_STRATEGIES.small;
+  return COMPRESSION_STRATEGIES.small!;
 }
 
 /**
@@ -190,12 +191,12 @@ function compressImageWithQuality(blob: Blob, quality: number): Promise<Blob> {
 
       ctx.drawImage(img, 0, 0);
       canvas.toBlob(
-        (compressedBlob) => {
+        (blob) => {
           URL.revokeObjectURL(img.src);
-          if (compressedBlob) {
-            resolve(compressedBlob);
+          if (blob) {
+            resolve(blob);
           } else {
-            reject(new Error('Failed to compress image'));
+            reject(new Error('Canvas to Blob failed'));
           }
         },
         'image/jpeg',
@@ -488,7 +489,11 @@ export function trimBorders(
     for (let x = 0; x < width; x++) {
       const idx = (y * width + x) * 4;
       const alpha = data[idx + 3];
-      if (isBorderColor(data[idx], data[idx + 1], data[idx + 2], { alpha })) {
+      if (
+        isBorderColor(data[idx]!, data[idx + 1]!, data[idx + 2]!, {
+          alpha: alpha!,
+        })
+      ) {
         borderCount++;
       }
     }
@@ -500,7 +505,11 @@ export function trimBorders(
     for (let y = 0; y < height; y++) {
       const idx = (y * width + x) * 4;
       const alpha = data[idx + 3];
-      if (isBorderColor(data[idx], data[idx + 1], data[idx + 2], { alpha })) {
+      if (
+        isBorderColor(data[idx]!, data[idx + 1]!, data[idx + 2]!, {
+          alpha: alpha!,
+        })
+      ) {
         borderCount++;
       }
     }
@@ -624,8 +633,8 @@ export function trimCanvasWhiteAndTransparentBorderWithInfo(
     const b = data[idx + 2];
     const alpha = data[idx + 3];
 
-    if (alpha < alphaThreshold) return true;
-    if (r >= whiteThreshold && g >= whiteThreshold && b >= whiteThreshold)
+    if (alpha! < alphaThreshold) return true;
+    if (r! >= whiteThreshold && g! >= whiteThreshold && b! >= whiteThreshold)
       return true;
 
     return false;

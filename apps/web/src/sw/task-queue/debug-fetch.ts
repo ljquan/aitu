@@ -125,7 +125,7 @@ async function blobToDataUrl(blob: Blob): Promise<string> {
 async function parseFormData(formData: FormData): Promise<FormDataField[]> {
   const fields: FormDataField[] = [];
   
-  for (const [name, value] of formData.entries()) {
+  for (const [name, value] of (formData as any).entries()) {
     if (value instanceof Blob) {
       const field: FormDataField = {
         name,

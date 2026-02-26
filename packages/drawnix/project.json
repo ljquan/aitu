@@ -9,7 +9,7 @@
     "typecheck": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "tsc --noEmit",
+        "command": "tsc -p tsconfig.lib.json --noEmit",
         "cwd": "packages/drawnix"
       }
     },

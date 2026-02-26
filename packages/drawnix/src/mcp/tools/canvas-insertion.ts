@@ -13,6 +13,8 @@ import { DrawTransforms } from '@plait/draw';
 import { insertImageFromUrl } from '../../data/image';
 import { insertVideoFromUrl } from '../../data/video';
 import { scrollToPointIfNeeded } from '../../utils/selection-utils';
+import { parseMarkdownToCards } from '../../utils/markdown-to-cards';
+import { insertCardsToCanvas } from '../../utils/insert-cards';
 
 /**
  * 内容类型
@@ -197,12 +199,30 @@ function groupItems(items: InsertionItem[]): InsertionItem[][] {
 
 /**
  * 插入单个文本项到画布
+ * - 包含 Markdown 特征的文本 → 解析为 Card 标签贴插入
+ * - 普通文本 → 直接插入文本元素
  */
 async function insertTextToCanvas(
   board: PlaitBoard,
   text: string,
   point: Point
 ): Promise<{ width: number; height: number }> {
+  // 尝试解析为 Markdown Card 块
+  const cardBlocks = parseMarkdownToCards(text);
+  if (cardBlocks && cardBlocks.length > 0) {
+    // 有 Markdown 特征 → 插入为 Card 标签贴，宽度为屏幕宽度的 50%
+    const cardWidth = Math.round(window.innerWidth * 0.5);
+    insertCardsToCanvas(board, cardBlocks, point, cardWidth);
+    // 返回估算的总尺寸（3列布局）
+    const cols = Math.min(cardBlocks.length, 3);
+    const rows = Math.ceil(cardBlocks.length / 3);
+    return {
+      width: cols * (cardWidth + 20) - 20,
+      height: rows * (120 + 20) - 20,
+    };
+  }
+
+  // 普通文本 → 直接插入
   DrawTransforms.insertText(board, point, text);
   return estimateTextSize(text);
 }

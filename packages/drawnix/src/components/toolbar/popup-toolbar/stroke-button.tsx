@@ -58,11 +58,13 @@ export const PopupStrokeButton: React.FC<PopupStrokeButtonProps> = ({
     setWidthInputValue(String(currentStrokeWidth || 2));
   }, [currentStrokeWidth]);
 
-  const icon = isFullyTransparent(opacity)
+  const IconComponent = isFullyTransparent(opacity)
     ? StrokeIcon
     : isWhite(hexColor)
     ? StrokeWhiteIcon
     : undefined;
+
+  const icon = IconComponent ? <IconComponent /> : undefined;
 
   const setStrokeStyle = (style: StrokeStyle) => {
     setStrokeStyleTransform(board, style);

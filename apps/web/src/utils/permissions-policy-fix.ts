@@ -16,7 +16,7 @@ window.addEventListener = function(
   type: string,
   listener: EventListenerOrEventListenerObject,
   options?: boolean | AddEventListenerOptions
-) {
+): any {
   // 只拦截 unload 事件（总是阻止，因为它会影响 bfcache）
   if (type === 'unload') {
     console.warn('[Permissions Policy] Blocked unload event listener');
@@ -27,24 +27,24 @@ window.addEventListener = function(
   if (type === 'beforeunload') {
     beforeUnloadHandler = listener;
     // console.log('[Permissions Policy] Registering beforeunload with native method');
-    return originalAddEventListener.call(window, type, listener, options);
+    return originalAddEventListener.call(window, type as any, listener as any, options);
   }
 
   // 其他事件正常处理
-  return originalAddEventListener.call(window, type, listener, options);
+  return originalAddEventListener.call(window, type as any, listener as any, options);
 };
 
 window.removeEventListener = function(
   type: string,
   listener: EventListenerOrEventListenerObject,
   options?: boolean | EventListenerOptions
-) {
+): any {
   // 对于 beforeunload，清除引用
   if (type === 'beforeunload') {
     beforeUnloadHandler = null;
   }
 
-  return originalRemoveEventListener.call(window, type, listener, options);
+  return originalRemoveEventListener.call(window, type as any, listener as any, options);
 };
 
 // 暴露调试函数

@@ -255,6 +255,7 @@ export const TextPropertyPanel: React.FC<TextPropertyPanelProps> = ({
       }, 500);
       return () => clearTimeout(timer);
     }
+    return undefined;
   }, [isOpen, isFontDropdownOpen]);
 
   // 计算面板位置 - 在选中元素右侧，且在 popup-toolbar 下方

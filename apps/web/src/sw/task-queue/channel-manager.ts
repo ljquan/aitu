@@ -451,7 +451,7 @@ export class SWChannelManager {
   private async handleCrashSnapshot(data: CrashSnapshotParams): Promise<{ success: boolean; error?: string }> {
     try {
       const { saveCrashSnapshot } = await import('../index');
-      await saveCrashSnapshot(data.snapshot);
+      await saveCrashSnapshot(data.snapshot as any);
       return { success: true };
     } catch (error: any) {
       console.error('[SWChannelManager] Crash snapshot save failed:', error);
@@ -1155,11 +1155,11 @@ export class SWChannelManager {
       const response = await withTimeout(
         clientChannel.channel.call('thumbnail:generate', { url }),
         timeoutMs,
-        'Video thumbnail generation timeout'
-      );
+        'Video thumbnail generation timeout' as any
+      ) as any;
 
-      if (response.ret !== 0) {
-        console.warn('[ChannelManager] Video thumbnail generation failed:', response.msg);
+      if (!response || response.ret !== 0) {
+        console.warn('[ChannelManager] Video thumbnail generation failed:', response?.msg);
         return null;
       }
 

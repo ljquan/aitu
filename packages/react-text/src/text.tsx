@@ -24,9 +24,8 @@ import {
 } from '@plait/common';
 import React, { useMemo, useCallback, useEffect, CSSProperties } from 'react';
 import { withHistory } from 'slate-history';
-import { isUrl, LinkEditor } from '@plait/text-plugins';
 import { withText } from './plugins/with-text';
-import { CustomEditor, RenderElementPropsFor } from './custom-types';
+import { RenderElementPropsFor } from './custom-types';
 import { useSearchHighlightQuery } from './search-highlight';
 
 import './styles/index.scss';
@@ -47,10 +46,10 @@ export const Text: React.FC<TextComponentProps> = (
   );
 
   const decorate = useCallback(
-    ([node, path]: NodeEntry): BaseRange[] => {
+    ([node, path]: NodeEntry): (BaseRange & Record<string, unknown>)[] => {
       if (!searchQuery || !SlateText.isText(node)) return [];
 
-      const ranges: BaseRange[] = [];
+      const ranges: (BaseRange & Record<string, unknown>)[] = [];
       const { text: nodeText } = node;
       const escaped = searchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const regex = new RegExp(escaped, 'gi');
@@ -61,7 +60,7 @@ export const Text: React.FC<TextComponentProps> = (
           anchor: { path, offset: match.index },
           focus: { path, offset: match.index + match[0].length },
           searchHighlight: true,
-        } as BaseRange & { searchHighlight: boolean });
+        } as BaseRange & Record<string, unknown>);
       }
 
       return ranges;

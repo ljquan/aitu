@@ -121,8 +121,13 @@ export class LoopDetector {
       return { loopDetected: false };
     }
 
+    const first = recent[0];
+    if (!first) {
+      return { loopDetected: false };
+    }
+
     // Check if last N calls are exactly the same
-    const firstSignature = `${recent[0].toolName}:${recent[0].argsHash}`;
+    const firstSignature = `${first.toolName}:${first.argsHash}`;
     const allSame = recent.every(
       (call) => `${call.toolName}:${call.argsHash}` === firstSignature
     );
@@ -132,8 +137,8 @@ export class LoopDetector {
         loopDetected: true,
         loopType: LoopType.EXACT,
         loopLength: repeatThreshold,
-        involvedTools: [recent[0].toolName],
-        description: `Exact repeat detected: tool "${recent[0].toolName}" called ${repeatThreshold} times consecutively with identical arguments`,
+        involvedTools: [first.toolName],
+        description: `Exact repeat detected: tool "${first.toolName}" called ${repeatThreshold} times consecutively with identical arguments`,
         suggestion: 'Check for deadlock, consider changing strategy or terminating the task',
       };
     }
@@ -153,7 +158,10 @@ export class LoopDetector {
     }
 
     // Check if all calls are the same tool
-    const toolName = recent[0].toolName;
+    const first = recent[0];
+    if (!first) return { loopDetected: false };
+
+    const toolName = first.toolName;
     const allSameTool = recent.every((call) => call.toolName === toolName);
 
     if (!allSameTool) {
@@ -163,9 +171,13 @@ export class LoopDetector {
     // Calculate argument similarity
     let similarCount = 0;
     for (let i = 1; i < recent.length; i++) {
+      const prev = recent[i - 1];
+      const curr = recent[i];
+      if (!prev || !curr) continue;
+
       const similarity = this.calculateSimilarity(
-        recent[i - 1].args || {},
-        recent[i].args || {}
+        prev.args || {},
+        curr.args || {}
       );
       if (similarity >= similarityThreshold) {
         similarCount++;
@@ -191,31 +203,29 @@ export class LoopDetector {
    * Detect oscillating pattern (A-B-A-B)
    */
   private detectOscillatingPattern(): LoopDetectionResult {
-    const minLength = 4; // Need at least 4 calls to detect A-B-A-B
-    if (this.callHistory.length < minLength) {
-      return { loopDetected: false };
-    }
+    if (this.callHistory.length < 4) return { loopDetected: false };
 
-    const recent = this.callHistory.slice(-6);
-    if (recent.length < 4) {
-      return { loopDetected: false };
-    }
+    // Simple oscillating check: A -> B -> A -> B
+    // Look at last 4 calls
+    const last4 = this.callHistory.slice(-4);
+    const [c1, c2, c3, c4] = last4;
 
-    // Check A-B-A-B pattern
-    const signatures = recent.map((c) => `${c.toolName}:${c.argsHash}`);
+    if (!c1 || !c2 || !c3 || !c4) return { loopDetected: false };
 
-    // Check if last 4 form A-B-A-B
-    const last4 = signatures.slice(-4);
-    if (last4[0] === last4[2] && last4[1] === last4[3] && last4[0] !== last4[1]) {
-      const toolA = recent[recent.length - 4].toolName;
-      const toolB = recent[recent.length - 3].toolName;
+    if (
+      c1.toolName === c3.toolName &&
+      c1.argsHash === c3.argsHash &&
+      c2.toolName === c4.toolName &&
+      c2.argsHash === c4.argsHash &&
+      (c1.toolName !== c2.toolName || c1.argsHash !== c2.argsHash)
+    ) {
       return {
         loopDetected: true,
         loopType: LoopType.OSCILLATING,
         loopLength: 2,
-        involvedTools: [toolA, toolB],
-        description: `Oscillating pattern detected: tools switching between "${toolA}" and "${toolB}"`,
-        suggestion: 'Check if two tools are triggering each other, consider breaking the cycle or terminating',
+        involvedTools: [c1.toolName, c2.toolName],
+        description: `Oscillating loop detected: ${c1.toolName} <-> ${c2.toolName}`,
+        suggestion: 'The model is flipping between two states. Consider adding a new constraint or stopping.',
       };
     }
 
@@ -243,7 +253,13 @@ export class LoopDetector {
 
       const isMatch = lastPeriod.every((sig, i) => sig === prevPeriod[i]);
       if (isMatch) {
-        const involvedTools = [...new Set(lastPeriod.map((s) => s.split(':')[0]))];
+        const involvedTools = [
+          ...new Set(
+            lastPeriod
+              .map((s) => s.split(':')[0])
+              .filter((s): s is string => s !== undefined)
+          ),
+        ];
         return {
           loopDetected: true,
           loopType: LoopType.PERIODIC,

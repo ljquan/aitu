@@ -45,7 +45,7 @@ class TaskQueueService {
       startedAt: task.startedAt,
       completedAt: task.completedAt,
       result: task.result,
-      error: task.error,
+      error: task.error as any,
       progress: task.progress,
       remoteId: task.remoteId,
       executionPhase: task.executionPhase,

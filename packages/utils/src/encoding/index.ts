@@ -25,8 +25,8 @@
  */
 export function base64ToBlob(base64: string): Blob {
   const arr = base64.split(',');
-  const fileType = arr[0].match(/:(.*?);/)![1];
-  const bstr = atob(arr[1]);
+  const fileType = arr[0]!.match(/:(.*?);/)![1];
+  const bstr = atob(arr[1]!);
   let l = bstr.length;
   const u8Arr = new Uint8Array(l);
 

@@ -45,8 +45,8 @@ function getMimeTypeFromFileName(fileName: string): string | null {
 /** 检查 MIME 类型是否为支持的媒体类型 */
 function isSupportedMediaType(mimeType: string): boolean {
   return (
-    ASSET_CONSTANTS.ALLOWED_IMAGE_TYPES.includes(mimeType) ||
-    ASSET_CONSTANTS.ALLOWED_VIDEO_TYPES.includes(mimeType)
+    ASSET_CONSTANTS.ALLOWED_IMAGE_TYPES.includes(mimeType as any) ||
+    ASSET_CONSTANTS.ALLOWED_VIDEO_TYPES.includes(mimeType as any)
   );
 }
 
@@ -141,6 +141,6 @@ export async function extractMediaFromZip(
  * 检查文件是否为 ZIP 文件
  */
 export function isZipFile(file: File): boolean {
-  return ASSET_CONSTANTS.ALLOWED_ZIP_TYPES.includes(file.type) ||
+  return ASSET_CONSTANTS.ALLOWED_ZIP_TYPES.includes(file.type as any) ||
     file.name.toLowerCase().endsWith('.zip');
 }

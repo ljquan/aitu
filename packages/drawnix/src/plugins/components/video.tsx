@@ -48,6 +48,7 @@ export const Video: React.FC<VideoProps> = (props: VideoProps) => {
         video.removeEventListener('error', handleError);
       };
     }
+    return undefined;
   }, [url]);
 
   const handleVideoClick = (e: React.MouseEvent) => {

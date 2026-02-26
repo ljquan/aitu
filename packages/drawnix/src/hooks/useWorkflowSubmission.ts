@@ -226,7 +226,7 @@ export function useWorkflowSubmission(
               defaultModels: {
                 image: globalSettings.imageModelName || 'gemini-3-pro-image-preview-vip',
                 video: globalSettings.videoModelName || 'veo3.1',
-              },
+              } as any,
               params: {
                 count: recoveredWorkflow.metadata?.count,
                 size: recoveredWorkflow.metadata?.size,
@@ -234,7 +234,7 @@ export function useWorkflowSubmission(
               },
               selection: { texts: [], images: [], videos: [], graphics: [] },
               finalPrompt: recoveredWorkflow.metadata?.prompt || '',
-            },
+            } as any,
             referenceImages: recoveredWorkflow.context?.referenceImages || [],
             textModel: globalSettings.textModelName,
           };
@@ -286,7 +286,7 @@ export function useWorkflowSubmission(
         // Update step in WorkflowContext
         workflowControl.updateStep(
           event.stepId,
-          event.status,
+          event.status as any,
           event.result,
           event.error,
           event.duration
@@ -399,7 +399,7 @@ export function useWorkflowSubmission(
         // console.log('[useWorkflowSubmission] Steps added:', event.steps?.length);
         // Add new steps to WorkflowContext
         const stepsAddedEvent = event as WorkflowStepsAddedEvent;
-        workflowControl.addSteps(stepsAddedEvent.steps.map(step => ({
+        workflowControl.addSteps(stepsAddedEvent.steps.map((step: any) => ({
           id: step.id,
           mcp: step.mcp,
           args: step.args,
@@ -480,7 +480,7 @@ export function useWorkflowSubmission(
       },
       referenceImages,
       textModel,
-    };
+    } as any;
     currentRetryContextRef.current = finalRetryContext;
 
     // Send to ChatDrawer

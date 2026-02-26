@@ -194,12 +194,12 @@ export const QuickCreationToolbar: React.FC<QuickCreationToolbarProps> = ({
       } else if (asset.type === AssetType.VIDEO) {
         await insertVideoFromUrl(board, asset.url);
       }
-      MessagePlugin.success(t('toolbar.assetInserted') || '素材已插入到画板');
+      MessagePlugin.success(t('toolbar.assetInserted' as any) || '素材已插入到画板');
       setMediaLibraryOpen(false);
       onClose();
     } catch (error) {
       console.error('Failed to insert asset:', error);
-      MessagePlugin.error(t('toolbar.assetInsertFailed') || '插入素材失败');
+      MessagePlugin.error(t('toolbar.assetInsertFailed' as any) || '插入素材失败');
     }
   };
 
@@ -412,7 +412,7 @@ export const QuickCreationToolbar: React.FC<QuickCreationToolbarProps> = ({
         }}
         mode={SelectionMode.SELECT}
         onSelect={handleInsertAsset}
-        selectButtonText={t('toolbar.insert') || '插入'}
+        selectButtonText={t('toolbar.insert' as any) || '插入'}
       />
     </>
   );

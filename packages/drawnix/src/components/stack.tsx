@@ -27,7 +27,7 @@ const RowStack = forwardRef(
           alignItems: align,
           justifyContent,
           ...style,
-        }}
+        } as React.CSSProperties}
         ref={ref}
       >
         {children}
@@ -49,7 +49,7 @@ const ColStack = forwardRef(
           justifyItems: align,
           justifyContent,
           ...style,
-        }}
+        } as React.CSSProperties}
         ref={ref}
       >
         {children}

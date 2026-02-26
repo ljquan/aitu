@@ -45,6 +45,7 @@ import localforage from 'localforage';
 import { ASSET_CONSTANTS } from '../constants/ASSET_CONSTANTS';
 import { unifiedCacheService } from './unified-cache-service';
 import { analytics } from '../utils/posthog-analytics';
+import { knowledgeBaseService } from './knowledge-base-service';
 
 // 备份文件版本
 const BACKUP_VERSION = 2;
@@ -72,6 +73,7 @@ export interface BackupOptions {
   includePrompts: boolean;
   includeProjects: boolean;
   includeAssets: boolean;
+  includeKnowledgeBase: boolean;
 }
 
 /**
@@ -100,6 +102,7 @@ interface BackupManifest {
     prompts: boolean;
     projects: boolean;
     assets: boolean;
+    knowledgeBase: boolean;
   };
   stats: {
     promptCount: number;
@@ -109,6 +112,7 @@ interface BackupManifest {
     boardCount: number;
     assetCount: number;
     taskCount: number;
+    kbNoteCount: number;
   };
   /** 备份时的工作区状态 */
   workspaceState?: BackupWorkspaceState;
@@ -196,6 +200,12 @@ export interface ImportResult {
     imported: number;
     skipped: number;
   };
+  knowledgeBase: {
+    directories: number;
+    notes: number;
+    tags: number;
+    skipped: number;
+  };
   errors: string[];
   /** 备份时的工作区状态（用于恢复画布位置） */
   workspaceState?: BackupWorkspaceState;
@@ -276,6 +286,7 @@ class BackupRestoreService {
         prompts: options.includePrompts,
         projects: options.includeProjects,
         assets: options.includeAssets,
+        knowledgeBase: options.includeKnowledgeBase,
       },
       stats: {
         promptCount: 0,
@@ -285,6 +296,7 @@ class BackupRestoreService {
         boardCount: 0,
         assetCount: 0,
         taskCount: 0,
+        kbNoteCount: 0,
       },
       workspaceState,
     };
@@ -299,9 +311,21 @@ class BackupRestoreService {
       manifest.stats.imagePromptCount = promptsData.imagePromptHistory.length;
     }
 
+    // 导出知识库
+    if (options.includeKnowledgeBase) {
+      onProgress?.(30, '正在导出知识库...');
+      try {
+        const kbData = await knowledgeBaseService.exportAllData();
+        zip.file('knowledge-base.json', JSON.stringify(kbData, null, 2));
+        manifest.stats.kbNoteCount = kbData.notes.length;
+      } catch (error) {
+        console.error('Failed to export knowledge base:', error);
+      }
+    }
+
     // 导出项目
     if (options.includeProjects) {
-      onProgress?.(25, '正在导出项目...');
+      onProgress?.(40, '正在导出项目...');
       await this.exportProjects(zip, manifest, onProgress);
     }
 
@@ -344,6 +368,45 @@ class BackupRestoreService {
     });
 
     return blob;
+  }
+
+  /**
+   * 导入知识库数据
+   */
+  private async importKnowledgeBase(zip: JSZip): Promise<{
+    directories: number;
+    notes: number;
+    tags: number;
+    skipped: number;
+    errors: string[];
+  }> {
+    const kbFile = zip.file('knowledge-base.json');
+    if (!kbFile) {
+      return { directories: 0, notes: 0, tags: 0, skipped: 0, errors: [] };
+    }
+
+    try {
+      const content = await kbFile.async('string');
+      const data = JSON.parse(content);
+      const result = await knowledgeBaseService.importAllData(data);
+      
+      return {
+        directories: result.dirCount,
+        notes: result.noteCount,
+        tags: result.tagCount,
+        skipped: 0,
+        errors: [],
+      };
+    } catch (error) {
+      console.error('Failed to import knowledge base:', error);
+      return {
+        directories: 0,
+        notes: 0,
+        tags: 0,
+        skipped: 0,
+        errors: [`Knowledge base import failed: ${error instanceof Error ? error.message : String(error)}`],
+      };
+    }
   }
 
   /**
@@ -610,6 +673,7 @@ class BackupRestoreService {
       projects: { folders: 0, boards: 0, merged: 0, skipped: 0 },
       assets: { imported: 0, skipped: 0 },
       tasks: { imported: 0, skipped: 0 },
+      knowledgeBase: { directories: 0, notes: 0, tags: 0, skipped: 0 },
       errors: [],
     };
 
@@ -640,6 +704,16 @@ class BackupRestoreService {
           const promptsContent = await promptsFile.async('string');
           const promptsData: PromptsData = JSON.parse(promptsContent);
           result.prompts = await this.importPromptData(promptsData);
+        }
+      }
+
+      // 导入知识库
+      if (manifest.includes.knowledgeBase) {
+        onProgress?.(30, '正在导入知识库...');
+        const kbResult = await this.importKnowledgeBase(zip);
+        result.knowledgeBase = kbResult;
+        if (kbResult.errors && kbResult.errors.length > 0) {
+          result.errors.push(...kbResult.errors);
         }
       }
 
@@ -679,7 +753,13 @@ class BackupRestoreService {
         projectCount: result.projects.boards,
         assetCount: result.assets.imported,
         taskCount: result.tasks.imported,
-        skippedCount: result.prompts.skipped + result.projects.skipped + result.assets.skipped + result.tasks.skipped,
+        kbNoteCount: result.knowledgeBase.notes,
+        skippedCount:
+          result.prompts.skipped +
+          result.projects.skipped +
+          result.assets.skipped +
+          result.tasks.skipped +
+          result.knowledgeBase.skipped,
       });
     } catch (error: unknown) {
       const errorMessage =

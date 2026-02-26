@@ -66,8 +66,8 @@ class PostHogAnalytics {
         console.debug('[Analytics] track failed', error);
       }
     };
-    if (typeof (globalThis as Window & { requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number }).requestIdleCallback === 'function') {
-      (globalThis as Window & { requestIdleCallback: (cb: () => void, opts?: { timeout: number }) => number }).requestIdleCallback(doTrack, { timeout: 2000 });
+    if (typeof (globalThis as unknown as Window & { requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number }).requestIdleCallback === 'function') {
+      (globalThis as unknown as Window & { requestIdleCallback: (cb: () => void, opts?: { timeout: number }) => number }).requestIdleCallback(doTrack, { timeout: 2000 });
     } else {
       setTimeout(doTrack, 0);
     }

@@ -447,7 +447,7 @@ export const withMultiResize = (board: PlaitBoard) => {
   return withResize<PlaitElement[], ResizeHandle>(board, {
     key: 'multi-resize',
     canResize: () => canResize(board),
-    hitTest: (point: Point) => hitTest(board, point),
+    hitTest: ((point: Point) => hitTest(board, point)) as any,
     onResize: (resizeRef, resizeState) => onResize(board, resizeRef, resizeState),
   });
 };

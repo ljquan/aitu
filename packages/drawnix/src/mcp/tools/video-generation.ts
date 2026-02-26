@@ -118,7 +118,7 @@ async function executeAsync(params: VideoGenerationParams): Promise<MCPResult> {
         prompt,
         seconds,
         size,
-        inputReferences,
+        inputReferences: inputReferences as any,
       },
       {
         interval: 5000, // 每 5 秒轮询一次

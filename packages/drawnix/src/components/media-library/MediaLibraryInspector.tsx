@@ -190,7 +190,7 @@ export function MediaLibraryInspector({
               onChange={(value) => setNewName(value as string)}
               autofocus
               onBlur={handleConfirmRename}
-              onEnter={handleConfirmRename}
+              {...{onEnter: handleConfirmRename} as any}
               onKeydown={handleKeyDown}
               placeholder="输入名称，按 Enter 或点击外部保存"
             />

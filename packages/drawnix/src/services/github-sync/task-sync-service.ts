@@ -353,7 +353,7 @@ class TaskSyncService {
       );
 
       return JSON.parse(decrypted) as TaskIndex;
-    } catch (error) {
+    } catch (error: any) {
       logWarning('TaskSyncService: Failed to download remote task index', error);
       return null;
     }
@@ -383,7 +383,7 @@ class TaskSyncService {
       );
 
       return JSON.parse(decrypted) as TaskPage;
-    } catch (error) {
+    } catch (error: any) {
       logWarning(`TaskSyncService: Failed to download task page ${pageId}`, error);
       return null;
     }
