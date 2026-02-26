@@ -416,11 +416,11 @@ export const IMAGE_MODEL_MORE_OPTIONS: ModelConfig[] = [
     tags: ['seedream'],
   },
   {
-    id: 'seedream-5.0',
-    label: 'Seedream 5.0',
-    shortLabel: 'Seedream 5.0',
+    id: 'doubao-seedream-5-0-260128',
+    label: 'Seedream 5.0 lite',
+    shortLabel: 'Seedream 5.0 lite',
     shortCode: 'sd5',
-    description: '即梦 Seedream 5.0 图片生成，支持 2K/4K',
+    description: '即梦 Seedream 5.0 lite 图片生成，支持 2K/3K',
     type: 'image',
     vendor: ModelVendor.DOUBAO,
     supportsTools: false,
@@ -1004,7 +1004,7 @@ const SEEDANCE_MODEL_IDS = [
 const SEEDREAM_IMAGE_MODEL_IDS = [
   'doubao-seedream-4-0-250828',
   'doubao-seedream-4-5-251128',
-  'seedream-5.0',
+  'doubao-seedream-5-0-260128',
 ];
 
 /** GPT 图片模型 ID（仅支持有限尺寸） */
@@ -1241,7 +1241,7 @@ export const IMAGE_PARAMS: ParamConfig[] = [
     compatibleTags: ['seedream'],
     modelType: 'image',
   },
-  // Seedream 图片质量（2K/4K）
+  // Seedream 4.0/4.5 图片质量（2K/4K）
   {
     id: 'seedream_quality',
     label: '图片质量',
@@ -1253,8 +1253,22 @@ export const IMAGE_PARAMS: ParamConfig[] = [
       { value: '4k', label: '4K' },
     ],
     defaultValue: '2k',
-    compatibleModels: SEEDREAM_IMAGE_MODEL_IDS,
-    compatibleTags: ['seedream'],
+    compatibleModels: ['doubao-seedream-4-0-250828', 'doubao-seedream-4-5-251128'],
+    modelType: 'image',
+  },
+  // Seedream 5.0 lite 图片质量（2K/3K）
+  {
+    id: 'seedream_quality',
+    label: '图片质量',
+    shortLabel: '质量',
+    description: '2K 或 3K 分辨率',
+    valueType: 'enum',
+    options: [
+      { value: '2k', label: '2K' },
+      { value: '3k', label: '3K' },
+    ],
+    defaultValue: '2k',
+    compatibleModels: ['doubao-seedream-5-0-260128'],
     modelType: 'image',
   },
   {

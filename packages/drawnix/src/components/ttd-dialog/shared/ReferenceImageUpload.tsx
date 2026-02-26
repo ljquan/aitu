@@ -354,6 +354,7 @@ export const ReferenceImageUpload: React.FC<ReferenceImageUploadProps> = ({
   // Remove image
   const handleRemove = useCallback((index: number) => {
     const newImages = images.filter((_, i) => i !== index);
+    setHoveredImage(null);
     onImagesChange(newImages);
   }, [images, onImagesChange]);
 
