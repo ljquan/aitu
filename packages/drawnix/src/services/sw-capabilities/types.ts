@@ -180,6 +180,8 @@ export interface ImageGenerationParams {
   batchTotal?: number;
   /** 全局索引 */
   globalIndex?: number;
+  /** 额外参数（如 seedream_quality 等模型特定参数） */
+  params?: Record<string, unknown>;
 }
 
 /**
