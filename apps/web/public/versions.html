@@ -6,24 +6,34 @@
     <title>OpenTu - 版本日志</title>
     <style>
       :root {
-        --primary-color: #f39c12;
-        --primary-hover: #e67e22;
-        --bg-color: #f5f5f5;
+        --primary-color: #4f46e5;
+        --primary-hover: #4338ca;
+        --bg-color: #f3f4f6;
         --card-bg: #ffffff;
-        --text-color: #333;
-        --text-secondary: #666;
-        --border-color: #e0e0e0;
-        --details-bg: #fafafa;
+        --text-main: #111827;
+        --text-secondary: #6b7280;
+        --border-color: #e5e7eb;
+        --details-bg: #f9fafb;
+        --tag-bg: #e0e7ff;
+        --tag-text: #4338ca;
+        --success-color: #10b981;
+        --warning-color: #f59e0b;
+        --timeline-line: #d1d5db;
+        --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+        --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
       }
 
       @media (prefers-color-scheme: dark) {
         :root {
-          --bg-color: #1a1a1a;
-          --card-bg: #2d2d2d;
-          --text-color: #e0e0e0;
-          --text-secondary: #999;
-          --border-color: #444;
-          --details-bg: #242424;
+          --bg-color: #111827;
+          --card-bg: #1f2937;
+          --text-main: #f9fafb;
+          --text-secondary: #9ca3af;
+          --border-color: #374151;
+          --details-bg: #111827;
+          --tag-bg: #312e81;
+          --tag-text: #e0e7ff;
+          --timeline-line: #4b5563;
         }
       }
 
@@ -32,134 +42,326 @@
       body {
         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
         background: var(--bg-color);
-        color: var(--text-color);
+        color: var(--text-main);
         min-height: 100vh;
-        padding: 20px;
+        padding: 40px 20px;
+        line-height: 1.5;
       }
 
-      .container { max-width: 800px; margin: 0 auto; }
+      .container { max-width: 800px; margin: 0 auto; position: relative; }
 
-      header { text-align: center; margin-bottom: 30px; }
+      header { text-align: center; margin-bottom: 60px; }
 
       h1 {
-        font-size: 28px; margin-bottom: 8px;
-        display: flex; align-items: center; justify-content: center; gap: 10px;
+        font-size: 32px; margin-bottom: 12px; font-weight: 800;
+        display: flex; align-items: center; justify-content: center; gap: 12px;
+        color: var(--text-main);
       }
-      h1 .icon { font-size: 32px; }
-      .subtitle { color: var(--text-secondary); font-size: 14px; }
+      h1 .icon { font-size: 36px; }
+      .subtitle { color: var(--text-secondary); font-size: 16px; }
 
-      .loading { text-align: center; padding: 40px; color: var(--text-secondary); }
+      .loading { text-align: center; padding: 60px; color: var(--text-secondary); }
       .loading .spinner {
         width: 40px; height: 40px; border: 3px solid var(--border-color);
         border-top-color: var(--primary-color); border-radius: 50%;
-        animation: spin 1s linear infinite; margin: 0 auto 15px;
+        animation: spin 1s linear infinite; margin: 0 auto 20px;
       }
       @keyframes spin { to { transform: rotate(360deg); } }
 
       .error {
-        background: #fff0f0; border: 1px solid #ffccc7; color: #cf1322;
-        padding: 20px; border-radius: 12px; text-align: center;
+        background: #fee2e2; border: 1px solid #fecaca; color: #b91c1c;
+        padding: 24px; border-radius: 12px; text-align: center;
       }
       @media (prefers-color-scheme: dark) {
-        .error { background: #3a2020; border-color: #5a3030; color: #ff7875; }
+        .error { background: #7f1d1d; border-color: #991b1b; color: #fca5a5; }
       }
 
-      .version-group { margin-bottom: 24px; }
-      .group-title {
-        font-size: 18px; font-weight: 600; margin-bottom: 12px;
-        padding-bottom: 8px; border-bottom: 2px solid var(--primary-color);
-        color: var(--primary-color);
+      /* Timeline styles */
+      .timeline {
+        position: relative;
+        padding-left: 30px;
       }
-      .version-list { display: flex; flex-direction: column; gap: 10px; }
+      .timeline::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: 14px;
+        width: 2px;
+        background: var(--timeline-line);
+        border-radius: 1px;
+      }
+
+      .version-group { margin-bottom: 40px; position: relative; }
+      
+      .group-label {
+        position: sticky;
+        top: 20px;
+        display: inline-block;
+        background: var(--primary-color);
+        color: white;
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 14px;
+        font-weight: 600;
+        margin-bottom: 24px;
+        margin-left: -44px;
+        z-index: 10;
+        box-shadow: var(--shadow-sm);
+      }
+
+      .version-item {
+        position: relative;
+        margin-bottom: 24px;
+      }
+
+      .version-dot {
+        position: absolute;
+        left: -36px;
+        top: 24px;
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: var(--bg-color);
+        border: 3px solid var(--primary-color);
+        z-index: 2;
+      }
+      
+      .version-item:hover .version-dot {
+        background: var(--primary-color);
+        transform: scale(1.2);
+        transition: all 0.2s ease;
+      }
 
       .version-card {
-        background: var(--card-bg); border: 1px solid var(--border-color);
-        border-radius: 12px; transition: all 0.2s ease; overflow: hidden;
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 16px;
+        transition: all 0.2s ease;
+        overflow: hidden;
+        box-shadow: var(--shadow-sm);
       }
+      
       .version-card:hover {
         border-color: var(--primary-color);
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        box-shadow: var(--shadow-md);
+        transform: translateY(-2px);
       }
+
       .version-header {
-        display: flex; align-items: center; justify-content: space-between;
-        padding: 14px 20px; cursor: pointer; user-select: none;
+        padding: 20px 24px;
+        cursor: pointer;
+        user-select: none;
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
       }
-      .version-meta { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-      .version-number { font-size: 17px; font-weight: 600; }
-      .version-date { font-size: 13px; color: var(--text-secondary); }
+
+      .version-info { flex: 1; }
+      
+      .version-title-row {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-bottom: 8px;
+      }
+
+      .version-number {
+        font-size: 20px;
+        font-weight: 700;
+        color: var(--text-main);
+      }
+
       .version-tag {
-        font-size: 11px; padding: 2px 8px; border-radius: 4px;
-        background: var(--primary-color); color: white;
+        font-size: 12px;
+        padding: 2px 10px;
+        border-radius: 999px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
       }
-      .version-tag.major { background: #722ed1; }
-      .version-tag.minor { background: #1890ff; }
+      .version-tag.major { background: #7c3aed; color: white; } /* Violet 600 */
+      .version-tag.minor { background: var(--tag-bg); color: var(--tag-text); }
+      .version-tag.patch { background: #e5e7eb; color: #374151; }
+
+      .version-date {
+        font-size: 14px;
+        color: var(--text-secondary);
+      }
 
       .version-highlights {
-        font-size: 13px; color: var(--text-secondary);
-        margin-top: 4px; line-height: 1.4;
+        font-size: 15px;
+        color: var(--text-secondary);
+        margin-top: 8px;
+        line-height: 1.6;
       }
 
-      .version-right { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
-      .expand-btn {
-        background: none; border: none; cursor: pointer; padding: 4px;
-        color: var(--text-secondary); transition: transform 0.2s ease;
-        font-size: 18px; line-height: 1;
+      .expand-icon {
+        color: var(--text-secondary);
+        transition: transform 0.3s ease;
+        margin-left: 16px;
+        margin-top: 4px;
+        opacity: 0.6;
       }
-      .expand-btn.expanded { transform: rotate(180deg); }
+      .version-card:hover .expand-icon { opacity: 1; }
+      .expand-icon.expanded { transform: rotate(180deg); }
 
       .version-details {
-        max-height: 0; overflow: hidden; transition: max-height 0.3s ease;
-        border-top: none;
+        max-height: 0;
+        overflow: hidden;
+        transition: max-height 0.3s ease-out;
+        background: var(--details-bg);
+        border-top: 1px solid transparent;
       }
+      
       .version-details.open {
-        max-height: 5000px; border-top: 1px solid var(--border-color);
+        max-height: 5000px;
+        border-top-color: var(--border-color);
       }
-      .version-details-inner { padding: 14px 20px; background: var(--details-bg); }
 
-      .change-category { margin-bottom: 12px; }
+      .version-details-inner { padding: 24px; }
+
+      .change-category { margin-bottom: 24px; }
       .change-category:last-child { margin-bottom: 0; }
-      .change-category-title {
-        font-size: 13px; font-weight: 600; margin-bottom: 6px;
-        display: flex; align-items: center; gap: 6px;
+      
+      .category-header {
+        font-size: 14px;
+        font-weight: 700;
+        margin-bottom: 12px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
       }
-      .change-category-title .emoji { font-size: 14px; }
+      
+      .category-icon { font-size: 18px; }
+      
       .change-list {
-        list-style: none; padding: 0; margin: 0;
-        font-size: 13px; line-height: 1.8;
+        list-style: none;
+        padding: 0;
       }
-      .change-list li { padding-left: 16px; position: relative; }
+      
+      .change-list li {
+        padding-left: 20px;
+        position: relative;
+        margin-bottom: 8px;
+        font-size: 14px;
+        color: var(--text-main);
+        line-height: 1.6;
+      }
+      
       .change-list li::before {
-        content: '•'; position: absolute; left: 4px; color: var(--text-secondary);
+        content: '';
+        position: absolute;
+        left: 6px;
+        top: 10px;
+        width: 4px;
+        height: 4px;
+        border-radius: 50%;
+        background-color: var(--text-secondary);
       }
 
-      .load-more {
-        display: block; width: 100%; padding: 12px; margin-top: 16px;
-        background: var(--card-bg); border: 1px solid var(--border-color);
-        border-radius: 8px; color: var(--primary-color); font-size: 14px;
-        cursor: pointer; transition: all 0.2s;
+      .load-more-container {
+        margin-top: 40px;
+        text-align: center;
+        position: relative;
+        z-index: 2;
       }
-      .load-more:hover { border-color: var(--primary-color); background: rgba(243,156,18,0.05); }
+      
+      .load-more {
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        padding: 12px 32px;
+        border-radius: 999px;
+        color: var(--primary-color);
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s;
+        box-shadow: var(--shadow-sm);
+        font-size: 15px;
+      }
+      
+      .load-more:hover {
+        background: var(--primary-color);
+        color: white;
+        border-color: var(--primary-color);
+        box-shadow: var(--shadow-md);
+        transform: translateY(-1px);
+      }
+
+      .version-link {
+        font-size: 13px;
+        color: var(--primary-color);
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 4px 10px;
+        border-radius: 999px;
+        background: rgba(79, 70, 229, 0.1);
+        transition: all 0.2s;
+        margin-left: auto;
+      }
+      .version-link:hover {
+        background: var(--primary-color);
+        color: white;
+      }
+
+      .loading-more {
+        text-align: center;
+        padding: 30px;
+        color: var(--text-secondary);
+        display: none;
+      }
+      .loading-more .spinner {
+        width: 30px; height: 30px; border: 3px solid var(--border-color);
+        border-top-color: var(--primary-color); border-radius: 50%;
+        animation: spin 1s linear infinite; margin: 0 auto 10px;
+      }
 
       .footer {
-        margin-top: 30px; text-align: center; color: var(--text-secondary); font-size: 13px;
+        margin-top: 60px;
+        text-align: center;
+        color: var(--text-secondary);
+        font-size: 14px;
+        padding-top: 40px;
+        border-top: 1px solid var(--border-color);
       }
-      .footer a { color: var(--primary-color); text-decoration: none; }
-      .footer a:hover { text-decoration: underline; }
+      
+      .footer a {
+        color: var(--text-secondary);
+        text-decoration: none;
+        margin: 0 8px;
+        transition: color 0.2s;
+      }
+      
+      .footer a:hover {
+        color: var(--primary-color);
+      }
     </style>
   </head>
   <body>
     <div class="container">
       <header>
         <h1>
-          <span class="icon">📋</span>
-          OpenTu - 版本日志
+          <span class="icon">🚀</span>
+          OpenTu 版本日志
         </h1>
-        <p class="subtitle">点击展开查看更新详情</p>
+        <p class="subtitle">探索 OpenTu 的每一次进化与成长</p>
       </header>
 
-      <div id="versionList" class="loading">
+      <div id="versionList" class="timeline">
+        <div class="loading">
+          <div class="spinner"></div>
+          <p>正在加载版本日志...</p>
+        </div>
+      </div>
+
+      <div id="loading-sentinel" class="loading-more">
         <div class="spinner"></div>
-        <p>正在加载版本日志...</p>
+        <p>加载更多...</p>
       </div>
 
       <footer class="footer">
@@ -167,6 +369,7 @@
           <a href="https://github.com/ljquan/aitu" target="_blank">GitHub</a> ·
           <a href="https://opentu.ai" target="_blank">官网</a>
         </p>
+        <p style="margin-top: 8px; font-size: 12px; opacity: 0.6;">© <span id="copyright-year">2024</span> OpenTu Team. All rights reserved.</p>
       </footer>
     </div>
     <script>
@@ -174,7 +377,7 @@
         const groups = {};
         for (const v of versions) {
           const parts = v.version.split('.');
-          const key = parts[0] + '.' + parts[1];
+          const key = parts[0] + '.' + parts[1]; // e.g., "0.6"
           if (!groups[key]) groups[key] = [];
           groups[key].push(v);
         }
@@ -184,91 +387,150 @@
       function renderChangeDetails(changelog) {
         if (!changelog || !changelog.changes) return '';
         const categories = [
-          { key: 'features', emoji: '✨', label: '新功能' },
-          { key: 'fixes', emoji: '🐛', label: '修复' },
-          { key: 'improvements', emoji: '💡', label: '优化' },
+          { key: 'features', emoji: '✨', label: '新功能', color: '#10b981' },
+          { key: 'fixes', emoji: '🐛', label: '问题修复', color: '#ef4444' },
+          { key: 'improvements', emoji: '⚡', label: '体验优化', color: '#f59e0b' },
         ];
+        
         let html = '';
         for (const cat of categories) {
           const items = changelog.changes[cat.key];
           if (!items || items.length === 0) continue;
-          html += '<div class="change-category">' +
-            '<div class="change-category-title">' +
-            '<span class="emoji">' + cat.emoji + '</span>' + cat.label +
-            '</div><ul class="change-list">' +
-            items.map(function(item) { return '<li>' + item + '</li>'; }).join('') +
-            '</ul></div>';
+          
+          html += `<div class="change-category">
+            <div class="category-header" style="color: ${cat.color}">
+              <span class="category-icon">${cat.emoji}</span>
+              ${cat.label}
+            </div>
+            <ul class="change-list">
+              ${items.map(item => `<li>${item}</li>`).join('')}
+            </ul>
+          </div>`;
         }
         return html;
       }
 
       function toggleDetails(cardId) {
         var details = document.getElementById('details-' + cardId);
-        var btn = document.getElementById('btn-' + cardId);
-        if (!details || !btn) return;
+        var icon = document.getElementById('icon-' + cardId);
+        if (!details) return;
+        
         details.classList.toggle('open');
-        btn.classList.toggle('expanded');
+        if (icon) icon.classList.toggle('expanded');
       }
 
-      var PAGE_SIZE = 30;
+      var PAGE_SIZE = 20;
       var allVersions = [];
+      var currentDisplayCount = 0;
 
       function renderVersionList(versions) {
         var container = document.getElementById('versionList');
+        
+        // If it's the first load (container has loading class), clear it
+        if (container.querySelector('.loading')) {
+            container.innerHTML = '';
+        } else {
+            // Remove existing load-more button if any
+            const existingBtn = container.querySelector('.load-more-container');
+            if (existingBtn) existingBtn.remove();
+        }
+
         var groups = groupByMinor(versions);
-        var isFirst = true;
+        var isFirst = currentDisplayCount === 0;
         var html = '';
 
         for (var groupKey in groups) {
           var groupVersions = groups[groupKey];
-          html += '<div class="version-group">' +
-            '<div class="group-title">v' + groupKey + '.x</div>' +
-            '<div class="version-list">';
-
-          for (var i = 0; i < groupVersions.length; i++) {
-            var entry = groupVersions[i];
-            var hasDetails = entry.changes && Object.values(entry.changes).some(function(a) { return a && a.length > 0; });
-            var cardId = entry.version.replace(/\./g, '-');
-            var tags = '';
-            if (entry.type === 'major') tags += '<span class="version-tag major">大版本</span>';
-            else if (entry.type === 'minor') tags += '<span class="version-tag minor">新版本</span>';
-
-            var dateStr = entry.date || '';
-            var highlights = entry.highlights || '';
-            var detailsHtml = hasDetails ? renderChangeDetails(entry) : '';
-            var defaultOpen = isFirst && hasDetails;
-
-            html += '<div class="version-card">' +
-              '<div class="version-header"' + (hasDetails ? ' onclick="toggleDetails(\'' + cardId + '\')"' : '') + '>' +
-              '<div>' +
-              '<div class="version-meta">' +
-              '<span class="version-number">v' + entry.version + '</span>' +
-              tags +
-              (dateStr ? '<span class="version-date">' + dateStr + '</span>' : '') +
-              '</div>' +
-              (highlights ? '<div class="version-highlights">' + highlights + '</div>' : '') +
-              '</div>' +
-              '<div class="version-right">' +
-              (hasDetails ? '<button class="expand-btn' + (defaultOpen ? ' expanded' : '') + '" id="btn-' + cardId + '" onclick="event.stopPropagation();toggleDetails(\'' + cardId + '\')">▾</button>' : '') +
-              '</div>' +
-              '</div>' +
-              (hasDetails ? '<div class="version-details' + (defaultOpen ? ' open' : '') + '" id="details-' + cardId + '"><div class="version-details-inner">' + detailsHtml + '</div></div>' : '') +
-              '</div>';
-
-            isFirst = false;
-          }
-          html += '</div></div>';
+          
+          // Only add group label if this is a new group or we are rendering from scratch
+          // But here we are appending, so we need to be careful.
+          // For simplicity, we re-render everything for now or just append. 
+          // Let's re-render everything to be safe with the grouping logic.
         }
+        
+        // Re-implementing logic: we will just regenerate the whole HTML for simplicity
+        html = '';
+        
+        for (var groupKey in groups) {
+            var groupVersions = groups[groupKey];
+            html += `<div class="version-group">
+                <div class="group-label">v${groupKey}.x</div>`;
+            
+            for (var i = 0; i < groupVersions.length; i++) {
+                var entry = groupVersions[i];
+                var hasDetails = entry.changes && Object.values(entry.changes).some(function(a) { return a && a.length > 0; });
+                var cardId = entry.version.replace(/\./g, '-');
+                
+                var tagClass = 'patch';
+                var tagText = '更新';
+                if (entry.type === 'major') { tagClass = 'major'; tagText = '大版本'; }
+                else if (entry.type === 'minor') { tagClass = 'minor'; tagText = '新功能'; }
+                
+                var dateStr = entry.date || '';
+                var highlights = entry.highlights || '';
+                var detailsHtml = hasDetails ? renderChangeDetails(entry) : '';
+                var defaultOpen = isFirst && hasDetails;
+
+                html += `
+                <div class="version-item">
+                    <div class="version-dot"></div>
+                    <div class="version-card" onclick="${hasDetails ? `toggleDetails('${cardId}')` : ''}">
+                        <div class="version-header">
+                            <div class="version-info">
+                                <div class="version-title-row">
+                                    <span class="version-number">v${entry.version}</span>
+                                    <span class="version-tag ${tagClass}">${tagText}</span>
+                                    ${dateStr ? `<span class="version-date">· ${dateStr}</span>` : ''}
+                                    <a href="https://release.opentu.ai/${entry.version}/" target="_blank" class="version-link" onclick="event.stopPropagation()">
+                                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                                        <polyline points="15 3 21 3 21 9"></polyline>
+                                        <line x1="10" y1="14" x2="21" y2="3"></line>
+                                      </svg>
+                                      进入版本
+                                    </a>
+                                </div>
+                                ${highlights ? `<div class="version-highlights">${highlights}</div>` : ''}
+                            </div>
+                            ${hasDetails ? `
+                            <svg id="icon-${cardId}" class="expand-icon ${defaultOpen ? 'expanded' : ''}" width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M6 9L12 15L18 9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>` : ''}
+                        </div>
+                        ${hasDetails ? `
+                        <div id="details-${cardId}" class="version-details ${defaultOpen ? 'open' : ''}" onclick="event.stopPropagation()">
+                            <div class="version-details-inner">
+                                ${detailsHtml}
+                            </div>
+                        </div>` : ''}
+                    </div>
+                </div>`;
+                
+                isFirst = false;
+            }
+            html += '</div>';
+        }
+
         container.innerHTML = html;
 
-        // 显示"加载更多"按钮
-        if (versions.length < allVersions.length) {
-          var btn = document.createElement('button');
-          btn.className = 'load-more';
-          btn.textContent = '加载更多（共 ' + allVersions.length + ' 个版本）';
-          btn.onclick = function() { renderVersionList(allVersions); };
-          container.appendChild(btn);
+        var sentinel = document.getElementById('loading-sentinel');
+        if (sentinel) {
+            sentinel.style.display = (versions.length < allVersions.length) ? 'block' : 'none';
         }
+      }
+
+      function setupInfiniteScroll() {
+        var sentinel = document.getElementById('loading-sentinel');
+        if (!sentinel) return;
+
+        var observer = new IntersectionObserver(function(entries) {
+            if (entries[0].isIntersecting && currentDisplayCount < allVersions.length) {
+                currentDisplayCount += PAGE_SIZE;
+                renderVersionList(allVersions.slice(0, currentDisplayCount));
+            }
+        }, { rootMargin: '200px' });
+        
+        observer.observe(sentinel);
       }
 
       async function init() {
@@ -277,13 +539,18 @@
           if (!response.ok) throw new Error('Failed to fetch changelog');
           var data = await response.json();
           allVersions = data.versions || [];
-          renderVersionList(allVersions.slice(0, PAGE_SIZE));
+          currentDisplayCount = PAGE_SIZE;
+          renderVersionList(allVersions.slice(0, currentDisplayCount));
+          setupInfiniteScroll();
         } catch (error) {
+          console.error(error);
           document.getElementById('versionList').innerHTML =
-            '<div class="error"><p>加载版本日志失败</p>' +
-            '<p style="margin-top:10px;font-size:13px;">请检查网络连接</p></div>';
+            '<div class="error"><h3>无法加载版本日志</h3><p>请检查网络连接或稍后重试</p></div>';
         }
       }
+
+      // Update copyright year
+      document.getElementById('copyright-year').textContent = new Date().getFullYear();
 
       init();
     </script>

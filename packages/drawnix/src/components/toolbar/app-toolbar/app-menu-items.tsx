@@ -292,42 +292,40 @@ export const UserManual = () => {
 };
 UserManual.displayName = 'UserManual';
 
-export const ChangeLog = () => {
-  const { t } = useI18n();
-  return (
-    <MenuItem
-      icon={<BookOpenIcon />}
-      data-track="toolbar_click_menu_changelog"
-      onSelect={() => {
-        window.open('./versions.html', '_blank');
-      }}
-      aria-label={t('menu.changelog')}
-    >
-      {t('menu.changelog')}
-    </MenuItem>
-  );
-};
-ChangeLog.displayName = 'ChangeLog';
-
 export const VersionInfo = () => {
   const { t } = useI18n();
   // 从 HTML meta 标签获取版本号
   const version = document.querySelector('meta[name="app-version"]')?.getAttribute('content') || '0.0.0';
   
-  // 跳转到 release 站点查看所有版本
-  const getVersionsUrl = () => 'https://release.opentu.ai/';
-  
   return (
     <MenuItem
       data-track="toolbar_click_menu_version"
-      onSelect={() => {
-        window.open(getVersionsUrl(), '_blank');
-      }}
       aria-label={t('menu.version')}
     >
       <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
         <span style={{ color: '#666' }}>{t('menu.version')}：{version}</span>
-        <span style={{ color: '#1890ff' }}>{t('menu.more')}</span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <span
+            style={{ color: '#1890ff', cursor: 'pointer' }}
+            data-track="toolbar_click_menu_changelog"
+            onClick={(e) => {
+              e.stopPropagation();
+              window.open('./versions.html', '_blank');
+            }}
+          >
+            {t('menu.changelog')}
+          </span>
+          <span
+            style={{ color: '#1890ff', cursor: 'pointer' }}
+            data-track="toolbar_click_menu_more_versions"
+            onClick={(e) => {
+              e.stopPropagation();
+              window.open('https://release.opentu.ai/', '_blank');
+            }}
+          >
+            {t('menu.more')}
+          </span>
+        </span>
       </span>
     </MenuItem>
   );
