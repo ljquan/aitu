@@ -1,3 +1,14 @@
+## 0.6.2 (2026-02-27)
+
+### 🚀 Features
+
+- 重构版本相关菜单与页面，优化样式与交互体验 ([e40635b9](https://github.com/ljquan/aitu/commit/e40635b9))
+- 升级版本至0.6.1，优化部署与生成流程，集成多模型适配器 ([784c58a8](https://github.com/ljquan/aitu/commit/784c58a8))
+
+### ❤️  Thank You
+
+- liquidliang <ljquan@qq.com>
+
 ## 0.6.1 (2026-02-26)
 
 ### 🚀 Features
