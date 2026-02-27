@@ -343,6 +343,17 @@ $green-health: #10B981;
     flex-shrink: 0;
   }
 
+  &__item-new {
+    font-size: 10px;
+    font-weight: 600;
+    color: #4CAF50;
+    background: rgba(#4CAF50, 0.1);
+    border: 1px solid rgba(#4CAF50, 0.2);
+    padding: 0 4px;
+    border-radius: 3px;
+    flex-shrink: 0;
+  }
+
   &__item-desc {
     font-size: 11px;
     color: $gray-medium;
@@ -472,6 +483,11 @@ $green-health: #10B981;
     &__item-vip {
       background: rgba($vip-color, 0.15);
       border-color: rgba($vip-color, 0.3);
+    }
+
+    &__item-new {
+      background: rgba(#4CAF50, 0.15);
+      border-color: rgba(#4CAF50, 0.3);
     }
   }
 }

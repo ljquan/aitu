@@ -148,7 +148,7 @@ Task (可能创建任务)
 |------|------|------|----------|
 | **模型类型 (ModelType)** | ModelType | 模型分类：image / video / text | `model-config.ts` |
 | **模型配置 (ModelConfig)** | ModelConfig | 模型的完整配置信息 | `model-config.ts` |
-| **短代码 (ShortCode)** | shortCode | 模型快捷标识，如 `nb2v`、`veo3` | `model-config.ts` |
+| **短代码 (ShortCode)** | shortCode | 模型快捷标识，如 `nbpv`、`veo3` | `model-config.ts` |
 | **参数配置 (ParamConfig)** | ParamConfig | 模型参数的配置信息 | `model-config.ts` |
 
 **模型分类**:
@@ -159,7 +159,7 @@ Task (可能创建任务)
 **常用短代码**:
 | 短代码 | 模型 | 类型 |
 |--------|------|------|
-| `nb2v` | nano-banana-2-vip | 图片 |
+| `nbpv` | nano-banana-pro-vip | 图片 |
 | `nb` | nano-banana | 图片 |
 | `veo3` | Veo 3 | 视频 |
 | `sora-2` | Sora 2 | 视频 |

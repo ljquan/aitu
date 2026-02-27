@@ -109,7 +109,7 @@ docker run -d -p 8080:80 ljquan/aitu:latest
 ## AI 创作能力 🔥
 - **AI 图片生成** - 支持多种图片生成模型
   - gemini-2.5-flash-image (nano-banana) - 快速生图
-  - gemini-3-pro-image-preview (nano-banana-2) - 高质量生图，支持 HD/2K/4K 分辨率
+  - gemini-3-pro-image-preview (nano-banana-pro) - 高质量生图，支持 HD/2K/4K 分辨率
   - 支持文本转图片、图片参考生成、批量生成
 - **AI 视频生成** - 支持多种视频生成模型
   - Veo3 / Veo3 Pro - 高质量视频生成

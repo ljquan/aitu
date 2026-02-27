@@ -1,7 +1,7 @@
 /**
  * Async Image API Service
  *
- * Handles async image generation for nano-banana models (异步香蕉格式)。
+ * Handles async image generation for nano-banana-pro models (异步香蕉格式)。
  * 提交任务后通过轮询查询结果，返回图片下载链接。
  */
 

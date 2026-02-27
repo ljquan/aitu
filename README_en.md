@@ -48,7 +48,7 @@ Click the buttons below to deploy Opentu to your own server:
 
 - **AI Image Generation** - Multiple image generation models
   - gemini-2.5-flash-image (nano-banana) - Fast image generation
-  - gemini-3-pro-image-preview (nano-banana-2) - High quality, supports HD/2K/4K resolution
+  - gemini-3-pro-image-preview (nano-banana-pro) - High quality, supports HD/2K/4K resolution
   - Text-to-image, image reference generation, batch generation
 - **AI Video Generation** - Multiple video generation models
   - Veo3 / Veo3 Pro - High quality video generation
