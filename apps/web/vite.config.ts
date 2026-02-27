@@ -47,6 +47,8 @@ function precacheManifestPlugin(): Plugin {
           /precache-manifest\.json$/, // 自身
           /sw\.js$/,                // Service Worker 本身不需要预缓存
           /sw-debug\.html$/,        // 调试面板，仅在访问时加载
+          /changelog\.json$/,       // 版本日志，需要始终获取最新
+          /version\.json$/,         // 版本信息，需要始终获取最新
         ];
         // 总是包含的关键文件
         const ALWAYS_INCLUDE = [

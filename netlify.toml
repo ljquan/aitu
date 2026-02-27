@@ -77,6 +77,17 @@
     Cache-Control = "public, max-age=0, must-revalidate"
     Content-Security-Policy = "frame-ancestors 'self' localhost:* 127.0.0.1:* *.localhost:* https://api.tu-zi.com"
 
+# 版本信息 - 不缓存，确保总是获取最新版本
+[[headers]]
+  for = "/version.json"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+
+[[headers]]
+  for = "/changelog.json"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+
 # 部署上下文配置
 [context.production]
   command = "pnpm install && pnpm nx reset && pnpm run build:web"

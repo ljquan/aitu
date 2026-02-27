@@ -535,7 +535,7 @@
 
       async function init() {
         try {
-          var response = await fetch('./changelog.json');
+          var response = await fetch('./changelog.json', { cache: 'no-cache' });
           if (!response.ok) throw new Error('Failed to fetch changelog');
           var data = await response.json();
           allVersions = data.versions || [];

@@ -82,3 +82,6 @@
 # 版本信息 - 不缓存
 /version.json
   Cache-Control: public, max-age=0, must-revalidate
+
+/changelog.json
+  Cache-Control: public, max-age=0, must-revalidate
