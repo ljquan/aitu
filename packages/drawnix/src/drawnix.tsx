@@ -9,11 +9,13 @@ import {
   Selection,
   ThemeColorMode,
   Viewport,
+  BoardTransforms,
   getSelectedElements,
   getHitElementByPoint,
   toHostPoint,
   toViewBoxPoint,
   getViewportOrigination,
+  type Point,
 } from '@plait/core';
 import React, { useState, useRef, useEffect, useMemo, useCallback, lazy, Suspense } from 'react';
 import { withGroup } from '@plait/common';
@@ -829,7 +831,7 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
   const [quickToolbarVisible, setQuickToolbarVisible] = useState(false);
   const [quickToolbarPosition, setQuickToolbarPosition] = useState<[number, number] | null>(null);
 
-  // 浮动文本输入状态（文本工具双击画布时使用）
+  // 浮动文本输入状态（文本工具单击画布时使用）
   const [inlineTextInput, setInlineTextInput] = useState<{
     screenX: number;
     screenY: number;
@@ -1021,7 +1023,9 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
       DrawTransforms.insertText(board, inlineTextInput.worldPoint, text);
     }
     setInlineTextInput(null);
-  }, [board, inlineTextInput]);
+    BoardTransforms.updatePointerType(board, PlaitPointerType.selection);
+    updateState(prev => ({ ...prev, pointer: PlaitPointerType.selection }));
+  }, [board, inlineTextInput, updateState]);
 
   // 监听双击事件 - 处理图片/视频预览和空白区域快捷工具栏
   useEffect(() => {
@@ -1066,18 +1070,6 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
 
       // 只有双击空白区域时才处理
       if (!hitElement && !isInsideInteractive) {
-        // 文本工具激活时：显示浮动文本输入（只有光标，无文本框）
-        if (PlaitBoard.isPointer(board, BasicShapes.text)) {
-          setInlineTextInput({
-            screenX: event.clientX,
-            screenY: event.clientY,
-            worldPoint: viewBoxPoint,
-            zoom: board.viewport.zoom,
-          });
-          event.preventDefault();
-          event.stopPropagation();
-          return;
-        }
         const position: [number, number] = [event.clientX, event.clientY];
         setQuickToolbarPosition(position);
         setQuickToolbarVisible(true);
@@ -1109,6 +1101,28 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
 
       if (!isInsideCanvas) {
         return;
+      }
+
+      // 文本工具激活时：单击空白区域显示浮动文本输入
+      if (PlaitBoard.isPointer(board, BasicShapes.text)) {
+        const isInsideInteractive = target.closest('.plait-tool-container') ||
+                                     target.closest('.plait-workzone-container') ||
+                                     target.closest('foreignObject');
+        if (!isInsideInteractive) {
+          const viewBoxPoint = toViewBoxPoint(board, toHostPoint(board, event.clientX, event.clientY));
+          const hitElement = getHitElementByPoint(board, viewBoxPoint);
+          if (!hitElement) {
+            setInlineTextInput({
+              screenX: event.clientX,
+              screenY: event.clientY,
+              worldPoint: viewBoxPoint,
+              zoom: board.viewport.zoom,
+            });
+            event.preventDefault();
+            event.stopPropagation();
+            return;
+          }
+        }
       }
 
       // 关闭项目抽屉和工具箱抽屉
