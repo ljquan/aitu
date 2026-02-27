@@ -1,6 +1,6 @@
 {
   "version": "0.6.2",
-  "buildTime": "2026-02-27T02:45:13.451Z",
+  "buildTime": "2026-02-27T02:46:59.578Z",
   "gitCommit": "unknown",
   "changelog": [
     "升级版本至0.6.1，优化部署与生成流程，集成多模型适配器",

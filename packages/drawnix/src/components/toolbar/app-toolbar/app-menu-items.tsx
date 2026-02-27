@@ -300,6 +300,7 @@ export const VersionInfo = () => {
   return (
     <MenuItem
       data-track="toolbar_click_menu_version"
+      onSelect={() => {}}
       aria-label={t('menu.version')}
     >
       <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
