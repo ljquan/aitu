@@ -1,3 +1,59 @@
+## 0.6.1 (2026-02-26)
+
+### 🚀 Features
+
+- 为 ImageGenerationParams 新增 params 字段支持模型特定参数 ([ac10ed55](https://github.com/ljquan/aitu/commit/ac10ed55))
+- 版本日志菜单 + CHANGELOG.md 自动同步到 changelog.json ([51bb033e](https://github.com/ljquan/aitu/commit/51bb033e))
+- 新增多个系统技能常量定义 ([f30c3ab6](https://github.com/ljquan/aitu/commit/f30c3ab6))
+- 支持双击卡片打开知识库并关联笔记 ([8301bce3](https://github.com/ljquan/aitu/commit/8301bce3))
+- 为卡片元素添加复制文本功能 ([f1a06a9a](https://github.com/ljquan/aitu/commit/f1a06a9a))
+- 实现 Markdown 粘贴和知识库集成的 Card 标签贴元素 ([7b590d30](https://github.com/ljquan/aitu/commit/7b590d30))
+- 统一系统与自定义Skill执行路径并支持角色扮演模式 ([58204689](https://github.com/ljquan/aitu/commit/58204689))
+- 新增Skill工作流DSL解析与知识库集成 ([f0df843c](https://github.com/ljquan/aitu/commit/f0df843c))
+- 新增知识提取与同步功能 ([093dd25d](https://github.com/ljquan/aitu/commit/093dd25d))
+- 完整支持多图生成结果的存储、展示与预览 ([2e5df25b](https://github.com/ljquan/aitu/commit/2e5df25b))
+- 集成 Seedream 5.0 并优化模型适配器匹配机制 ([cc4232fd](https://github.com/ljquan/aitu/commit/cc4232fd))
+- 优化模型参数处理与自定义参数透传链路 ([3eceb994](https://github.com/ljquan/aitu/commit/3eceb994))
+- 集成即梦（Seedream + Seedance）模型，修复自定义参数透传链路 ([31f857bb](https://github.com/ljquan/aitu/commit/31f857bb))
+- 升级 ([d8eb1502](https://github.com/ljquan/aitu/commit/d8eb1502))
+- 添加模型选择器厂商分类（VendorTabPanel 左右分栏布局） ([55a18a84](https://github.com/ljquan/aitu/commit/55a18a84))
+- 添加 Flux 图片生成适配器，重构 adapter 路由与回调传递 ([f6b1670e](https://github.com/ljquan/aitu/commit/f6b1670e))
+- 集成 Milkdown Markdown 编辑器并优化幻灯片播放 ([9e66bf4c](https://github.com/ljquan/aitu/commit/9e66bf4c))
+- 接入 Midjourney 图片模型适配 ([62266a31](https://github.com/ljquan/aitu/commit/62266a31))
+- 接入Kling视频模型适配 ([a9c0eade](https://github.com/ljquan/aitu/commit/a9c0eade))
+
+### 🩹 Fixes
+
+- 修复视频时长解析空值NaN并同步版本与更新说明 ([e1e4137c](https://github.com/ljquan/aitu/commit/e1e4137c))
+- 移除视频创作技能 ([33fe21bc](https://github.com/ljquan/aitu/commit/33fe21bc))
+- 修复卡片标题重复显示和交互事件问题 ([f7409839](https://github.com/ljquan/aitu/commit/f7409839))
+- 修复删除上传图片后 hover 预览大图未消失的问题 ([f9e3ee4f](https://github.com/ljquan/aitu/commit/f9e3ee4f))
+- 修复 Seedream 5.0 lite 模型 ID、3K 比例参数及底部输入栏参数丢失问题 ([98912c16](https://github.com/ljquan/aitu/commit/98912c16))
+- 修复上下文菜单z-index硬编码问题 ([3373b168](https://github.com/ljquan/aitu/commit/3373b168))
+- 提高上下文菜单的z-index以解决遮挡问题 ([853f7868](https://github.com/ljquan/aitu/commit/853f7868))
+- 修复外部签名 URL 的 CORS 和参数破坏问题 ([e0491e50](https://github.com/ljquan/aitu/commit/e0491e50))
+- 修复签名 URL（TOS）因 Referer 校验导致缩略图/插入/下载 403 ([262eea92](https://github.com/ljquan/aitu/commit/262eea92))
+
+### 🔧 Chores
+
+- update build artifacts for version 0.5.95 ([ef974603](https://github.com/ljquan/aitu/commit/ef974603))
+- bump version to 0.5.95 ([1a7a018f](https://github.com/ljquan/aitu/commit/1a7a018f))
+- refactor(web): 优化类型定义和构建配置 refactor(sw): 增强类型安全处理 refactor(dawnix): 完善类型导入和配置 ([84285d9e](https://github.com/ljquan/aitu/commit/84285d9e))
+- docs: 新增知识库、命令面板和任务队列文档并更新相关内容 ([4b3aedf8](https://github.com/ljquan/aitu/commit/4b3aedf8))
+- docs(settings): 在API Key说明中添加演示视频链接 ([d4e24da5](https://github.com/ljquan/aitu/commit/d4e24da5))
+- refactor(knowledge-base): 统一默认目录并简化目录类型映射 ([bf7a367d](https://github.com/ljquan/aitu/commit/bf7a367d))
+- docs: 更新 CLAUDE.md 反映多模型适配器架构 ([4bbebd99](https://github.com/ljquan/aitu/commit/4bbebd99))
+- Fix seedream adapter routing and dropdown layout ([f4bb5a74](https://github.com/ljquan/aitu/commit/f4bb5a74))
+- fixed:修复ppt新加的内容在上方的问题 ([f4e345f7](https://github.com/ljquan/aitu/commit/f4e345f7))
+- 知识库 ([5b8f2bdb](https://github.com/ljquan/aitu/commit/5b8f2bdb))
+
+### ❤️  Thank You
+
+- liquidliang <ljquan@qq.com>
+- gongchengtu <1817063960@qq.com>
+- liangyufeng <l.yfeng@qq.com>
+- liquid <ljquan@qq.com>
+
 ## 0.5.95 (2026-02-12)
 
 ### 🚀 Features

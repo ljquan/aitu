@@ -612,6 +612,7 @@ function stepDeployServer(version) {
 
 function stepGenerateManual(version) {
   logStep(4, 7, '生成用户手册');
+  const startTime = Date.now();
   
   if (skipManual) {
     logWarning('跳过手册生成（--skip-manual 参数）');
@@ -623,39 +624,52 @@ function stepGenerateManual(version) {
     return true;
   }
   
-  log('    生成用户手册...', 'gray');
-  
   // 手册生成不阻塞部署，失败只警告
   try {
-    // 步骤 1: 先尝试生成截图（需要 Playwright 环境）
-    log('    生成截图...', 'gray');
+    // 步骤 1: 检查端口 7200 是否已被占用，决定截图策略
+    let portInUse = false;
     try {
-      // 检查端口 7200 是否已被占用
-      let portInUse = false;
+      execSync('lsof -i :7200 -t', { stdio: 'pipe' });
+      portInUse = true;
+    } catch {
+      // 端口未被占用
+    }
+    
+    if (portInUse) {
+      // 端口已被占用，检查 Playwright 浏览器是否已安装
+      let playwrightReady = false;
       try {
-        execSync('lsof -i :7200 -t', { stdio: 'pipe' });
-        portInUse = true;
-        log('    检测到开发服务器已在运行 (端口 7200)', 'gray');
+        execSync('npx playwright --version', { stdio: 'pipe', timeout: 10000 });
+        playwrightReady = true;
       } catch {
-        log('    开发服务器未运行，将自动启动', 'gray');
+        // Playwright 未安装或不可用
       }
       
-      // 如果端口已被占用，设置 CI= 复用现有服务器；否则设置 CI=1 让 Playwright 自动启动
-      // 注意：CI= 显式清除环境变量，让 reuseExistingServer 为 true
-      const ciEnv = portInUse ? 'CI=' : 'CI=1';
-      execSync(`cd apps/web-e2e && ${ciEnv} npx playwright test --project=manual`, {
-        cwd: path.resolve(__dirname, '..'),
-        stdio: 'inherit',
-        timeout: 300000, // 5 分钟超时
-      });
-      logSuccess('截图生成完成');
-    } catch (screenshotError) {
-      logWarning('截图生成失败');
-      log(`    错误: ${screenshotError.message}`, 'gray');
-      log('    可能的原因:', 'gray');
-      log('    1. Playwright 浏览器未安装，请运行: npx playwright install chromium', 'gray');
-      log('    2. 开发服务器未运行，请运行: pnpm start', 'gray');
-      log('    将使用已有截图继续构建...', 'gray');
+      if (playwrightReady) {
+        log('    📖 手册生成：将更新截图并构建 HTML', 'gray');
+        log('    检测到开发服务器已在运行 (端口 7200)，复用现有服务器生成截图', 'gray');
+        
+        try {
+          execSync(`cd apps/web-e2e && CI= npx playwright test --project=manual`, {
+            cwd: path.resolve(__dirname, '..'),
+            stdio: 'inherit',
+            timeout: 60000, // 1 分钟超时（复用现有服务器，无需等待启动）
+          });
+          logSuccess('截图生成完成');
+        } catch (screenshotError) {
+          logWarning('截图生成失败，将使用已有截图继续构建');
+          log(`    错误: ${screenshotError.message}`, 'gray');
+        }
+      } else {
+        log('    📖 手册生成：跳过截图（Playwright 浏览器未安装），仅构建 HTML', 'gray');
+        logWarning('Playwright 浏览器未安装，跳过截图生成，使用已有截图');
+        log('    💡 安装命令: npx playwright install chromium', 'gray');
+      }
+    } else {
+      // 端口未被占用，直接跳过截图
+      log('    📖 手册生成：跳过截图，仅构建 HTML', 'gray');
+      log('    ⏭️  开发服务器未运行（端口 7200），跳过截图生成，使用已有截图', 'gray');
+      log('    💡 如需更新截图，请先运行: pnpm manual:screenshots', 'gray');
     }
     
     // 步骤 2: 设置 CDN 基础路径环境变量，供 generate-manual.ts 使用
@@ -664,14 +678,24 @@ function stepGenerateManual(version) {
     
     // 步骤 3: 构建手册 HTML
     log('    构建手册 HTML...', 'gray');
-    execSync('pnpm run manual:build', {
-      cwd: path.resolve(__dirname, '..'),
-      stdio: 'inherit',
-      env: {
-        ...process.env,
-        MANUAL_CDN_BASE: skipNpm ? '' : manualCdnBase,
-      },
-    });
+    try {
+      execSync('pnpm run manual:build', {
+        cwd: path.resolve(__dirname, '..'),
+        stdio: 'inherit',
+        env: {
+          ...process.env,
+          MANUAL_CDN_BASE: skipNpm ? '' : manualCdnBase,
+        },
+      });
+      logSuccess('手册 HTML 构建完成');
+    } catch (buildError) {
+      logWarning('手册 HTML 构建失败（不影响部署）');
+      log(`    错误: ${buildError.message}`, 'gray');
+      log('    💡 手动排查: pnpm manual:build', 'gray');
+      const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+      log(`    ⏱️  手册生成耗时: ${elapsed} 秒`, 'gray');
+      return true; // 不阻塞部署
+    }
     
     // 复制手册到 dist 目录（构建后手册不会自动包含）
     const manualSourceDir = path.resolve(__dirname, '../apps/web/public/user-manual');
@@ -712,7 +736,8 @@ function stepGenerateManual(version) {
       
       // 统计文件数
       const fileCount = countFilesRecursive(manualDistDir);
-      logSuccess(`用户手册生成完成 (${fileCount} 个文件)`);
+      const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+      logSuccess(`用户手册生成完成 (${fileCount} 个文件，耗时 ${elapsed} 秒)`);
       if (!skipNpm) {
         log(`    静态资源将通过 CDN 加载`, 'gray');
       }
@@ -724,6 +749,9 @@ function stepGenerateManual(version) {
   } catch (error) {
     logWarning('用户手册生成失败（不影响部署）');
     log(`    错误: ${error.message}`, 'gray');
+    log('    💡 手动排查: pnpm manual:build', 'gray');
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+    log(`    ⏱️  手册生成耗时: ${elapsed} 秒`, 'gray');
     return true; // 不阻塞部署
   }
 }
