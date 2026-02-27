@@ -306,6 +306,11 @@
     white-space: pre-wrap;
   }
 
+  &__markdown-wrap {
+    min-width: 0;
+    overflow: hidden;
+  }
+
   &__body {
     display: flex;
     flex-direction: column;

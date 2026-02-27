@@ -69,6 +69,7 @@ export const KBKnowledgeExtraction: React.FC<KBKnowledgeExtractionProps> = ({
   const [selectedModel, setSelectedModel] = useState(DEFAULT_MODEL);
   const [isLoading, setIsLoading] = useState(false);
   const [abortController, setAbortController] = useState<AbortController | null>(null);
+  const [streamingMsgId, setStreamingMsgId] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -199,6 +200,7 @@ export const KBKnowledgeExtraction: React.FC<KBKnowledgeExtractionProps> = ({
 
       // 添加一个临时的 AI 消息用于流式显示
       const aiMsgId = (Date.now() + 1).toString();
+      setStreamingMsgId(aiMsgId);
       setMessages((prev) => [
         ...prev,
         {
@@ -238,6 +240,7 @@ export const KBKnowledgeExtraction: React.FC<KBKnowledgeExtractionProps> = ({
     } finally {
       setIsLoading(false);
       setAbortController(null);
+      setStreamingMsgId(null);
     }
   }, [input, isLoading, messages, noteContent]);
 
@@ -374,7 +377,19 @@ export const KBKnowledgeExtraction: React.FC<KBKnowledgeExtractionProps> = ({
             <div className="kb-message__body">
               <div className="kb-message__content">
                 {msg.type === 'text' ? (
-                  <div className="kb-message__text">{msg.content}</div>
+                  msg.role === 'model' && msg.content && msg.id !== streamingMsgId ? (
+                    <div className="kb-message__markdown-wrap">
+                      <MarkdownEditor
+                        markdown={msg.content}
+                        readOnly
+                        showModeSwitch={false}
+                        initialMode="wysiwyg"
+                        className="kb-extraction-markdown"
+                      />
+                    </div>
+                  ) : (
+                    <div className="kb-message__text">{msg.content}</div>
+                  )
                 ) : (
                   <ExtractionResultView result={msg.data!} />
                 )}

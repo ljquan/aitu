@@ -25,7 +25,6 @@ export const CardElement: React.FC<CardElementProps> = ({ element }) => {
     <div
       style={{
         width: '100%',
-        height: '100%',
         display: 'flex',
         flexDirection: 'column',
         borderRadius: 8,
@@ -60,8 +59,6 @@ export const CardElement: React.FC<CardElementProps> = ({ element }) => {
       )}
       <div
         style={{
-          flex: 1,
-          minHeight: 0,
           pointerEvents: 'auto',
         }}
         onMouseDown={(e) => e.stopPropagation()}
