@@ -104,8 +104,8 @@ async function generateImageDirect(
       data.image = options.image;
     }
 
-    // quality 参数可选，仅对 gemini-3-pro-image-preview 有效
-    if (options.quality && data.model === 'gemini-3-pro-image-preview') {
+    // quality 参数可选
+    if (options.quality) {
       data.quality = options.quality;
     }
 

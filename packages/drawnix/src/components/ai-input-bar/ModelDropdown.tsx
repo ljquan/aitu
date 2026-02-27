@@ -77,6 +77,10 @@ export const ModelDropdown: React.FC<ModelDropdownProps> = ({
   const [activeVendor, setActiveVendor] = useState<ModelVendor | null>(null);
   const triggerInputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const modelOrderMap = useMemo(
+    () => new Map(models.map((model, index) => [model.id, index])),
+    [models]
+  );
 
   // 确保高亮项可见
   useEffect(() => {
@@ -120,25 +124,36 @@ export const ModelDropdown: React.FC<ModelDropdownProps> = ({
   const filteredModels = useMemo(() => {
     const query = searchQuery.toLowerCase().trim();
     const isSearching = !!query;
+    let baseModels: ModelConfig[];
 
     // 搜索时跨厂商过滤
     if (isSearching) {
-      return models.filter(m =>
+      baseModels = models.filter(m =>
         m.id.toLowerCase().includes(query) ||
         m.label.toLowerCase().includes(query) ||
         m.shortLabel?.toLowerCase().includes(query) ||
         m.shortCode?.toLowerCase().includes(query) ||
         m.description?.toLowerCase().includes(query)
       );
+    } else if (activeVendor) {
+      // 无搜索时按 activeVendor 过滤
+      baseModels = models.filter(m => m.vendor === activeVendor);
+    } else {
+      baseModels = models;
     }
 
-    // 无搜索时按 activeVendor 过滤
-    if (activeVendor) {
-      return models.filter(m => m.vendor === activeVendor);
-    }
+    const getPriority = (model: ModelConfig) => {
+      if (model.tags?.includes('new')) return 0;
+      if (model.isVip) return 1;
+      return 2;
+    };
 
-    return models;
-  }, [models, searchQuery, activeVendor]);
+    return [...baseModels].sort((a, b) => {
+      const priorityDiff = getPriority(a) - getPriority(b);
+      if (priorityDiff !== 0) return priorityDiff;
+      return (modelOrderMap.get(a.id) ?? 0) - (modelOrderMap.get(b.id) ?? 0);
+    });
+  }, [models, searchQuery, activeVendor, modelOrderMap]);
 
   // 计算厂商标签列表
   const vendorTabs = useMemo((): VendorTab[] => {
@@ -373,6 +388,9 @@ export const ModelDropdown: React.FC<ModelDropdownProps> = ({
                           </span>
                           {model.isVip && (
                             <span className="model-dropdown__item-vip">VIP</span>
+                          )}
+                          {model.tags?.includes('new') && (
+                            <span className="model-dropdown__item-new">NEW</span>
                           )}
                           <ModelHealthBadge modelId={model.id} />
                         </div>

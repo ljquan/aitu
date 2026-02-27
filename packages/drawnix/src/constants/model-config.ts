@@ -111,7 +111,7 @@ export interface ModelConfig {
   label: string;
   /** 简短显示名称（用于 ModelSelector 等） */
   shortLabel?: string;
-  /** 超短缩写（用于 @ 模型选择器显示，如 nb2v） */
+  /** 超短缩写（用于 @ 模型选择器显示，如 nbpv） */
   shortCode?: string;
   /** 描述信息 */
   description?: string;
@@ -175,9 +175,9 @@ const IMAGE_4K_DEFAULT_PARAMS: ImageModelDefaults = {
 export const IMAGE_MODEL_VIP_OPTIONS: ModelConfig[] = [
   {
     id: 'gemini-3-pro-image-preview-vip',
-    label: 'gemini-3-pro-image-preview-vip (nano-banana-2-vip)',
-    shortLabel: 'nano-banana-2-vip',
-    shortCode: 'nb2v',
+    label: 'gemini-3-pro-image-preview-vip (nano-banana-pro-vip)',
+    shortLabel: 'nano-banana-pro-vip',
+    shortCode: 'nbpv',
     description: '最新 Gemini 3 Pro 图片模型（VIP）',
     type: 'image',
     vendor: ModelVendor.GEMINI,
@@ -187,9 +187,9 @@ export const IMAGE_MODEL_VIP_OPTIONS: ModelConfig[] = [
   },
   {
     id: 'gemini-3-pro-image-preview-2k-vip',
-    label: 'gemini-3-pro-image-preview-2k-vip (nano-banana-2-2k-vip)',
-    shortLabel: 'nano-banana-2-2k-vip',
-    shortCode: 'nb22kv',
+    label: 'gemini-3-pro-image-preview-2k-vip (nano-banana-pro-2k-vip)',
+    shortLabel: 'nano-banana-pro-2k-vip',
+    shortCode: 'nbp2kv',
     description: '2K 高清图片模型（VIP）',
     type: 'image',
     vendor: ModelVendor.GEMINI,
@@ -199,9 +199,9 @@ export const IMAGE_MODEL_VIP_OPTIONS: ModelConfig[] = [
   },
   {
     id: 'gemini-3-pro-image-preview-4k-vip',
-    label: 'gemini-3-pro-image-preview-4k-vip (nano-banana-2-4k-vip)',
-    shortLabel: 'nano-banana-2-4k-vip',
-    shortCode: 'nb24kv',
+    label: 'gemini-3-pro-image-preview-4k-vip (nano-banana-pro-4k-vip)',
+    shortLabel: 'nano-banana-pro-4k-vip',
+    shortCode: 'nbp4kv',
     description: '4K 超高清图片模型（VIP）',
     type: 'image',
     vendor: ModelVendor.GEMINI,
@@ -227,6 +227,18 @@ export const IMAGE_MODEL_VIP_OPTIONS: ModelConfig[] = [
  * 更多图片模型
  */
 export const IMAGE_MODEL_MORE_OPTIONS: ModelConfig[] = [
+  {
+    id: 'gemini-3.1-flash-image-preview',
+    label: 'gemini-3.1-flash-image-preview (nano-banana-2)',
+    shortLabel: 'nano-banana-2',
+    shortCode: 'nb2',
+    description: 'Gemini 3.1 Flash 图片模型',
+    type: 'image',
+    vendor: ModelVendor.GEMINI,
+    supportsTools: true,
+    imageDefaults: IMAGE_DEFAULT_PARAMS,
+    tags: ['new'],
+  },
   {
     id: 'mj-imagine',
     label: 'midjourney imagine',
@@ -305,9 +317,9 @@ export const IMAGE_MODEL_MORE_OPTIONS: ModelConfig[] = [
   },
   {
     id: 'gemini-3-pro-image-preview',
-    label: 'gemini-3-pro-image-preview (nano-banana-2)',
-    shortLabel: 'nano-banana-2',
-    shortCode: 'nb2',
+    label: 'gemini-3-pro-image-preview (nano-banana-pro)',
+    shortLabel: 'nano-banana-pro',
+    shortCode: 'nbp',
     description: 'Gemini 3 Pro 图片模型',
     type: 'image',
     vendor: ModelVendor.GEMINI,
@@ -327,9 +339,9 @@ export const IMAGE_MODEL_MORE_OPTIONS: ModelConfig[] = [
   },
   {
     id: 'gemini-3-pro-image-preview-hd',
-    label: 'gemini-3-pro-image-preview-hd (nano-banana-2-hd)',
-    shortLabel: 'nano-banana-2-hd',
-    shortCode: 'nb2hd',
+    label: 'gemini-3-pro-image-preview-hd (nano-banana-pro-hd)',
+    shortLabel: 'nano-banana-pro-hd',
+    shortCode: 'nbphd',
     description: 'HD 高清图片模型',
     type: 'image',
     vendor: ModelVendor.GEMINI,
@@ -338,9 +350,9 @@ export const IMAGE_MODEL_MORE_OPTIONS: ModelConfig[] = [
   },
   {
     id: 'gemini-3-pro-image-preview-2k',
-    label: 'gemini-3-pro-image-preview-2k (nano-banana-2-2k)',
-    shortLabel: 'nano-banana-2-2k',
-    shortCode: 'nb22k',
+    label: 'gemini-3-pro-image-preview-2k (nano-banana-pro-2k)',
+    shortLabel: 'nano-banana-pro-2k',
+    shortCode: 'nbp2k',
     description: '2K 高清图片模型',
     type: 'image',
     vendor: ModelVendor.GEMINI,
@@ -349,9 +361,9 @@ export const IMAGE_MODEL_MORE_OPTIONS: ModelConfig[] = [
   },
   {
     id: 'gemini-3-pro-image-preview-4k',
-    label: 'gemini-3-pro-image-preview-4k (nano-banana-2-4k)',
-    shortLabel: 'nano-banana-2-4k',
-    shortCode: 'nb24k',
+    label: 'gemini-3-pro-image-preview-4k (nano-banana-pro-4k)',
+    shortLabel: 'nano-banana-pro-4k',
+    shortCode: 'nbp4k',
     description: '4K 超高清图片模型',
     type: 'image',
     vendor: ModelVendor.GEMINI,
@@ -361,8 +373,8 @@ export const IMAGE_MODEL_MORE_OPTIONS: ModelConfig[] = [
   {
     id: 'gemini-3-pro-image-preview-async',
     label: 'gemini-3-pro-image-preview-async (1k 异步)',
-    shortLabel: 'nb2-async',
-    shortCode: 'nb2a',
+    shortLabel: 'nbp-async',
+    shortCode: 'nbpa',
     description: '异步 1K 图片生成（轮询获取结果）',
     type: 'image',
     vendor: ModelVendor.GEMINI,
@@ -372,8 +384,8 @@ export const IMAGE_MODEL_MORE_OPTIONS: ModelConfig[] = [
   {
     id: 'gemini-3-pro-image-preview-2k-async',
     label: 'gemini-3-pro-image-preview-2k-async (2k 异步)',
-    shortLabel: 'nb22k-async',
-    shortCode: 'nb22ka',
+    shortLabel: 'nbp2k-async',
+    shortCode: 'nbp2ka',
     description: '异步 2K 图片生成（轮询获取结果）',
     type: 'image',
     vendor: ModelVendor.GEMINI,
@@ -383,8 +395,8 @@ export const IMAGE_MODEL_MORE_OPTIONS: ModelConfig[] = [
   {
     id: 'gemini-3-pro-image-preview-4k-async',
     label: 'gemini-3-pro-image-preview-4k-async (4k 异步)',
-    shortLabel: 'nb24k-async',
-    shortCode: 'nb24ka',
+    shortLabel: 'nbp4k-async',
+    shortCode: 'nbp4ka',
     description: '异步 4K 图片生成（轮询获取结果）',
     type: 'image',
     vendor: ModelVendor.GEMINI,
@@ -1269,6 +1281,21 @@ export const IMAGE_PARAMS: ParamConfig[] = [
     ],
     defaultValue: '2k',
     compatibleModels: ['doubao-seedream-5-0-260128'],
+    modelType: 'image',
+  },
+  // nano-banana-2 图片质量（1K/2K）- 适用于 gemini-3-pro-image-preview 和 gemini-3.1-flash-image-preview
+  {
+    id: 'quality',
+    label: '图片质量',
+    shortLabel: '质量',
+    description: '选择图像生成质量（1K/2K）',
+    valueType: 'enum',
+    options: [
+      { value: '1k', label: '1K' },
+      { value: '2k', label: '2K' },
+    ],
+    defaultValue: '1k',
+    compatibleModels: ['gemini-3.1-flash-image-preview', 'gemini-3-pro-image-preview'],
     modelType: 'image',
   },
   {

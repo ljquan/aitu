@@ -119,6 +119,8 @@ class TaskQueueService {
       // Execute based on task type
       switch (task.type) {
         case TaskType.IMAGE:
+          // 从 params.params 中提取额外参数（如 quality）
+          const extraParams = (task.params as any).params || {};
           await executor.generateImage({
             taskId: task.id,
             prompt: task.params.prompt,
@@ -127,7 +129,8 @@ class TaskQueueService {
             referenceImages: task.params.referenceImages as string[] | undefined,
             count: task.params.count as number | undefined,
             uploadedImages: task.params.uploadedImages as Array<{ url?: string }> | undefined,
-            params: (task.params as any).params,
+            quality: extraParams.quality as '1k' | '2k' | '4k' | undefined,
+            params: extraParams,
           }, executionOptions);
           break;
         case TaskType.VIDEO: {
