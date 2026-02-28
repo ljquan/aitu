@@ -23,7 +23,7 @@ import {
 } from 'lucide-react';
 import { Z_INDEX } from '../../constants/z-index';
 import type { KBDirectory, KBNoteMeta, KBTag } from '../../types/knowledge-base.types';
-import { SYSTEM_SKILLS } from '../../constants/skills';
+import { SYSTEM_SKILLS, EXTERNAL_SKILL_NOTE_PREFIX, getExternalSkills } from '../../constants/skills';
 
 /** 系统内置 Skill 虚拟笔记的 ID 前缀 */
 export const SYSTEM_SKILL_NOTE_PREFIX = '__system_skill__';
@@ -449,6 +449,28 @@ const DirectoryNode: React.FC<DirectoryNodeProps> = ({
           {/* Skill 目录：在顶部注入系统内置 Skill 虚拟笔记 */}
           {isSkillDir && SYSTEM_SKILLS.map((skill) => {
             const virtualId = `${SYSTEM_SKILL_NOTE_PREFIX}${skill.id}`;
+            const isNoteSelected = selectedNoteId === virtualId;
+            return (
+              <div
+                key={virtualId}
+                className={`kb-tree__note-row kb-tree__note-row--system ${isNoteSelected ? 'kb-tree__note-row--selected' : ''}`}
+                onClick={() => onSelectNote(virtualId)}
+              >
+                <div className="kb-tree__note-icon">
+                  <Lock size={14} />
+                </div>
+                <div className="kb-tree__note-content">
+                  <div className="kb-tree__note-title">
+                    {skill.name}
+                    <span className="kb-tree__system-badge">系统</span>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+          {/* Skill 目录：在系统 Skill 之后注入外部 Skill 虚拟笔记 */}
+          {isSkillDir && getExternalSkills().map((skill) => {
+            const virtualId = `${EXTERNAL_SKILL_NOTE_PREFIX}${skill.id}`;
             const isNoteSelected = selectedNoteId === virtualId;
             return (
               <div

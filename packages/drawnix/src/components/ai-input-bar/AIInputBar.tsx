@@ -62,8 +62,9 @@ import type { MCPTaskResult } from '../../mcp/types';
 import { parseAIInput, type GenerationType } from '../../utils/ai-input-parser';
 import { convertToWorkflow, convertSkillFlowToWorkflow, type WorkflowDefinition, type WorkflowStepOptions } from './workflow-converter';
 import { SkillDropdown } from './SkillDropdown';
-import { SKILL_AUTO_ID, findSystemSkillById } from '../../constants/skills';
+import { SKILL_AUTO_ID, findSystemSkillById, findExternalSkillById } from '../../constants/skills';
 import { knowledgeBaseService } from '../../services/knowledge-base-service';
+import { externalSkillService } from '../../services/external-skill-service';
 import { useWorkflowControl } from '../../contexts/WorkflowContext';
 import { geminiSettings } from '../../utils/settings-manager';
 import { promptForApiKey } from '../../utils/gemini-api/auth';
@@ -134,6 +135,10 @@ let mcpInitialized = false;
 if (!mcpInitialized) {
   initializeMCP();
   initializeLongVideoChainService();
+  // 初始化外部 Skill 服务（异步，会自动加载预构建 bundle）
+  externalSkillService.initialize().catch((err) => {
+    console.warn('[AIInputBar] 外部 Skill 服务初始化失败（非致命）:', err);
+  });
   mcpInitialized = true;
 }
 
@@ -1131,13 +1136,38 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
             workflow = convertToWorkflow(parsedParams, referenceImages);
           }
         } else {
+          // 尝试外部 Skill
+          const externalSkill = findExternalSkillById(selectedSkillId);
+          if (externalSkill) {
+            console.log(`[AIInputBar] 外部 Skill: id=${externalSkill.id} name=${externalSkill.name} outputType=${externalSkill.outputType} contentLen=${externalSkill.content?.length || 0}`);
+            // 外部 Skill：使用 content（SKILL.md 文档体）走三条路径
+            try {
+              workflow = await convertSkillFlowToWorkflow(
+                parsedParams,
+                { id: externalSkill.id, name: externalSkill.name, type: 'external' as const, content: externalSkill.content, outputType: externalSkill.outputType },
+                referenceImages,
+                () => {
+                  console.log('[AIInputBar] AI 正在解析外部 Skill 工作流...');
+                }
+              );
+            } catch (e) {
+              console.warn('[AIInputBar] 外部 Skill 工作流转换失败，降级到角色扮演:', e);
+              // 外部 Skill 降级时，使用 content 作为 systemPrompt
+              workflow = await convertSkillFlowToWorkflow(
+                parsedParams,
+                { id: externalSkill.id, name: externalSkill.name, type: 'external' as const, content: externalSkill.content, outputType: externalSkill.outputType },
+                referenceImages
+              ).catch(() => convertToWorkflow(parsedParams, referenceImages));
+            }
+          } else {
           // 用户自定义 Skill：从知识库读取笔记内容
           try {
             const userNote = await knowledgeBaseService.getNoteById(selectedSkillId);
             if (userNote) {
+const userOutputType = (userNote.metadata?.outputType as 'image' | 'text' | 'video' | 'ppt') || undefined;
               workflow = await convertSkillFlowToWorkflow(
                 parsedParams,
-                { id: userNote.id, name: userNote.title, type: 'user', content: userNote.content },
+                { id: userNote.id, name: userNote.title, type: 'user', content: userNote.content, outputType: userOutputType },
                 referenceImages,
                 () => {
                   // LLM 解析路径触发时，通知 UI 显示加载状态
@@ -1149,6 +1179,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
             }
           } catch {
             workflow = convertToWorkflow(parsedParams, referenceImages);
+          }
           }
         }
         // 兜底：若上述所有路径均未赋值（理论上不应发生），降级到通用工作流

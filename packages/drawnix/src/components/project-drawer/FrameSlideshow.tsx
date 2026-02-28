@@ -434,6 +434,26 @@ export const FrameSlideshow: React.FC<FrameSlideshowProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [visible, goToFrame, handleClose, resetControlsTimer]);
 
+  // 鼠标点击切换下一页（仅在选择工具模式下生效）
+  const handleSlideshowClick = useCallback(
+    (e: React.MouseEvent) => {
+      // 只在选择模式下点击才切换页面，画笔/橡皮擦/激光笔模式不处理
+      if (activeTool !== 'select') return;
+
+      // 忽略来自控制栏、导航按钮等交互元素的点击
+      const target = e.target as HTMLElement;
+      if (target.closest('.frame-slideshow__controls') || target.closest('.frame-slideshow__nav')) {
+        return;
+      }
+
+      const frames = framesRef.current;
+      if (currentIndex < frames.length - 1) {
+        goToFrame(currentIndex + 1);
+      }
+    },
+    [activeTool, currentIndex, goToFrame]
+  );
+
   // 鼠标移动显示控件
   useEffect(() => {
     if (!visible) return;
@@ -453,6 +473,7 @@ export const FrameSlideshow: React.FC<FrameSlideshowProps> = ({
       className="frame-slideshow"
       style={{ zIndex: Z_INDEX.SLIDESHOW }}
       onMouseMove={resetControlsTimer}
+      onClick={handleSlideshowClick}
     >
       {/* 四块黑色遮罩围住 Frame 区域 */}
       <div className="frame-slideshow__mask">
@@ -460,6 +481,21 @@ export const FrameSlideshow: React.FC<FrameSlideshowProps> = ({
           <div key={i} className="frame-slideshow__mask-block" style={style} />
         ))}
       </div>
+
+      {/* 选择模式下的 Frame 内容区域蒙层：拦截点击事件，防止选中画布元素 */}
+      {activeTool === 'select' && (
+        <div
+          className="frame-slideshow__content-overlay"
+          style={{
+            position: 'absolute',
+            left: frameRect.left,
+            top: frameRect.top,
+            width: frameRect.width,
+            height: frameRect.height,
+            cursor: currentIndex < frames.length - 1 ? 'pointer' : 'default',
+          }}
+        />
+      )}
 
       {/* 底部控制栏 */}
       <div

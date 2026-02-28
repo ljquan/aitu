@@ -111,6 +111,8 @@ export const TaskItem: React.FC<TaskItemProps> = React.memo(({
   const containerRef = useRef<HTMLDivElement>(null);
   const isCompleted = task.status === TaskStatus.COMPLETED;
   const isFailed = task.status === TaskStatus.FAILED;
+  const isCancelled = task.status === TaskStatus.CANCELLED;
+  const isRetryable = isFailed || isCancelled;
 
   // 使用传入的布局模式，如果没有传入则使用内部的 ResizeObserver（兼容旧用法）
   const isCompactLayout = forcedIsCompact !== undefined ? forcedIsCompact : internalIsCompact;
@@ -465,7 +467,7 @@ export const TaskItem: React.FC<TaskItemProps> = React.memo(({
                 </Button>
               )}
 
-              {isFailed && (
+              {isRetryable && (
                 <Button
                   size="small"
                   theme="primary"

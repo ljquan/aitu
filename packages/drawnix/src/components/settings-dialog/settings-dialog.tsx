@@ -34,6 +34,8 @@ export const SettingsDialog = ({
   const [videoModelName, setVideoModelName] = useState('');
   const [textModelName, setTextModelName] = useState('');
 
+
+
   // 加载当前配置
   useEffect(() => {
     if (appState.openSettings) {
@@ -203,6 +205,8 @@ export const SettingsDialog = ({
               />
             </div>
           </div>
+
+
         </form>
         <div className="settings-dialog__actions">
           <button

@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { MarkdownEditor, MarkdownEditorRef } from '../MarkdownEditor';
 import { KBTagSelector } from './KBTagSelector';
+import { McpToolSelector } from './McpToolSelector';
 import { useTextToSpeech } from './useTextToSpeech';
 import { knowledgeBaseService } from '../../services/knowledge-base-service';
 import './knowledge-base-editor.scss';
@@ -75,6 +76,18 @@ export const KBNoteEditor: React.FC<KBNoteEditorProps> = ({
 
   // 标签 IDs
   const selectedTagIds = useMemo(() => noteTags.map((t) => t.id), [noteTags]);
+
+  // MCP 输出类型（仅 Skill 目录下有效）
+  const [outputType, setOutputType] = useState<'image' | 'text' | 'video' | 'ppt' | undefined>(undefined);
+
+  // 笔记切换时同步 outputType
+  useEffect(() => {
+    if (note && isSkillDirectory) {
+setOutputType((note.metadata?.outputType as 'image' | 'text' | 'video' | 'ppt' | undefined) || undefined);
+    } else {
+      setOutputType(undefined);
+    }
+  }, [note?.id, isSkillDirectory]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 笔记元数据
   const metadata = (note as any)?.metadata;
@@ -135,6 +148,25 @@ export const KBNoteEditor: React.FC<KBNoteEditorProps> = ({
       }
     },
     [note, onUpdateNote, isSkillDirectory, readOnly]
+  );
+
+
+
+  // 输出类型变化
+  const handleOutputTypeChange = useCallback(
+    (newOutputType: 'image' | 'text' | 'video' | 'ppt' | undefined) => {
+      if (!note) return;
+      setOutputType(newOutputType);
+      // 立即保存到元数据
+      const updatedMetadata = { ...note.metadata, outputType: newOutputType };
+      if (!newOutputType) {
+        delete updatedMetadata.outputType;
+      }
+      knowledgeBaseService.updateNote(note.id, {
+        metadata: updatedMetadata,
+      });
+    },
+    [note]
   );
 
   // 标签变化
@@ -354,6 +386,17 @@ export const KBNoteEditor: React.FC<KBNoteEditorProps> = ({
             selectedTagIds={selectedTagIds}
             onSelectedChange={handleTagsChange}
             onCreateTag={onCreateTag}
+          />
+        </div>
+      )}
+
+      {/* MCP 工具绑定（仅在 Skill 目录下显示） */}
+      {isSkillDirectory && (
+        <div className="kb-note-editor__mcp-tools">
+          <McpToolSelector
+            outputType={outputType}
+            onOutputTypeChange={handleOutputTypeChange}
+            readOnly={readOnly}
           />
         </div>
       )}

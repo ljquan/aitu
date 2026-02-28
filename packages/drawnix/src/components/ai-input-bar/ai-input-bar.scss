@@ -1955,6 +1955,35 @@ $vip-color: #E91E63;
   font-weight: 500;
   margin-left: auto;
   margin-right: 4px;
+
+  &--external {
+    background: rgba(#3b82f6, 0.1);
+    color: #3b82f6;
+  }
+}
+
+.skill-dropdown__search {
+  padding: 4px 8px;
+  border-bottom: 1px solid $gray-light;
+}
+
+.skill-dropdown__search-input {
+  width: 100%;
+  padding: 6px 8px;
+  font-size: 12px;
+  border: 1px solid $gray-light;
+  border-radius: 4px;
+  outline: none;
+  background: var(--island-bg-color, #fff);
+  color: inherit;
+
+  &:focus {
+    border-color: $orange-primary;
+  }
+
+  &::placeholder {
+    color: #999;
+  }
 }
 
 .skill-dropdown__item-check {

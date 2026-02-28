@@ -15,6 +15,7 @@ import type { VideoModel } from '../../types/video.types';
 import { VIDEO_MODEL_CONFIGS } from '../../constants/video-model-config';
 import { getDefaultVideoModel } from '../../constants/model-config';
 import { geminiSettings } from '../../utils/settings-manager';
+import { normalizeToClosestVideoSize } from '../../services/media-api/utils';
 
 /**
  * 获取当前使用的视频模型名称
@@ -402,8 +403,21 @@ export const videoGenerationTool: MCPTool = {
 
   execute: async (params: Record<string, unknown>, options?: MCPExecuteOptions): Promise<MCPResult> => {
     console.log('[VideoGenerationTool] execute called with mode:', options?.mode);
-    const typedParams = params as unknown as VideoGenerationParams;
+    const rawParams = params as unknown as VideoGenerationParams;
     const mode = options?.mode || 'async';
+
+    // 规范化 size：将不在可用范围内的 size 自动转换为最接近的可用值
+    let normalizedSize = rawParams.size;
+    if (rawParams.size) {
+      const model = (rawParams.model || 'veo3') as VideoModel;
+      const modelConfig = VIDEO_MODEL_CONFIGS[model] || VIDEO_MODEL_CONFIGS['veo3'];
+      const validSizes = modelConfig.sizeOptions.map(opt => opt.value);
+      normalizedSize = normalizeToClosestVideoSize(rawParams.size, validSizes, modelConfig.defaultSize);
+    }
+    const typedParams: VideoGenerationParams = {
+      ...rawParams,
+      size: normalizedSize,
+    };
 
     if (mode === 'queue') {
       // 队列模式：直接使用 taskQueueService

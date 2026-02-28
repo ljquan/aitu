@@ -21,6 +21,7 @@
 
 import type { WorkflowStep } from './workflow-converter';
 import type { SkillDSLVariables, SkillParseResult } from './skill-dsl.types';
+import { mcpRegistry } from '../../mcp/registry';
 
 /**
  * 工具调用声明行正则
@@ -158,25 +159,51 @@ export class SkillDSLParser {
   /**
    * 将用户输入自动注入到步骤的主要文本参数中
    *
-   * 主要文本参数优先级：theme > prompt > query > text > content
-   * 如果这些参数都不存在，则注入到 theme 参数
+   * 注入策略（按优先级）：
+   * 1. 查询 mcpRegistry 获取工具 schema 的 required 参数，
+   *    如果 required 参数中有匹配 PRIMARY_TEXT_PARAMS 的，优先注入
+   * 2. 如果没有匹配的 required 参数，检查 PRIMARY_TEXT_PARAMS 中是否已有值
+   * 3. 都没有则 fallback 注入到工具 schema 的第一个 required string 参数，
+   *    或兜底注入到 theme
    *
    * @param step - 工作流步骤
    * @param userInput - 用户输入文本
    */
   static injectUserInput(step: import('./workflow-converter').WorkflowStep, userInput: string): void {
-    // 主要文本参数优先级列表（按常见程度排序）
-    const PRIMARY_TEXT_PARAMS = ['theme', 'prompt', 'query', 'text', 'content'];
+    // 主要文本参数候选列表
+    const PRIMARY_TEXT_PARAMS = ['topic', 'theme', 'prompt', 'query', 'text', 'content'];
 
-    // 检查是否已有主要文本参数
+    // 检查是否已有主要文本参数（如果用户已在 DSL 中显式指定，不覆盖）
     for (const paramName of PRIMARY_TEXT_PARAMS) {
       if (paramName in step.args) {
-        // 已有该参数，不覆盖
         return;
       }
     }
 
-    // 没有主要文本参数，默认注入到 theme
+    // 尝试从 mcpRegistry 获取工具 schema，精准注入到工具实际需要的参数
+    const tool = mcpRegistry.getTool(step.mcp);
+    if (tool) {
+      const required = tool.inputSchema.required || [];
+      const properties = tool.inputSchema.properties || {};
+
+      // 优先注入到 required 中匹配 PRIMARY_TEXT_PARAMS 的参数
+      for (const paramName of PRIMARY_TEXT_PARAMS) {
+        if (required.includes(paramName) && properties[paramName]?.type === 'string') {
+          step.args[paramName] = userInput;
+          return;
+        }
+      }
+
+      // 其次注入到第一个 required string 参数（兜底）
+      for (const paramName of required) {
+        if (properties[paramName]?.type === 'string' && !(paramName in step.args)) {
+          step.args[paramName] = userInput;
+          return;
+        }
+      }
+    }
+
+    // 无法获取工具 schema 时，默认注入到 theme
     step.args['theme'] = userInput;
   }
 

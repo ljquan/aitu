@@ -189,3 +189,142 @@ export function sleep(ms: number, signal?: AbortSignal): Promise<void> {
     }
   });
 }
+
+/**
+ * 图片生成支持的宽高比列表（NxM 格式）
+ */
+const VALID_IMAGE_SIZES = ['auto', '1x1', '16x9', '9x16', '3x2', '2x3', '4x3', '3x4', '5x4', '4x5', '21x9'];
+
+/**
+ * 将宽高比字符串解析为数值比例
+ * 支持格式：'16:9', '16x9', '2.35:1', '1920x1080'（像素尺寸）
+ * @returns 宽高比数值（w/h），解析失败返回 null
+ */
+function parseAspectRatioValue(size: string): number | null {
+  if (!size || size === 'auto') return null;
+
+  // 统一分隔符：支持 ':', 'x', '*'
+  const normalized = size.trim().toLowerCase();
+
+  // 尝试匹配 '数字:数字' 或 '数字x数字' 格式（支持小数如 2.35:1）
+  const match = normalized.match(/^([\d.]+)\s*[:x*]\s*([\d.]+)$/);
+  if (!match) return null;
+
+  const w = parseFloat(match[1]);
+  const h = parseFloat(match[2]);
+  if (!w || !h || isNaN(w) || isNaN(h)) return null;
+
+  return w / h;
+}
+
+/**
+ * 计算标准 size token 的宽高比数值
+ */
+function sizeTokenToRatio(sizeToken: string): number | null {
+  if (sizeToken === 'auto') return null;
+  return parseAspectRatioValue(sizeToken);
+}
+
+/**
+ * 将任意 size 字符串规范化为最接近的可用图片尺寸
+ *
+ * 处理逻辑：
+ * 1. 如果 size 已在可用列表中（精确匹配），直接返回
+ * 2. 将 ':' 转为 'x' 后再次精确匹配
+ * 3. 解析为宽高比数值，找到数值最接近的可用 size
+ * 4. 都无法处理时返回默认值 'auto'
+ *
+ * @param size 原始 size 字符串，如 '2.35:1', '16:9', '1920x1080'
+ * @param defaultSize 默认尺寸，当无法匹配时返回
+ * @returns 最接近的可用图片 size
+ */
+export function normalizeToClosestImageSize(size?: string, defaultSize: string = 'auto'): string {
+  if (!size) return defaultSize;
+
+  const trimmed = size.trim();
+  if (!trimmed) return defaultSize;
+
+  // 1. 精确匹配（不区分大小写）
+  const lower = trimmed.toLowerCase();
+  if (VALID_IMAGE_SIZES.includes(lower)) return lower;
+
+  // 2. ':' → 'x' 后再精确匹配
+  const colonToX = lower.replace(':', 'x');
+  if (VALID_IMAGE_SIZES.includes(colonToX)) return colonToX;
+
+  // 3. 解析为宽高比数值，找最接近的
+  const targetRatio = parseAspectRatioValue(trimmed);
+  if (targetRatio === null) return defaultSize;
+
+  let bestMatch = defaultSize;
+  let bestDiff = Infinity;
+
+  for (const candidate of VALID_IMAGE_SIZES) {
+    if (candidate === 'auto') continue;
+    const candidateRatio = sizeTokenToRatio(candidate);
+    if (candidateRatio === null) continue;
+    const diff = Math.abs(targetRatio - candidateRatio);
+    if (diff < bestDiff) {
+      bestDiff = diff;
+      bestMatch = candidate;
+    }
+  }
+
+  if (bestMatch !== defaultSize) {
+    console.log(`[normalizeToClosestImageSize] "${trimmed}" → "${bestMatch}" (ratio: ${targetRatio.toFixed(3)} → ${sizeTokenToRatio(bestMatch)?.toFixed(3)})`);
+  }
+
+  return bestMatch;
+}
+
+/**
+ * 将任意 size 字符串规范化为最接近的可用视频尺寸
+ *
+ * 视频尺寸格式是像素值（如 '1280x720'）或分辨率标签（如 '720p'）
+ *
+ * @param size 原始 size 字符串
+ * @param validSizes 当前模型支持的 size 列表
+ * @param defaultSize 默认尺寸
+ * @returns 最接近的可用视频 size
+ */
+export function normalizeToClosestVideoSize(
+  size?: string,
+  validSizes?: string[],
+  defaultSize: string = '1280x720'
+): string {
+  if (!size) return defaultSize;
+  if (!validSizes || validSizes.length === 0) return defaultSize;
+
+  const trimmed = size.trim();
+  if (!trimmed) return defaultSize;
+
+  // 1. 精确匹配
+  if (validSizes.includes(trimmed)) return trimmed;
+
+  // 2. ':' → 'x' 后精确匹配
+  const colonToX = trimmed.replace(':', 'x');
+  if (validSizes.includes(colonToX)) return colonToX;
+
+  // 3. 解析 size 的宽高比数值，在 validSizes 中找最接近的
+  const targetRatio = parseAspectRatioValue(trimmed);
+  if (targetRatio === null) return defaultSize;
+
+  let bestMatch = defaultSize;
+  let bestDiff = Infinity;
+
+  for (const candidate of validSizes) {
+    const candidateRatio = parseAspectRatioValue(candidate);
+    if (candidateRatio === null) continue;
+    const diff = Math.abs(targetRatio - candidateRatio);
+    if (diff < bestDiff) {
+      bestDiff = diff;
+      bestMatch = candidate;
+    }
+  }
+
+  if (bestMatch !== defaultSize || bestDiff < Infinity) {
+    console.log(`[normalizeToClosestVideoSize] "${trimmed}" → "${bestMatch}" (ratio: ${targetRatio.toFixed(3)})`);
+  }
+
+  return bestMatch;
+}

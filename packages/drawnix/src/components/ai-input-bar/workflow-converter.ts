@@ -22,6 +22,7 @@ import { SKILL_AUTO_ID, isSystemSkillId, findSystemSkillById } from '../../const
 import { SkillDSLParser } from './skill-dsl-parser';
 import { SkillLLMParser } from './skill-llm-parser';
 import type { SkillDSLVariables } from './skill-dsl.types';
+import { preprocessExternalSkillContent } from '../../services/external-skill-parser';
 
 /**
  * 工作流步骤执行选项（批量参数等）
@@ -454,7 +455,7 @@ function generateFilteredToolsDescription(toolNames: string[]): string {
  */
 export async function convertSkillFlowToWorkflow(
   params: ParsedGenerationParams,
-  skill: SystemSkill | { id: string; name: string; type: 'user'; content: string },
+  skill: SystemSkill | { id: string; name: string; type: 'user' | 'external'; content: string; outputType?: 'image' | 'text' | 'video' | 'ppt' },
   referenceImages: string[] = [],
   onLLMParsing?: () => void
 ): Promise<WorkflowDefinition> {
@@ -473,12 +474,12 @@ export async function convertSkillFlowToWorkflow(
 
   const workflowId = generateWorkflowId();
 
-  // 统一获取 Skill 内容：系统 Skill 使用 description，自定义 Skill 使用 content
+  // 统一获取 Skill 内容：系统 Skill 使用 description，自定义/外部 Skill 使用 content
   const skillId = skill.id;
   const skillName = skill.name;
   const skillContent = skill.type === 'system'
     ? (skill as SystemSkill).description
-    : (skill as { id: string; name: string; type: 'user'; content: string }).content;
+    : (skill as { id: string; name: string; type: 'user' | 'external'; content: string }).content;
 
   // 用户输入文本（用于自动注入到工具的主要文本参数）
   const userInputText = userInstruction || prompt || rawInput;
@@ -539,10 +540,38 @@ export async function convertSkillFlowToWorkflow(
     finalPrompt: prompt,
   };
 
+  // Skill 内容预处理：对图片类 Skill 进行 content 适配（外部 Skill 和配置了 outputType 的用户 Skill 均适用）
+  const isExternalSkill = skill.type === 'external';
+  const isUserSkill = skill.type === 'user';
+
+  // 确定 outputType：优先使用显式配置
+  const skillOutputType = (skill as { outputType?: 'image' | 'text' | 'video' | 'ppt' }).outputType;
+  const externalOutputType: 'image' | 'text' = skillOutputType === 'image' ? 'image' : 'text';
+
+  // 用户 Skill 配置了 outputType 时，也需要进行内容预处理（用户复制外部 Skill 内容时，需要适配 aitu 环境）
+  const needsPreprocess = isExternalSkill || (isUserSkill && externalOutputType === 'image');
+  const processedSkillContent = needsPreprocess
+    ? preprocessExternalSkillContent(skillContent, externalOutputType)
+    : skillContent;
+
+  console.log(`[SkillFlow] Skill="${skillName}" type=${skill.type} outputType=${externalOutputType} isExternal=${isExternalSkill} contentLen=${processedSkillContent?.length || 0}`);
+
   // 从 Skill 笔记中提取工具名引用，用于判断走路径 B 还是路径 C
-  const referencedToolNames = SkillDSLParser.extractToolNamesFromContent(skillContent);
+  const referencedToolNames = SkillDSLParser.extractToolNamesFromContent(processedSkillContent);
   // 过滤出在 registry 中实际存在的工具名
   const validToolNames = referencedToolNames.filter(name => mcpRegistry.hasTool(name));
+
+  // 图片类 Skill 强制注入 generate_image 工具，确保走路径 B
+  if (externalOutputType === 'image') {
+    if (!validToolNames.includes('generate_image') && mcpRegistry.hasTool('generate_image')) {
+      validToolNames.push('generate_image');
+    }
+  }
+
+  // 判断是否包含 generate_image（用于后续路径 B/C 的图片生成指引）
+  const hasGenerateImage = validToolNames.includes('generate_image');
+
+  console.log(`[SkillFlow] referencedTools=[${referencedToolNames.join(',')}] validTools=[${validToolNames.join(',')}] hasGenerateImage=${hasGenerateImage} → 路径${validToolNames.length > 0 ? 'B' : 'C'}`);
 
   // ─── 路径 B：Agent 模式，精准注入相关工具描述 ─────────────────────────────
   if (validToolNames.length > 0) {
@@ -550,7 +579,9 @@ export async function convertSkillFlowToWorkflow(
     const filteredToolsDesc = generateFilteredToolsDescription(validToolNames);
 
     // Skill 笔记内容作为前置上下文，工具描述紧随其后
-    let systemPrompt = `## 当前激活的 Skill：${skillName}\n\n${skillContent}`;
+    // 外部 Skill 和配置了 outputType 的用户 Skill 均使用预处理后的内容
+    const pathBContent = processedSkillContent;
+    let systemPrompt = `## 当前激活的 Skill：${skillName}\n\n${pathBContent}`;
     if (filteredToolsDesc) {
       systemPrompt += `\n\n## 可用工具\n\n${filteredToolsDesc}`;
     }
@@ -563,6 +594,11 @@ export async function convertSkillFlowToWorkflow(
 
     // 添加响应格式约束（与 generateSystemPrompt 保持一致）
     systemPrompt += `\n\n## 响应格式（严格遵守）\n\n你的响应必须是一个有效的 JSON 对象：\n{"content": "你的分析内容", "next": [{"mcp": "工具名称", "args": {"参数名": "参数值"}}]}`;
+
+    // 图片类 Skill（outputType 为 image）：追加执行要求
+    if (hasGenerateImage) {
+      systemPrompt += `\n\n## 执行要求\n\n你必须严格按照以上 Skill 工作流指令执行。最终目标是：\n1. 基于用户输入内容，按照 Skill 中的步骤分析并构建高质量的图片描述 prompt\n2. 调用 generate_image 工具生成图片，将构建好的 prompt 作为参数传入\n3. 不要仅输出文字描述，必须实际调用工具生成图片\n\n你的回复必须包含对 generate_image 工具的调用，例如：\n{"content": "分析与 prompt 构建过程", "next": [{"mcp": "generate_image", "args": {"prompt": "完整的图片描述 prompt"}}]}`;
+    }
 
     const userMessage = buildStructuredUserMessage(agentContext);
 
@@ -614,12 +650,18 @@ export async function convertSkillFlowToWorkflow(
 
   // ─── 路径 C：角色扮演模式，Skill 笔记直接作为 systemPrompt ────────────────
   // 正则解析失败且笔记中无工具名引用 → 纯 LLM 角色扮演，不注入任何 MCP 工具描述
-  let roleSystemPrompt = skillContent || '';
+  // 外部 Skill 和配置了 mcpTools 的用户 Skill 均使用预处理后的内容
+  let roleSystemPrompt = processedSkillContent || '';
   if (allReferenceImages.length > 0) {
     roleSystemPrompt += generateReferenceImagesPrompt(
       allReferenceImages.length,
       selection.imageDimensions
     );
+  }
+
+  // 图片类 Skill 降级到路径 C 时，追加图片生成指引（outputType 为 image）
+  if (hasGenerateImage) {
+    roleSystemPrompt += `\n\n## 重要执行指引\n\n请基于以上 Skill 指令构建详细的图片描述 prompt，并使用以下 JSON 格式回复以调用图片生成工具：\n{"content": "你的分析", "next": [{"mcp": "generate_image", "args": {"prompt": "你构建的完整 prompt"}}]}\n\n你必须实际调用 generate_image 工具生成图片，不要仅输出文字描述。`;
   }
 
   // 用户输入直接作为 userMessage（不经过 buildStructuredUserMessage，避免注入工具上下文）

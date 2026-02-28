@@ -43,6 +43,10 @@ export interface KBNoteMetadata {
   faviconUrl?: string;
   /** 发布时间 */
   publishedAt?: string;
+  /** @deprecated 已废弃，工具绑定由 outputType 自动推断。保留字段以兼容旧数据 */
+  mcpTools?: string[];
+  /** Skill 输出类型：image 表示图片生成类，text 表示文本处理类（用于 Skill 笔记配置） */
+outputType?: 'image' | 'text' | 'video' | 'ppt';
   [key: string]: unknown;
 }
 

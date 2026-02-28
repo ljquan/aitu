@@ -1,10 +1,11 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronDown, Check, Zap, Plus } from 'lucide-react';
+import { ChevronDown, Check, Zap, Plus, Image, Video, Presentation } from 'lucide-react';
 import { ATTACHED_ELEMENT_CLASS_NAME } from '@plait/core';
 import { Z_INDEX } from '../../constants/z-index';
 import { SYSTEM_SKILLS, SKILL_AUTO_ID } from '../../constants/skills';
 import { knowledgeBaseService } from '../../services/knowledge-base-service';
+import { externalSkillService } from '../../services/external-skill-service';
 import type { KBNoteMeta } from '../../types/knowledge-base.types';
 import { KeyboardDropdown } from './KeyboardDropdown';
 
@@ -20,6 +21,9 @@ interface SkillOption {
   id: string;
   name: string;
   isSystem?: boolean;
+  isExternal?: boolean;
+  source?: string;
+  outputType?: 'image' | 'text' | 'video' | 'ppt';
 }
 
 /** 自动选项 */
@@ -40,8 +44,11 @@ export const SkillDropdown: React.FC<SkillDropdownProps> = ({
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [userSkills, setUserSkills] = useState<SkillOption[]>([]);
+  const [externalSkills, setExternalSkills] = useState<SkillOption[]>([]);
+  const [searchText, setSearchText] = useState('');
   const [highlightedIndex, setHighlightedIndex] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
 
   /** 加载用户自定义 Skill（从知识库 Skill 目录读取） */
   const loadUserSkills = useCallback(async () => {
@@ -55,20 +62,49 @@ export const SkillDropdown: React.FC<SkillDropdownProps> = ({
       const systemIds = new Set(SYSTEM_SKILLS.map((s) => s.id));
       const userOptions: SkillOption[] = notes
         .filter((n: KBNoteMeta) => !systemIds.has(n.id))
-        .map((n: KBNoteMeta) => ({ id: n.id, name: n.title }));
+        .map((n: KBNoteMeta) => ({
+          id: n.id,
+          name: n.title,
+  outputType: (n.metadata?.outputType as 'image' | 'text' | 'video' | 'ppt') || undefined,
+        }));
       setUserSkills(userOptions);
     } catch {
       // 静默失败
     }
   }, []);
 
-  // 打开时加载用户 Skill 并重置高亮
+  /** 加载外部 Skill */
+  const loadExternalSkills = useCallback(async () => {
+    try {
+      const metas = await externalSkillService.getAllExternalSkillsMeta();
+      // 排除与系统内置 Skill ID 冲突的外部 Skill
+      const systemIds = new Set(SYSTEM_SKILLS.map((s) => s.id));
+      const externalOptions: SkillOption[] = metas
+        .filter((m) => !systemIds.has(m.id))
+        .map((m) => ({
+          id: m.id,
+          name: m.name,
+          isExternal: true,
+          source: m.source,
+          outputType: m.outputType,
+        }));
+      setExternalSkills(externalOptions);
+    } catch {
+      // 静默失败
+    }
+  }, []);
+
+  // 打开时加载用户 Skill 和外部 Skill，并重置高亮和搜索
   useEffect(() => {
     if (isOpen) {
       loadUserSkills();
-      const allOptions = [AUTO_OPTION, ...SYSTEM_OPTIONS, ...userSkills];
-      const currentIndex = allOptions.findIndex((opt) => opt.id === value);
+      loadExternalSkills();
+      setSearchText('');
+      const allOpts = [AUTO_OPTION, ...SYSTEM_OPTIONS, ...externalSkills, ...userSkills];
+      const currentIndex = allOpts.findIndex((opt) => opt.id === value);
       setHighlightedIndex(currentIndex >= 0 ? currentIndex : 0);
+      // 聚焦搜索框
+      setTimeout(() => searchRef.current?.focus(), 50);
     }
   }, [isOpen, value]);
 
@@ -108,7 +144,16 @@ export const SkillDropdown: React.FC<SkillDropdownProps> = ({
     [onAddSkill]
   );
 
-  const allOptions = [AUTO_OPTION, ...SYSTEM_OPTIONS, ...userSkills];
+  // 构建所有选项：自动 → 系统内置 → 外部 Skill → 用户自定义
+  const rawOptions = [AUTO_OPTION, ...SYSTEM_OPTIONS, ...externalSkills, ...userSkills];
+  // 应用搜索过滤
+  const allOptions = searchText.trim()
+    ? rawOptions.filter((opt) =>
+        opt.name.toLowerCase().includes(searchText.toLowerCase()) ||
+        opt.id.toLowerCase().includes(searchText.toLowerCase())
+      )
+    : rawOptions;
+  const showSearch = rawOptions.length > 15;
 
   const handleOpenKey = useCallback(
     (key: string) => {
@@ -183,6 +228,23 @@ export const SkillDropdown: React.FC<SkillDropdownProps> = ({
                   <Zap size={14} />
                   <span>Skill</span>
                 </div>
+                {showSearch && (
+                  <div className="skill-dropdown__search">
+                    <input
+                      ref={searchRef}
+                      type="text"
+                      className="skill-dropdown__search-input"
+                      placeholder="搜索 Skill..."
+                      value={searchText}
+                      onChange={(e) => {
+                        setSearchText(e.target.value);
+                        setHighlightedIndex(0);
+                      }}
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onKeyDown={(e) => e.stopPropagation()}
+                    />
+                  </div>
+                )}
                 <div ref={listRef} className="skill-dropdown__list">
                   {allOptions.map((option, index) => {
                     const isSelected = option.id === value;
@@ -195,7 +257,19 @@ export const SkillDropdown: React.FC<SkillDropdownProps> = ({
                         onMouseEnter={() => setHighlightedIndex(index)}
                       >
                         <span className="skill-dropdown__item-label">{option.name}</span>
+                        {option.outputType === 'image' && (
+                          <Image size={12} className="skill-dropdown__item-image-icon" />
+                        )}
+                        {option.outputType === 'video' && (
+                          <Video size={12} className="skill-dropdown__item-image-icon" />
+                        )}
+                        {option.outputType === 'ppt' && (
+                          <Presentation size={12} className="skill-dropdown__item-image-icon" />
+                        )}
                         {option.isSystem && (
+                          <span className="skill-dropdown__item-badge">系统</span>
+                        )}
+                        {option.isExternal && (
                           <span className="skill-dropdown__item-badge">系统</span>
                         )}
                         {isSelected && (

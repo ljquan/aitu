@@ -129,6 +129,11 @@
     margin-bottom: 12px;
   }
 
+  &__mcp-tools {
+    margin-bottom: 12px;
+    padding-left: 2px;
+  }
+
   // Source info / metadata section
   &__metadata-section {
     margin-bottom: 12px;
@@ -594,6 +599,61 @@
     &:hover {
       color: var(--td-brand-color, #0052d9);
       background-color: var(--td-brand-color-light, #ecf2fe);
+    }
+  }
+}
+
+// ============================================================================
+// MCP Tool Selector
+// ============================================================================
+
+.mcp-tool-selector {
+  position: relative;
+
+  // 输出类型选择
+  &__output-type {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  &__output-type-label {
+    font-size: 12px;
+    color: var(--td-text-color-secondary, #666);
+    white-space: nowrap;
+  }
+
+  &__output-type-options {
+    display: flex;
+    gap: 2px;
+  }
+
+  &__output-type-value {
+    font-size: 12px;
+    color: var(--td-text-color-primary, #333);
+  }
+
+  &__output-type-btn {
+    display: inline-flex;
+    align-items: center;
+    padding: 1px 8px;
+    font-size: 11px;
+    border: 1px solid var(--td-border-level-2-color, #dcdcdc);
+    border-radius: 10px;
+    background: transparent;
+    cursor: pointer;
+    color: var(--td-text-color-secondary, #666);
+    transition: all 0.15s;
+
+    &:hover {
+      border-color: var(--td-brand-color, #0052d9);
+    }
+
+    &--active {
+      border-color: var(--td-brand-color, #0052d9);
+      background-color: var(--td-brand-color-light, #ecf2fe);
+      color: var(--td-brand-color, #0052d9);
+      font-weight: 500;
     }
   }
 }

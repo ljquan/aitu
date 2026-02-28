@@ -42,3 +42,6 @@ export type {
   CrashRecoveryState,
   CrashInfo,
 } from './services/crash-recovery-service';
+
+// Export external skill service
+export { externalSkillService } from './services/external-skill-service';

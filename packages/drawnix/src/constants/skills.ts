@@ -9,6 +9,8 @@
 export const SKILL_TYPE_SYSTEM = 'system' as const;
 /** Skill 类型：用户自定义 */
 export const SKILL_TYPE_USER = 'user' as const;
+/** Skill 类型：外部引入 */
+export const SKILL_TYPE_EXTERNAL = 'external' as const;
 
 /** 自动模式 Skill ID */
 export const SKILL_AUTO_ID = 'auto';
@@ -28,6 +30,49 @@ export interface SystemSkill {
   /** 类型标记 */
   type: typeof SKILL_TYPE_SYSTEM;
 }
+
+/** 外部 Skill 接口，继承 SystemSkill 并扩展来源信息 */
+export interface ExternalSkill {
+  /** 唯一标识（自动加包名前缀，如 baoyu-skills:baoyu-infographic） */
+  id: string;
+  /** 中文/英文名称，用于 UI 展示 */
+  name: string;
+  /** 对应的 MCP 工具名称（可选） */
+  mcpTool?: string;
+  /** 功能描述（来自 SKILL.md front matter 的 description） */
+  description: string;
+  /** 类型标记 */
+  type: typeof SKILL_TYPE_EXTERNAL;
+  /** SKILL.md 文档体（Markdown 内容，作为执行路径的解析内容） */
+  content: string;
+  /** 包源名称 */
+  source: string;
+  /** 包源路径/URL */
+  sourceUrl?: string;
+  /** 分类（来自 marketplace.json） */
+  category?: string;
+  /** 输出类型：image 表示图片生成类 Skill，text 表示文本处理类 Skill，video 表示视频生成类 Skill */
+outputType?: 'image' | 'text' | 'video' | 'ppt';
+}
+
+/** 外部 Skill 包接口 */
+export interface ExternalSkillPackage {
+  /** 包名（如 baoyu-skills） */
+  name: string;
+  /** 包源路径/URL */
+  url?: string;
+  /** 包含的外部 Skill 列表 */
+  skills: ExternalSkill[];
+  /** 包元数据 */
+  metadata?: {
+    version?: string;
+    description?: string;
+    [key: string]: unknown;
+  };
+}
+
+/** 外部 Skill 虚拟笔记 ID 前缀 */
+export const EXTERNAL_SKILL_NOTE_PREFIX = '__external_skill__:';
 
 /** 系统内置 Skill 列表 */
 export const SYSTEM_SKILLS: SystemSkill[] = [
@@ -91,4 +136,30 @@ export function findSystemSkillById(id: string): SystemSkill | undefined {
 /** 判断是否为系统内置 Skill ID */
 export function isSystemSkillId(id: string): boolean {
   return SYSTEM_SKILLS.some((skill) => skill.id === id);
+}
+
+/**
+ * 外部 Skill 运行时注册表
+ * 由 external-skill-service 在加载后填充，供其他模块查询
+ */
+let _externalSkills: ExternalSkill[] = [];
+
+/** 注册外部 Skill 列表（由 external-skill-service 调用） */
+export function registerExternalSkills(skills: ExternalSkill[]): void {
+  _externalSkills = skills;
+}
+
+/** 获取所有已注册的外部 Skill */
+export function getExternalSkills(): ExternalSkill[] {
+  return _externalSkills;
+}
+
+/** 根据 ID 查找外部 Skill */
+export function findExternalSkillById(id: string): ExternalSkill | undefined {
+  return _externalSkills.find((skill) => skill.id === id);
+}
+
+/** 判断是否为外部 Skill ID */
+export function isExternalSkillId(id: string): boolean {
+  return _externalSkills.some((skill) => skill.id === id);
 }
