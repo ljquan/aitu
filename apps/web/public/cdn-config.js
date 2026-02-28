@@ -45,13 +45,13 @@
   // CDN 源列表
   var CDN_SOURCES = [
     {
-      name: 'unpkg',
-      baseUrl: 'https://unpkg.com/' + CONFIG.packageName,
+      name: 'jsdelivr',
+      baseUrl: 'https://cdn.jsdelivr.net/npm/' + CONFIG.packageName,
       testPath: '/version.json',
     },
     {
-      name: 'jsdelivr',
-      baseUrl: 'https://cdn.jsdelivr.net/npm/' + CONFIG.packageName,
+      name: 'unpkg',
+      baseUrl: 'https://unpkg.com/' + CONFIG.packageName,
       testPath: '/version.json',
     },
   ];

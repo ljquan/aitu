@@ -88,7 +88,7 @@ function generateNpmPackageJson(version) {
   const npmPackage = {
     name: CONFIG.packageName,
     version: version,
-    description: 'Opentu - AI-powered whiteboard app with image/video creation, mind mapping, flowcharts, and freehand drawing',
+    description: 'Opentu static assets for CDN (HTML not included)',
     keywords: [
       'aitu',
       'whiteboard',
@@ -110,7 +110,12 @@ function generateNpmPackageJson(version) {
     license: 'MIT',
     author: 'ljquan',
     files: [
-      '**/*'
+      'assets/**',
+      'version.json',
+      'icons/**',
+      'logo/**',
+      'favicon.ico',
+      'manifest.json'
     ],
     publishConfig: {
       access: 'public'

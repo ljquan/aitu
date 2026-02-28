@@ -61,15 +61,15 @@ const CDN_CONFIG = {
 // CDN 源列表（按优先级排序）
 const CDN_SOURCES: CDNSource[] = [
   {
-    name: 'unpkg',
-    urlTemplate: 'https://unpkg.com/aitu-app@{version}/{path}',
+    name: 'jsdelivr',
+    urlTemplate: 'https://cdn.jsdelivr.net/npm/aitu-app@{version}/{path}',
     healthCheckPath: 'version.json',
     enabled: true,
     priority: 1,
   },
   {
-    name: 'jsdelivr',
-    urlTemplate: 'https://cdn.jsdelivr.net/npm/aitu-app@{version}/{path}',
+    name: 'unpkg',
+    urlTemplate: 'https://unpkg.com/aitu-app@{version}/{path}',
     healthCheckPath: 'version.json',
     enabled: true,
     priority: 2,
