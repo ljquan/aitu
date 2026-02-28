@@ -60,7 +60,7 @@ import { PopupDistributeButton } from './distribute-button';
 import { PopupBooleanButton } from './boolean-button';
 import { TextPropertyPanel } from './text-property-panel';
 import { AIImageIcon, AIVideoIcon, VideoFrameIcon, DuplicateIcon, TrashIcon, SplitImageIcon, DownloadIcon, MergeIcon, VideoMergeIcon } from '../../icons';
-import { Pencil, Presentation, Copy } from 'lucide-react';
+import { Pencil, Presentation, Copy, Play } from 'lucide-react';
 import { useDrawnix, DialogType } from '../../../hooks/use-drawnix';
 import { useI18n } from '../../../i18n';
 import { ToolButton } from '../../tool-button';
@@ -81,6 +81,7 @@ import { ImageEditor } from '../../image-editor';
 import { insertImageFromUrl } from '../../../data/image';
 import { calculateEditedImagePoints } from '../../../utils/image';
 import { isFrameElement } from '../../../types/frame.types';
+import { FrameSlideshow } from '../../project-drawer/FrameSlideshow';
 import { isCardElement } from '../../../types/card.types';
 import { duplicateFrame, focusFrame } from '../../../utils/frame-duplicate';
 import { isPlaitMind, findMindRootFromSelection } from '../../../services/ppt';
@@ -110,6 +111,10 @@ export const PopupToolbar = () => {
   // 属性面板状态
   const [showPropertyPanel, setShowPropertyPanel] = useState(false);
   const propertyPanelOpenRef = useRef(false);
+
+  // Frame 幻灯片播放状态
+  const [showSlideshow, setShowSlideshow] = useState(false);
+  const [slideshowFrameId, setSlideshowFrameId] = useState<string | undefined>();
 
   // 保存 toolbar 和选中元素的位置信息，用于定位属性面板
   const [toolbarRect, setToolbarRect] = useState<{ top: number; left: number; width: number; height: number } | undefined>();
@@ -163,6 +168,7 @@ export const PopupToolbar = () => {
     hasBoolean?: boolean; // 是否显示布尔组合按钮（多选时显示）
     hasMindmapToPPT?: boolean; // 是否显示思维导图转PPT按钮
     hasCardEdit?: boolean; // 是否显示 Card 编辑按钮（打开知识库）
+    hasFramePlay?: boolean; // 是否显示 Frame 幻灯片播放按钮
   } = {
     fill: 'red',
   };
@@ -352,6 +358,12 @@ export const PopupToolbar = () => {
       isCardElement(selectedElements[0]) &&
       !PlaitBoard.hasBeenTextEditing(board);
 
+    // Frame 播放按钮：选中单个 Frame 元素时显示
+    const hasFramePlay =
+      selectedElements.length === 1 &&
+      isFrameElement(selectedElements[0]) &&
+      !PlaitBoard.hasBeenTextEditing(board);
+
     state = {
       ...getElementState(board),
       hasFill,
@@ -379,6 +391,7 @@ export const PopupToolbar = () => {
       hasBoolean,
       hasMindmapToPPT,
       hasCardEdit,
+      hasFramePlay,
     };
   }
 
@@ -1263,6 +1276,26 @@ export const PopupToolbar = () => {
                 key="size-input"
               />
             )}
+            {/* Frame 幻灯片播放按钮 - 选中单个 Frame 时显示 */}
+            {state.hasFramePlay && (
+              <ToolButton
+                className="frame-play"
+                key="frame-play"
+                type="icon"
+                icon={<Play size={15} />}
+                visible={true}
+                title={language === 'zh' ? '播放幻灯片' : 'Play Slideshow'}
+                aria-label={language === 'zh' ? '播放幻灯片' : 'Play Slideshow'}
+                data-track="toolbar_click_frame_play"
+                onPointerUp={() => {
+                  const frameElement = selectedElements.find(el => isFrameElement(el));
+                  if (frameElement) {
+                    setSlideshowFrameId(frameElement.id);
+                    setShowSlideshow(true);
+                  }
+                }}
+              />
+            )}
             <ToolButton
               className="duplicate"
               key={8}
@@ -1464,6 +1497,17 @@ export const PopupToolbar = () => {
           selectionRect={selectionRect}
         />
       )}
+
+      {/* Frame 幻灯片播放 */}
+      <FrameSlideshow
+        visible={showSlideshow}
+        board={board}
+        onClose={() => {
+          setShowSlideshow(false);
+          setSlideshowFrameId(undefined);
+        }}
+        initialFrameId={slideshowFrameId}
+      />
     </>
   );
 };

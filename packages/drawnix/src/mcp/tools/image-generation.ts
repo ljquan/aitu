@@ -13,6 +13,7 @@ import { taskQueueService } from '../../services/task-queue';
 import { TaskType } from '../../types/task.types';
 import { getDefaultImageModel, IMAGE_PARAMS } from '../../constants/model-config';
 import { geminiSettings } from '../../utils/settings-manager';
+import { normalizeToClosestImageSize } from '../../services/media-api/utils';
 
 /**
  * 获取当前使用的图片模型名称
@@ -356,8 +357,14 @@ export const imageGenerationTool: MCPTool = {
 
   execute: async (params: Record<string, unknown>, options?: MCPExecuteOptions): Promise<MCPResult> => {
     console.log('[ImageGenerationTool] execute called with mode:', options?.mode);
-    const typedParams = params as unknown as ImageGenerationParams;
+    const rawParams = params as unknown as ImageGenerationParams;
     const mode = options?.mode || 'async';
+
+    // 规范化 size：将不在可用范围内的 size 自动转换为最接近的可用值
+    const typedParams: ImageGenerationParams = {
+      ...rawParams,
+      size: rawParams.size ? normalizeToClosestImageSize(rawParams.size, '1x1') : rawParams.size,
+    };
 
     if (mode === 'queue') {
       // 队列模式：直接使用 taskQueueService

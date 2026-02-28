@@ -417,7 +417,7 @@ class TaskQueueService {
   }
 
   /**
-   * Retries a failed task
+   * Retries a failed or cancelled task
    *
    * @param taskId - The task ID to retry
    */
@@ -428,8 +428,8 @@ class TaskQueueService {
       return;
     }
 
-    if (task.status !== TaskStatus.FAILED) {
-      console.warn(`[TaskQueueService] Task ${taskId} is not failed, cannot retry`);
+    if (task.status !== TaskStatus.FAILED && task.status !== TaskStatus.CANCELLED) {
+      console.warn(`[TaskQueueService] Task ${taskId} is not failed or cancelled, cannot retry`);
       return;
     }
 

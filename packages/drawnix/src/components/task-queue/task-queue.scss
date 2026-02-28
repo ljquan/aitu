@@ -135,6 +135,23 @@
     align-items: center;
     gap: 8px;
     margin-left: 12px; // 与任务列表的 checkbox 左边对齐
+
+    // 覆盖 TDesign Checkbox 默认样式为橙色主题
+    :global(.t-checkbox) {
+      &.t-is-checked .t-checkbox__input {
+        background-color: #F39C12;
+        border-color: #F39C12;
+      }
+
+      &.t-is-indeterminate .t-checkbox__input {
+        background-color: #F39C12;
+        border-color: #F39C12;
+      }
+
+      &:hover .t-checkbox__input {
+        border-color: #F39C12;
+      }
+    }
   }
 
   &__batch-count {
@@ -318,6 +335,23 @@
     align-items: flex-start;
     padding-top: 4px;
     padding-left: 16px; // 避开失败任务的红色竖线，同时与全选 checkbox 对齐
+
+    // 覆盖 TDesign Checkbox 默认样式为橙色主题
+    :global(.t-checkbox) {
+      &.t-is-checked .t-checkbox__input {
+        background-color: #F39C12;
+        border-color: #F39C12;
+      }
+
+      &.t-is-indeterminate .t-checkbox__input {
+        background-color: #F39C12;
+        border-color: #F39C12;
+      }
+
+      &:hover .t-checkbox__input {
+        border-color: #F39C12;
+      }
+    }
   }
 
   &__preview-wrapper {

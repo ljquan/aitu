@@ -21,6 +21,7 @@ import {
   Tags,
 } from 'lucide-react';
 import { KBUnifiedTree, SYSTEM_SKILL_NOTE_PREFIX } from './KBUnifiedTree';
+import { EXTERNAL_SKILL_NOTE_PREFIX, findExternalSkillById } from '../../constants/skills';
 import { KBNoteEditor } from './KBNoteEditor';
 import { SYSTEM_SKILLS } from '../../constants/skills';
 import { KBTagFilterDropdown } from './KBTagFilterDropdown';
@@ -443,6 +444,15 @@ const KnowledgeBaseContent: React.FC<KnowledgeBaseContentProps> = ({ initialNote
       const skillId = id.slice(SYSTEM_SKILL_NOTE_PREFIX.length);
       const skill = SYSTEM_SKILLS.find((s) => s.id === skillId);
       if (skill) {
+        // 从 mcpTool 名称推断 outputType
+        const IMAGE_TOOL_KEYWORDS = ['image', 'inspiration', 'grid_image'];
+        const PPT_TOOL_KEYWORDS = ['ppt'];
+        const inferredOutputType = skill.mcpTool && IMAGE_TOOL_KEYWORDS.some(k => skill.mcpTool!.includes(k))
+          ? 'image' as const
+          : skill.mcpTool && PPT_TOOL_KEYWORDS.some(k => skill.mcpTool!.includes(k))
+          ? 'ppt' as const
+          : undefined;
+
         const virtualNote: KBNote = {
           id,
           title: skill.name,
@@ -450,6 +460,32 @@ const KnowledgeBaseContent: React.FC<KnowledgeBaseContentProps> = ({ initialNote
           directoryId: '',
           createdAt: 0,
           updatedAt: 0,
+          metadata: {
+            ...(inferredOutputType ? { outputType: inferredOutputType } : {}),
+          },
+        };
+        setCurrentNote(virtualNote);
+        setNoteTags([]);
+      }
+      return;
+    }
+
+    // 外部 Skill 虚拟笔记：构造虚拟 KBNote 对象，不查询 IndexedDB
+    if (id.startsWith(EXTERNAL_SKILL_NOTE_PREFIX)) {
+      const externalSkillId = id.slice(EXTERNAL_SKILL_NOTE_PREFIX.length);
+      const externalSkill = findExternalSkillById(externalSkillId);
+      if (externalSkill) {
+        const virtualNote: KBNote = {
+          id,
+          title: externalSkill.name,
+          content: externalSkill.content || externalSkill.description || '',
+          directoryId: '',
+          createdAt: 0,
+          updatedAt: 0,
+          metadata: {
+            ...(externalSkill.outputType ? { outputType: externalSkill.outputType } : {}),
+            ...(externalSkill.category ? { category: externalSkill.category } : {}),
+          },
         };
         setCurrentNote(virtualNote);
         setNoteTags([]);
@@ -617,6 +653,11 @@ const KnowledgeBaseContent: React.FC<KnowledgeBaseContentProps> = ({ initialNote
     // 系统内置 Skill 笔记不可删除
     if (id.startsWith(SYSTEM_SKILL_NOTE_PREFIX)) {
       MessagePlugin.warning('系统内置 Skill，不可删除');
+      return;
+    }
+    // 外部 Skill 笔记不可删除
+    if (id.startsWith(EXTERNAL_SKILL_NOTE_PREFIX)) {
+      MessagePlugin.warning('外部 Skill，不可在此删除（请在设置中管理外部 Skill 包）');
       return;
     }
 
@@ -997,9 +1038,13 @@ const KnowledgeBaseContent: React.FC<KnowledgeBaseContentProps> = ({ initialNote
             note={currentNote}
             allTags={allTags}
             noteTags={noteTags}
-            readOnly={!!(selectedNoteId && selectedNoteId.startsWith(SYSTEM_SKILL_NOTE_PREFIX))}
+            readOnly={!!(selectedNoteId && (selectedNoteId.startsWith(SYSTEM_SKILL_NOTE_PREFIX) || selectedNoteId.startsWith(EXTERNAL_SKILL_NOTE_PREFIX)))}
             isSkillDirectory={
-              !!(currentNote && directories.find(d => d.id === currentNote.directoryId)?.name === 'Skill')
+              !!(currentNote && (
+                directories.find(d => d.id === currentNote.directoryId)?.name === 'Skill'
+                || (selectedNoteId && selectedNoteId.startsWith(SYSTEM_SKILL_NOTE_PREFIX))
+                || (selectedNoteId && selectedNoteId.startsWith(EXTERNAL_SKILL_NOTE_PREFIX))
+              ))
             }
             onUpdateNote={handleUpdateNote}
             onSetNoteTags={handleSetNoteTags}

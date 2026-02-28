@@ -798,6 +798,12 @@
     pointer-events: auto;
   }
 
+  &__content-overlay {
+    pointer-events: auto;
+    z-index: 1;
+    transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
   &__controls {
     position: absolute;
     bottom: 16px;
