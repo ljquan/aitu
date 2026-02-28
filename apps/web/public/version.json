@@ -1,6 +1,6 @@
 {
   "version": "0.6.3",
-  "buildTime": "2026-02-28T02:59:55.948Z",
+  "buildTime": "2026-02-28T03:04:08.194Z",
   "gitCommit": "unknown",
   "changelog": [
     "修复 GitHub Actions CI 配置以支持 pnpm",

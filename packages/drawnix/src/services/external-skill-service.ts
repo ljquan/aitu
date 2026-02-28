@@ -45,7 +45,7 @@ export interface ExternalSkillMeta {
   source: string;
   sourceUrl?: string;
   category?: string;
-  outputType?: 'image' | 'text';
+  outputType?: 'image' | 'text' | 'video' | 'ppt';
 }
 
 /** 内存中的包元数据列表 */
@@ -139,7 +139,7 @@ async function initialize(): Promise<void> {
 async function loadPrebuiltBundle(): Promise<ExternalSkillPackage | null> {
   try {
     // 动态导入 JSON bundle（Vite 会在构建时内联）
-    const bundle = await import('../generated/external-skills-bundle.json');
+    const bundle = await import('../generated/external-skills-bundle.json') as { default?: ExternalSkillPackage; } & ExternalSkillPackage;
     return bundle.default || bundle;
   } catch {
     // bundle 文件不存在时静默忽略
