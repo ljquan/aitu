@@ -1,3 +1,27 @@
+## 0.6.4 (2026-02-28)
+
+### 🚀 Features
+
+- 优化Service Worker激活和CDN策略 ([e8ec6272](https://github.com/ljquan/aitu/commit/e8ec6272))
+- 引入baoyu-skill ([5b04670b](https://github.com/ljquan/aitu/commit/5b04670b))
+
+### 🩹 Fixes
+
+- 修复 GitHub Actions CI 配置以支持 pnpm ([582b46cc](https://github.com/ljquan/aitu/commit/582b46cc))
+
+### 🔧 Chores
+
+- bump version to 0.6.3 ([28217b94](https://github.com/ljquan/aitu/commit/28217b94))
+- 多文件禁用缓存确保版本与日志数据实时更新 ([099d8807](https://github.com/ljquan/aitu/commit/099d8807))
+- 升级版本至0.6.2并更新构建时间与版本信息 ([f3b13616](https://github.com/ljquan/aitu/commit/f3b13616))
+- 优化 ([60a5d1d4](https://github.com/ljquan/aitu/commit/60a5d1d4))
+- refactor: 模型命名重构与功能增强 ([1bd8048a](https://github.com/ljquan/aitu/commit/1bd8048a))
+
+### ❤️  Thank You
+
+- liquidliang <ljquan@qq.com>
+- gongchengtu <1817063960@qq.com>
+
 ## 0.6.3 (2026-02-28)
 
 ### 🚀 Features

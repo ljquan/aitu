@@ -1,6 +1,25 @@
 {
   "versions": [
     {
+      "version": "0.6.4",
+      "date": "2026-02-28",
+      "changes": {
+        "features": [
+          "优化Service Worker激活和CDN策略",
+          "引入baoyu-skill"
+        ],
+        "fixes": [
+          "修复 GitHub Actions CI 配置以支持 pnpm"
+        ],
+        "improvements": [
+          "多文件禁用缓存确保版本与日志数据实时更新",
+          "升级版本至0.6.2并更新构建时间与版本信息"
+        ]
+      },
+      "type": "patch",
+      "highlights": "优化Service Worker激活和CDN策略"
+    },
+    {
       "version": "0.6.3",
       "date": "2026-02-28",
       "changes": {
