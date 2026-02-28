@@ -121,13 +121,17 @@ function precacheManifestPlugin(): Plugin {
 // 检测是否在 watch 模式下运行（命令行包含 --watch）
 const isWatchMode = process.argv.includes('--watch');
 
-export default defineConfig({
-  root: __dirname,
-  cacheDir: '../../node_modules/.vite/apps/web',
+export default defineConfig(({ command }) => {
+  // 生产构建默认使用 CDN，首次访问即走 CDN 下载 JS/CSS，不依赖 SW
+  // 可通过 VITE_BASE_URL=./ 禁用 CDN 回退到相对路径
+  const cdnBase = `https://unpkg.com/aitu-app@${appVersion}/`;
+  const base = process.env.VITE_BASE_URL || (command === 'build' ? cdnBase : './');
 
-  // 使用相对路径，支持 CDN 部署（如 unpkg、jsdelivr）
-  // 可通过环境变量 VITE_BASE_URL 自定义，默认使用相对路径
-  base: process.env.VITE_BASE_URL || './',
+  return {
+    root: __dirname,
+    cacheDir: '../../node_modules/.vite/apps/web',
+
+    base,
 
   define: {
     'import.meta.env.VITE_APP_VERSION': JSON.stringify(appVersion),
@@ -182,4 +186,5 @@ export default defineConfig({
       transformMixedEsModules: true,
     },
   },
+};
 });

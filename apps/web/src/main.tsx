@@ -160,76 +160,64 @@ if ('serviceWorker' in navigator) {
   // Global reference to service worker registration
   let swRegistration: ServiceWorkerRegistration | null = null;
 
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js')
-      .then(registration => {
-        // console.log('Service Worker registered successfully:', registration);
-        swRegistration = registration;
+  // Register immediately for faster activation
+  navigator.serviceWorker.register('/sw.js')
+    .then(registration => {
+      swRegistration = registration;
 
-        // 在开发模式下，强制检查更新并处理等待中的Worker
-        if (isDevelopment) {
-          // console.log('Development mode: forcing SW update check');
-          registration.update().catch(err => console.warn('Forced update check failed:', err));
-          
-          if (registration.waiting) {
-            registration.waiting.postMessage({ type: 'SKIP_WAITING' });
-          }
+      // 在开发模式下，强制检查更新并处理等待中的Worker
+      if (isDevelopment) {
+        registration.update().catch(err => console.warn('Forced update check failed:', err));
+        
+        if (registration.waiting) {
+          registration.waiting.postMessage({ type: 'SKIP_WAITING' });
         }
-        
-        // 监听Service Worker更新
-        registration.addEventListener('updatefound', () => {
-          const newWorker = registration.installing;
-          if (newWorker) {
-            // console.log('New Service Worker found, installing...');
-            
-            newWorker.addEventListener('statechange', () => {
-              if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                // console.log('New Service Worker installed, waiting for user confirmation...');
-                pendingWorker = newWorker;
-                
-                // 在开发模式下自动激活新的Service Worker
-                if (isDevelopment) {
-                  // console.log('Development mode: activating new Service Worker immediately');
-                  newWorker.postMessage({ type: 'SKIP_WAITING' });
-                } else {
-                  // 生产模式：新版本已安装，通知 UI 显示升级提示
-                  // console.log('Production mode: New version installed, dispatching update event');
-                  newVersionReady = true;
-                  // 尝试获取新版本号，用于更新提示
-                  fetch(`/version.json?t=${Date.now()}`)
-                    .then(res => res.ok ? res.json() : null)
-                    .then(data => {
-                      window.dispatchEvent(new CustomEvent('sw-update-available', { 
-                        detail: { version: data?.version || 'new' } 
-                      }));
-                    })
-                    .catch(() => {
-                      window.dispatchEvent(new CustomEvent('sw-update-available', { 
-                        detail: { version: 'new' } 
-                      }));
-                    });
-                }
+      }
+      
+      // 监听Service Worker更新
+      registration.addEventListener('updatefound', () => {
+        const newWorker = registration.installing;
+        if (newWorker) {
+          newWorker.addEventListener('statechange', () => {
+            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+              pendingWorker = newWorker;
+              
+              // 在开发模式下自动激活新的Service Worker
+              if (isDevelopment) {
+                newWorker.postMessage({ type: 'SKIP_WAITING' });
+              } else {
+                // 生产模式：新版本已安装，通知 UI 显示升级提示
+                newVersionReady = true;
+                // 尝试获取新版本号，用于更新提示
+                fetch(`/version.json?t=${Date.now()}`)
+                  .then(res => res.ok ? res.json() : null)
+                  .then(data => {
+                    window.dispatchEvent(new CustomEvent('sw-update-available', { 
+                      detail: { version: data?.version || 'new' } 
+                    }));
+                  })
+                  .catch(() => {
+                    window.dispatchEvent(new CustomEvent('sw-update-available', { 
+                      detail: { version: 'new' } 
+                    }));
+                  });
               }
-            });
-          }
-        });
-        
-        // 定期检查更新（每 5 分钟检查一次）
-        setInterval(() => {
-          // console.log('Checking for updates...');
-          registration.update().catch(error => {
-            console.warn('Update check failed:', error);
+            }
           });
-        }, 5 * 60 * 1000);
-        
-        // 注意：不自动清理图片和视频缓存，这些是用户生成的内容
-        // 只在用户手动操作时（如媒体库中删除）才清理
-        
-      })
-      .catch(error => {
-        // console.log('Service Worker registration failed:', error);
+        }
       });
-  });
+      
+      // 定期检查更新（每 5 分钟检查一次）
+      setInterval(() => {
+        registration.update().catch(error => {
+          console.warn('Update check failed:', error);
+        });
+      }, 5 * 60 * 1000);
+      
+    })
+    .catch(error => {
+      // console.log('Service Worker registration failed:', error);
+    });
   
   // 设置 SW 事件处理器（通过 postmessage-duplex）
   const setupSWEventHandlers = () => {

@@ -1115,17 +1115,15 @@ async function precacheStaticFiles(
 }
 
 sw.addEventListener('install', (event: ExtendableEvent) => {
+  // 立即 skipWaiting，不等待 precache 完成
+  // 这样 SW 可以尽快进入 activate → claim，拦截后续的 JS/CSS 请求
+  // precache 在后台继续执行，cache miss 时走 CDN 回退
+  sw.skipWaiting();
 
-  const installPromises: Promise<any>[] = [];
-
-  // Load failed domains from database
-  installPromises.push(loadFailedDomains());
-
-  // 预缓存静态资源（通过 manifest 文件是否存在来判断是否需要预缓存）
-  // - 构建产物有 precache-manifest.json → 预缓存
-  // - 开发模式没有此文件 → 跳过预缓存
-  installPromises.push(
+  // 后台预缓存，不阻塞激活
+  event.waitUntil(
     (async () => {
+      await loadFailedDomains();
       try {
         const files = await loadPrecacheManifest();
         if (files && files.length > 0) {
@@ -1134,44 +1132,26 @@ sw.addEventListener('install', (event: ExtendableEvent) => {
         }
       } catch (err) {
         console.warn('Service Worker: Precache failed:', err);
-        // 预缓存失败不应该阻止 SW 安装
       }
     })()
-  );
-
-  event.waitUntil(
-    Promise.all(installPromises).then(async () => {
-
-      // 判断是否是版本更新的最可靠方式：检查是否存在旧版本的缓存
-      // 旧版本缓存名称包含版本号，只有在版本变化时才会不同
-      const cacheNames = await caches.keys();
-      const hasOldStaticCache = cacheNames.some(
-        (name) =>
-          name.startsWith('drawnix-static-v') && name !== STATIC_CACHE_NAME
-      );
-      const hasOldAppCache = cacheNames.some(
-        (name) =>
-          name.startsWith('drawnix-v') &&
-          name !== CACHE_NAME &&
-          name !== IMAGE_CACHE_NAME &&
-          !name.startsWith('drawnix-static-v')
-      );
-
-      // 只有存在旧版本缓存时，才认为是版本更新
-      const isUpdate = hasOldStaticCache || hasOldAppCache;
-
-      // console.log(`Service Worker: isUpdate=${isUpdate}, oldStatic=${hasOldStaticCache}, oldApp=${hasOldAppCache}`);
-
-      // 预缓存完成后，直接激活新 SW，不等待用户确认
-      // 这样可以确保用户总是使用最新版本
-      // 注意：这不会强制刷新页面，只是让新 SW 接管控制权
-      sw.skipWaiting();
-    })
   );
 });
 
 sw.addEventListener('activate', (event: ExtendableEvent) => {
   // console.log('Service Worker activated');
+
+  // 立即接管所有页面，不等待缓存清理
+  // 这样可以确保 SW 尽快生效，拦截后续请求（如下载失败的 JS/CSS）
+  event.waitUntil(
+    (async () => {
+      await sw.clients.claim();
+      // 使用 channelManager 通知所有客户端 SW 已更新
+      const cm = getChannelManager();
+      if (cm) {
+        cm.sendSWActivated(APP_VERSION);
+      }
+    })()
+  );
 
   // 迁移旧的图片缓存并清理过期缓存
   // 重要：延迟清理旧版本的静态资源缓存，避免升级时资源加载失败
@@ -1255,14 +1235,7 @@ sw.addEventListener('activate', (event: ExtendableEvent) => {
         console.warn('Failed to cleanup expired console logs:', err);
       });
 
-      // 立即接管所有页面
-      await sw.clients.claim();
 
-      // 使用 channelManager 通知所有客户端 SW 已更新
-      const cm = getChannelManager();
-      if (cm) {
-        cm.sendSWActivated(APP_VERSION);
-      }
     })
   );
 });
@@ -3433,26 +3406,26 @@ async function handleStaticRequest(request: Request): Promise<Response> {
   // CDN 优先策略：暂时禁用，等 npm 包发布后再启用
   // TODO: npm publish aitu-app 后取消注释下面的代码
   // ============================================
-  // if (isStaticResource) {
-  //   try {
-  //     console.log(`[SW CDN] Trying CDN first for: ${resourcePath}`);
-  //     const cdnResult = await fetchFromCDNWithFallback(
-  //       resourcePath,
-  //       APP_VERSION,
-  //       location.origin
-  //     );
-  //
-  //     if (cdnResult && cdnResult.response.ok) {
-  //       console.log(`[SW CDN] Success from ${cdnResult.source}: ${resourcePath}`);
-  //       // 缓存成功的响应
-  //       const responseToCache = cdnResult.response.clone();
-  //       cache.put(request, responseToCache);
-  //       return cdnResult.response;
-  //     }
-  //   } catch (cdnError) {
-  //     console.warn('[SW CDN] CDN sources failed, trying local server:', cdnError);
-  //   }
-  // }
+  if (isStaticResource) {
+    try {
+      // console.log(`[SW CDN] Trying CDN first for: ${resourcePath}`);
+      const cdnResult = await fetchFromCDNWithFallback(
+        resourcePath,
+        APP_VERSION,
+        location.origin
+      );
+
+      if (cdnResult && cdnResult.response.ok) {
+        // console.log(`[SW CDN] Success from ${cdnResult.source}: ${resourcePath}`);
+        // 缓存成功的响应
+        const responseToCache = cdnResult.response.clone();
+        cache.put(request, responseToCache);
+        return cdnResult.response;
+      }
+    } catch (cdnError) {
+      console.warn('[SW CDN] CDN sources failed, trying local server:', cdnError);
+    }
+  }
 
   // 回退到本地服务器（开发模式或 CDN 失败）
   try {
