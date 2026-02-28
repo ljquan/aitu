@@ -1,3 +1,18 @@
+## 0.6.5 (2026-02-28)
+
+### 🚀 Features
+
+- 优化Service Worker激活和CDN策略 ([e8ec6272](https://github.com/ljquan/aitu/commit/e8ec6272))
+
+### 🔧 Chores
+
+- bump version to 0.6.4 ([42f24424](https://github.com/ljquan/aitu/commit/42f24424))
+- 优化 ([60a5d1d4](https://github.com/ljquan/aitu/commit/60a5d1d4))
+
+### ❤️  Thank You
+
+- liquidliang <ljquan@qq.com>
+
 ## 0.6.4 (2026-02-28)
 
 ### 🚀 Features

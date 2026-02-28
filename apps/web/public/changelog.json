@@ -1,6 +1,19 @@
 {
   "versions": [
     {
+      "version": "0.6.5",
+      "date": "2026-02-28",
+      "changes": {
+        "features": [
+          "优化Service Worker激活和CDN策略"
+        ],
+        "fixes": [],
+        "improvements": []
+      },
+      "type": "patch",
+      "highlights": "优化Service Worker激活和CDN策略"
+    },
+    {
       "version": "0.6.4",
       "date": "2026-02-28",
       "changes": {
