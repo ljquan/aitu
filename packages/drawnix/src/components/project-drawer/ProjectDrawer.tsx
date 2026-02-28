@@ -38,6 +38,7 @@ import {
   DownloadIcon,
   UploadIcon,
   ViewListIcon,
+  LayersIcon,
 } from 'tdesign-icons-react';
 import { useWorkspace } from '../../hooks/useWorkspace';
 import {
@@ -51,6 +52,7 @@ import { BaseDrawer } from '../side-drawer';
 import { workspaceExportService } from '../../services/workspace-export-service';
 import { safeReload } from '../../utils/active-tasks';
 import { FramePanel } from './FramePanel';
+import { LayerPanel } from './LayerPanel';
 import './project-drawer.scss';
 
 export interface ProjectDrawerProps {
@@ -948,7 +950,7 @@ export const ProjectDrawer: React.FC<ProjectDrawerProps> = ({
     switchBoard,
   } = useWorkspace();
 
-  const [activeTab, setActiveTab] = useState<'boards' | 'frames'>('boards');
+  const [activeTab, setActiveTab] = useState<'boards' | 'frames' | 'layers'>('boards');
   const [searchQuery, setSearchQuery] = useState('');
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<{
@@ -1428,6 +1430,14 @@ export const ProjectDrawer: React.FC<ProjectDrawerProps> = ({
         <ViewListIcon />
         Frame 管理
       </button>
+      <button
+        type="button"
+        className={`project-drawer-tabs__tab${activeTab === 'layers' ? ' project-drawer-tabs__tab--active' : ''}`}
+        onClick={() => setActiveTab('layers')}
+      >
+        <LayersIcon />
+        图层
+      </button>
     </div>
   );
 
@@ -1538,7 +1548,9 @@ export const ProjectDrawer: React.FC<ProjectDrawerProps> = ({
         contentClassName="project-drawer__content"
         data-testid="project-drawer"
       >
-        {activeTab === 'frames' ? (
+        {activeTab === 'layers' ? (
+          <LayerPanel />
+        ) : activeTab === 'frames' ? (
           <FramePanel />
         ) : isLoading ? (
           <div className="project-drawer__loading">加载中...</div>
