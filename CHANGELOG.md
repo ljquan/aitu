@@ -1,3 +1,13 @@
+## 0.6.6 (2026-02-28)
+
+### 🔧 Chores
+
+- bump version to 0.6.5 ([c8c22e00](https://github.com/ljquan/aitu/commit/c8c22e00))
+
+### ❤️  Thank You
+
+- liquidliang <ljquan@qq.com>
+
 ## 0.6.5 (2026-02-28)
 
 ### 🚀 Features

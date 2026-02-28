@@ -1,8 +1,6 @@
 {
-  "version": "0.6.5",
-  "buildTime": "2026-02-28T09:09:40.096Z",
+  "version": "0.6.6",
+  "buildTime": "2026-02-28T09:19:39.515Z",
   "gitCommit": "unknown",
-  "changelog": [
-    "优化Service Worker激活和CDN策略"
-  ]
+  "changelog": []
 }
