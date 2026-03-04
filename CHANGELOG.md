@@ -1,3 +1,27 @@
+## 0.6.7 (2026-03-04)
+
+### 🚀 Features
+
+- 添加图层 ([74fc6e51](https://github.com/ljquan/aitu/commit/74fc6e51))
+- 优化Service Worker激活和CDN策略 ([e8ec6272](https://github.com/ljquan/aitu/commit/e8ec6272))
+- 引入baoyu-skill ([5b04670b](https://github.com/ljquan/aitu/commit/5b04670b))
+
+### 🔧 Chores
+
+- 更新版本至0.6.6并调整CDN优先级 ([21a5d6ff](https://github.com/ljquan/aitu/commit/21a5d6ff))
+- bump version to 0.6.6 ([95f54096](https://github.com/ljquan/aitu/commit/95f54096))
+- bump version to 0.6.5 ([c8c22e00](https://github.com/ljquan/aitu/commit/c8c22e00))
+- bump version to 0.6.4 ([42f24424](https://github.com/ljquan/aitu/commit/42f24424))
+- bump version to 0.6.3 ([28217b94](https://github.com/ljquan/aitu/commit/28217b94))
+- refactor: replace video with tutorial link in settings dialog and auth components ([94675952](https://github.com/ljquan/aitu/commit/94675952))
+- 优化 ([60a5d1d4](https://github.com/ljquan/aitu/commit/60a5d1d4))
+
+### ❤️  Thank You
+
+- liquid <ljquan@qq.com>
+- liangyufeng <l.yfeng@qq.com>
+- liquidliang <ljquan@qq.com>
+
 ## 0.6.6 (2026-02-28)
 
 ### 🔧 Chores
