@@ -103,11 +103,25 @@ export const SettingsDialog = ({
                       api.tu-zi.com/token
                     </a>
                     <br />
-                    <video
-                      src="https://cc-im-kefu-1256921685.7moor-fs1.com/im/4d2c3f00-7d4c-11e5-af15-41bf63ae4ea0/1440d4ac-7e9d-4ab2-8e80-4f0632796b3f/1.jpg"
-                      controls
-                      style={{ marginTop: 6, width: 240, display: 'block', borderRadius: 4 }}
-                    />
+                    <a
+                      href="https://www.bilibili.com/video/BV1k4PqzPEKz/"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        marginTop: 6,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 4,
+                        padding: '4px 10px',
+                        background: '#fb7299',
+                        color: '#fff',
+                        borderRadius: 4,
+                        fontSize: 12,
+                        textDecoration: 'none',
+                      }}
+                    >
+                      ▶ 观看视频教程 (B站)
+                    </a>
                   </div>
                 }
                 placement="top"
