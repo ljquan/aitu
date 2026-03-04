@@ -5,7 +5,7 @@ import { useI18n } from '../../i18n';
 import { type Language } from '../../constants/prompts';
 import { useTaskQueue } from '../../hooks/useTaskQueue';
 import { TaskType } from '../../types/task.types';
-import { MessagePlugin } from 'tdesign-react';
+import { MessagePlugin, Checkbox, Tooltip } from 'tdesign-react';
 import { useGenerationHistory } from '../../hooks/useGenerationHistory';
 import { ModelDropdown } from '../ai-input-bar/ModelDropdown';
 import { ParametersDropdown } from '../ai-input-bar/ParametersDropdown';
@@ -28,6 +28,7 @@ import {
   convertAspectRatioToSize,
 } from '../../constants/image-aspect-ratios';
 import { DialogTaskList } from '../task-queue/DialogTaskList';
+import { LS_KEYS } from '../../constants/storage-keys';
 import { geminiSettings } from '../../utils/settings-manager';
 import { promptForApiKey } from '../../utils/gemini-api';
 import { buildMJPromptSuffix } from '../../utils/mj-params';
@@ -74,6 +75,14 @@ const AIImageGeneration = ({
   const [error, setError] = useState<string | null>(null);
   const [uploadedImages, setUploadedImages] =
     useState<ReferenceImage[]>(initialImages);
+  const [autoInsertToCanvas, setAutoInsertToCanvas] = useState(() => {
+    try {
+      const saved = localStorage.getItem(LS_KEYS.AI_IMAGE_AUTO_INSERT);
+      return saved !== 'false';
+    } catch {
+      return true;
+    }
+  });
 
   // 任务列表面板状态 - 使用像素宽度
   const [isTaskListVisible, setIsTaskListVisible] = useState(true);
@@ -127,6 +136,15 @@ const AIImageGeneration = ({
   // 切换任务列表显示/隐藏
   const handleToggleTaskList = useCallback(() => {
     setIsTaskListVisible((prev) => !prev);
+  }, []);
+
+  const handleAutoInsertChange = useCallback((checked: boolean) => {
+    setAutoInsertToCanvas(checked);
+    try {
+      localStorage.setItem(LS_KEYS.AI_IMAGE_AUTO_INSERT, String(checked));
+    } catch {
+      // localStorage not available
+    }
   }, []);
 
   // 处理 props 变化，更新内部状态
@@ -381,7 +399,7 @@ const AIImageGeneration = ({
             batchId,
             batchIndex: i + 1,
             batchTotal: count,
-            autoInsertToCanvas: true,
+            autoInsertToCanvas,
             targetFrameId,
             targetFrameDimensions,
             ...(extraParams ? { params: extraParams } : {}),
@@ -447,7 +465,7 @@ const AIImageGeneration = ({
         model: currentImageModel,
         // 保存上传的图片（已转换为可序列化的格式）
         uploadedImages: convertedImages,
-        autoInsertToCanvas: true,
+        autoInsertToCanvas,
         // 始终包含 batchId 以跳过重复检测
         batchId: `image_single_${Date.now()}`,
         batchIndex: 1,
@@ -590,13 +608,27 @@ const AIImageGeneration = ({
             onGenerate={handleGenerate}
             onReset={handleReset}
             leftContent={
-              isMJModel ? null : (
-                <AspectRatioSelector
-                  value={aspectRatio}
-                  onChange={setAspectRatio}
-                  compact={true}
-                />
-              )
+              <>
+                <Tooltip
+                  content={language === 'zh' ? '生成后自动插入画布' : 'Auto insert to canvas after generation'}
+                  theme="light"
+                >
+                  <Checkbox
+                    checked={autoInsertToCanvas}
+                    onChange={handleAutoInsertChange}
+                    className="auto-insert-checkbox"
+                  >
+                    {language === 'zh' ? '插入画布' : 'Insert'}
+                  </Checkbox>
+                </Tooltip>
+                {!isMJModel && (
+                  <AspectRatioSelector
+                    value={aspectRatio}
+                    onChange={setAspectRatio}
+                    compact={true}
+                  />
+                )}
+              </>
             }
           />
         </div>

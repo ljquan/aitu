@@ -6,7 +6,7 @@
  */
 
 import React, { useMemo, useEffect, useRef, useState, useCallback } from 'react';
-import { Trash2, RotateCcw } from 'lucide-react';
+import { Trash2, RotateCcw, EyeOff } from 'lucide-react';
 import type { WorkflowMessageData } from '../../types/chat.types';
 import './workzone-content.scss';
 
@@ -32,6 +32,8 @@ interface WorkZoneContentProps {
   onWorkflowStateChange?: (workflowId: string, status: 'completed' | 'failed', error?: string) => void;
   /** 从失败步骤重试工作流 */
   onRetry?: (workflow: WorkflowMessageData, stepIndex: number) => Promise<void>;
+  /** 永远不再显示 WorkZone 卡片 */
+  onHideForever?: () => void;
 }
 
 export const WorkZoneContent: React.FC<WorkZoneContentProps> = ({
@@ -40,10 +42,12 @@ export const WorkZoneContent: React.FC<WorkZoneContentProps> = ({
   onDelete,
   onWorkflowStateChange,
   onRetry,
+  onHideForever,
 }) => {
   // 用于追踪是否已经尝试 claim
   const hasClaimedRef = useRef(false);
   const [isRetrying, setIsRetrying] = useState(false);
+  const [showHideConfirm, setShowHideConfirm] = useState(false);
 
   // 页面刷新后，尝试接管工作流或同步状态
   // 注意：只对"旧"工作流执行 claim，新创建的工作流不需要 claim
@@ -234,6 +238,19 @@ export const WorkZoneContent: React.FC<WorkZoneContentProps> = ({
     }
   }, [onRetry, workflow, firstFailedStepIndex, isRetrying]);
 
+  const handleHideForeverClick = useCallback(() => {
+    setShowHideConfirm(true);
+  }, []);
+
+  const handleHideConfirm = useCallback(() => {
+    setShowHideConfirm(false);
+    onHideForever?.();
+  }, [onHideForever]);
+
+  const handleHideCancel = useCallback(() => {
+    setShowHideConfirm(false);
+  }, []);
+
   return (
     <div
       className={`workzone-content workzone-content--${workflowStatus.status} ${className}`}
@@ -245,6 +262,32 @@ export const WorkZoneContent: React.FC<WorkZoneContentProps> = ({
         <span className={`workzone-content__status workzone-content__status--${workflowStatus.status}`}>
           {statusLabel}
         </span>
+        {/* 不再显示按钮 */}
+        {onHideForever && (
+          <button
+            className="workzone-content__hide-btn"
+            onPointerDown={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+            }}
+            onPointerUp={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              handleHideForeverClick();
+            }}
+            onMouseDown={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+            }}
+            onClick={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+            }}
+            title="不再显示"
+          >
+            <EyeOff size={14} />
+          </button>
+        )}
         {/* 删除按钮 - 始终显示（如果有 onDelete 回调） */}
         {onDelete && (
           <button
@@ -352,6 +395,43 @@ export const WorkZoneContent: React.FC<WorkZoneContentProps> = ({
       {workflowStatus.status === 'completed' && (
         <div className="workzone-content__success">
           ✨ 已完成
+        </div>
+      )}
+
+      {/* 二次确认弹窗 */}
+      {showHideConfirm && (
+        <div
+          className="workzone-content__confirm-overlay"
+          onPointerDown={(e) => { e.stopPropagation(); e.preventDefault(); }}
+          onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); }}
+        >
+          <div className="workzone-content__confirm-dialog">
+            <p className="workzone-content__confirm-text">
+              确定不再显示进度卡片？
+              <br />
+              <span className="workzone-content__confirm-hint">任务仍会在后台执行，可在设置中恢复显示</span>
+            </p>
+            <div className="workzone-content__confirm-actions">
+              <button
+                className="workzone-content__confirm-btn workzone-content__confirm-btn--cancel"
+                onPointerDown={(e) => { e.stopPropagation(); e.preventDefault(); }}
+                onPointerUp={(e) => { e.stopPropagation(); e.preventDefault(); handleHideCancel(); }}
+                onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); }}
+                onClick={(e) => { e.stopPropagation(); e.preventDefault(); }}
+              >
+                取消
+              </button>
+              <button
+                className="workzone-content__confirm-btn workzone-content__confirm-btn--confirm"
+                onPointerDown={(e) => { e.stopPropagation(); e.preventDefault(); }}
+                onPointerUp={(e) => { e.stopPropagation(); e.preventDefault(); handleHideConfirm(); }}
+                onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); }}
+                onClick={(e) => { e.stopPropagation(); e.preventDefault(); }}
+              >
+                确定
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

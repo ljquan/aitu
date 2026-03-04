@@ -28,12 +28,23 @@ import type { WorkflowMessageData } from '../types/chat.types';
 import { WorkZoneContent } from '../components/workzone-element/WorkZoneContent';
 import { ToolProviderWrapper } from '../components/toolbox-drawer/ToolProviderWrapper';
 import { workflowStatusSyncService } from '../services/workflow-status-sync';
+import { LS_KEYS } from '../constants/storage-keys';
 
 /**
  * 判断是否为 WorkZone 元素
  */
 export function isWorkZoneElement(element: any): element is PlaitWorkZone {
   return element && element.type === 'workzone';
+}
+
+const WORKZONE_VISIBILITY_EVENT = 'workzone-visibility-changed';
+
+function isWorkZoneCardVisible(): boolean {
+  try {
+    return localStorage.getItem(LS_KEYS.WORKZONE_CARD_VISIBLE) !== 'false';
+  } catch {
+    return true;
+  }
 }
 
 /**
@@ -76,7 +87,8 @@ export class WorkZoneComponent extends CommonElementFlavour<PlaitWorkZone, Plait
     // 渲染 React 内容
     this.renderContent();
 
-    // console.log('[WorkZone] Element initialized:', this.element.id);
+    // 监听全局可见性变化事件
+    window.addEventListener(WORKZONE_VISIBILITY_EVENT, this.handleVisibilityChange);
   }
 
   /**
@@ -161,6 +173,23 @@ export class WorkZoneComponent extends CommonElementFlavour<PlaitWorkZone, Plait
   };
 
   /**
+   * 永远不再显示 WorkZone 卡片
+   */
+  private handleHideForever = (): void => {
+    try {
+      localStorage.setItem(LS_KEYS.WORKZONE_CARD_VISIBLE, 'false');
+    } catch {
+      // localStorage not available
+    }
+    window.dispatchEvent(new CustomEvent(WORKZONE_VISIBILITY_EVENT));
+  };
+
+  private handleVisibilityChange = (): void => {
+    if (!this.container) return;
+    this.container.style.display = isWorkZoneCardVisible() ? '' : 'none';
+  };
+
+  /**
    * 处理工作流重试（从失败步骤开始）
    */
   private handleRetry = async (workflow: WorkflowMessageData, stepIndex: number): Promise<void> => {
@@ -179,6 +208,9 @@ export class WorkZoneComponent extends CommonElementFlavour<PlaitWorkZone, Plait
   private renderContent(): void {
     if (!this.container) return;
 
+    // 根据设置控制初始可见性
+    this.container.style.display = isWorkZoneCardVisible() ? '' : 'none';
+
     // 创建 React root
     this.reactRoot = createRoot(this.container);
     this.reactRoot.render(
@@ -188,6 +220,7 @@ export class WorkZoneComponent extends CommonElementFlavour<PlaitWorkZone, Plait
           onDelete: this.handleDelete,
           onWorkflowStateChange: this.handleWorkflowStateChange,
           onRetry: this.handleRetry,
+          onHideForever: this.handleHideForever,
         })
       )
     );
@@ -226,6 +259,7 @@ export class WorkZoneComponent extends CommonElementFlavour<PlaitWorkZone, Plait
               onDelete: this.handleDelete,
               onWorkflowStateChange: this.handleWorkflowStateChange,
               onRetry: this.handleRetry,
+              onHideForever: this.handleHideForever,
             })
           )
         );
@@ -286,7 +320,7 @@ export class WorkZoneComponent extends CommonElementFlavour<PlaitWorkZone, Plait
    * 销毁
    */
   destroy(): void {
-    // console.log('[WorkZone] destroy() called for:', this.element?.id);
+    window.removeEventListener(WORKZONE_VISIBILITY_EVENT, this.handleVisibilityChange);
 
     // 取消状态同步订阅
     if (this.statusSyncUnsubscribe) {

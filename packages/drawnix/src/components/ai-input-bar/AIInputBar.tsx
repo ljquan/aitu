@@ -1381,6 +1381,23 @@ const userOutputType = (userNote.metadata?.outputType as 'image' | 'text' | 'vid
       // Fallback: 主线程执行（仅当 SW 不可用时）
       console.log('[AIInputBar] Fallback: Executing workflow in main thread:', workflow.steps.length, 'steps');
 
+      // 工作流已提交，立即保存历史、清空输入并解锁，步骤执行在后台继续
+      if (prompt.trim()) {
+        const hasSelection = allContent.length > 0;
+        const modelTypeForHistory = generationType === 'text' ? 'agent' : generationType;
+        addPromptHistory(prompt.trim(), hasSelection, modelTypeForHistory);
+      }
+      setPrompt('');
+      setSelectedContent([]);
+      setUploadedContent([]);
+      if (submitCooldownRef.current) {
+        clearTimeout(submitCooldownRef.current);
+      }
+      submitCooldownRef.current = setTimeout(() => {
+        setIsSubmitting(false);
+        submitCooldownRef.current = null;
+      }, 1000);
+
       const createdTaskIds: string[] = [];
 
       // 收集动态添加的步骤（用于后续执行）
@@ -1608,14 +1625,6 @@ const userOutputType = (userNote.metadata?.outputType as 'image' | 'text' | 'vid
         }
       }
 
-      // 保存提示词到历史记录（只保存有实际内容的提示词）
-      if (prompt.trim()) {
-        const hasSelection = allContent.length > 0;
-        // 将 generationType 'text' 映射为 'agent' 用于历史记录
-        const modelTypeForHistory = generationType === 'text' ? 'agent' : generationType;
-        addPromptHistory(prompt.trim(), hasSelection, modelTypeForHistory);
-      }
-
       // 检查工作流是否已完成（所有步骤都是 completed 或 failed/skipped）
       // 如果没有创建任务（createdTaskIds 为空），则立即删除 WorkZone
       const finalWorkflow = workflowControl.getWorkflow();
@@ -1653,12 +1662,6 @@ const userOutputType = (userNote.metadata?.outputType as 'image' | 'text' | 'vid
         }
       }
 
-      // 清空输入，保持面板打开以便用户继续创作
-      setPrompt('');
-      setSelectedContent([]);
-      setUploadedContent([]); // 同时清空用户上传内容
-      // 不关闭面板，让用户可以继续输入
-      setIsSubmitting(false);
     } catch (error) {
       console.error('Failed to create generation task:', error);
       workflowControl.abortWorkflow();

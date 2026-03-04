@@ -115,6 +115,18 @@
   &.unified-action-bar {
     gap: 8px;
   }
+
+  .action-bar-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .auto-insert-checkbox {
+    font-size: 13px;
+    white-space: nowrap;
+    user-select: none;
+  }
 }
 
 .task-sidebar {
