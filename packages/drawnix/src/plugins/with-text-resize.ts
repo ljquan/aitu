@@ -8,6 +8,8 @@
 
 import {
   PlaitBoard,
+  PlaitElement,
+  PlaitOperation,
   PlaitPlugin,
   Point,
   RectangleClient,
@@ -27,10 +29,11 @@ import {
 import { PlaitDrawElement, PlaitText, DrawTransforms } from '@plait/draw';
 import { DEFAULT_FONT_SIZE } from '@plait/text-plugins';
 import { ResizeHandle } from '../utils/resize-utils';
+import {
+  calculateScaledTextHeight,
+  getMinTextContentSize,
+} from '../utils/text-measurement';
 
-const MIN_BOX_SIZE = 10;
-const LINE_HEIGHT_FACTOR = 1.4;
-const MIN_TEXT_BOX_HEIGHT = DEFAULT_FONT_SIZE * LINE_HEIGHT_FACTOR;
 const EDGE_CURSOR_CLASSES = ['ns-resize', 'ew-resize'];
 
 function rotatePoint(point: Point, center: Point, angle: number): Point {
@@ -45,10 +48,17 @@ function rotatePoint(point: Point, center: Point, angle: number): Point {
   ];
 }
 
+/** Slate 文本节点结构：含 text/font-size 或 children */
+interface SlateTextNode {
+  text?: string;
+  'font-size'?: string;
+  children?: SlateTextNode[];
+}
+
 function hitTestAllHandles(
   rectangle: RectangleClient,
   point: Point,
-  angle: number = 0
+  angle = 0
 ) {
   const refs = getRectangleResizeHandleRefs(rectangle, RESIZE_HANDLE_DIAMETER);
   const testPoint = angle
@@ -79,7 +89,10 @@ function hitTestAllHandles(
 /**
  * 递归缩放文本节点的 font-size
  */
-function scaleTextContent(node: any, scaleFactor: number): any {
+function scaleTextContent(
+  node: SlateTextNode | null | undefined,
+  scaleFactor: number
+): SlateTextNode | null | undefined {
   if (!node) return node;
   if ('text' in node && typeof node.text === 'string') {
     const cur = node['font-size']
@@ -91,7 +104,9 @@ function scaleTextContent(node: any, scaleFactor: number): any {
   if ('children' in node && Array.isArray(node.children)) {
     return {
       ...node,
-      children: node.children.map((c: any) => scaleTextContent(c, scaleFactor)),
+      children: node.children
+        .map((c) => scaleTextContent(c, scaleFactor))
+        .filter((x): x is SlateTextNode => x != null),
     };
   }
   return node;
@@ -108,7 +123,7 @@ function getSelectedTextElement(board: PlaitBoard): PlaitText | null {
 interface TextSnapshot {
   width: number;
   height: number;
-  text: any;
+  text: SlateTextNode | undefined;
 }
 
 export const withTextResize: PlaitPlugin = (board: PlaitBoard) => {
@@ -122,7 +137,7 @@ export const withTextResize: PlaitPlugin = (board: PlaitBoard) => {
       const el = getSelectedTextElement(board);
       if (!el) return null;
       const rect = getRectangleByElements(board, [el], false);
-      const angle = (el as any).angle || 0;
+      const angle = (el as PlaitText & { angle?: number }).angle ?? 0;
       const hit = hitTestAllHandles(rect, point, angle);
       if (hit) {
         return {
@@ -161,9 +176,19 @@ export const withTextResize: PlaitPlugin = (board: PlaitBoard) => {
       }
 
       const proj = (projDx * w + projDy * h) / diag;
-      // 最小缩放：确保元素不会小于 CSS 行框 strut 高度，防止文本溢出裁切
-      const minScale = Math.min(1.0, Math.max(MIN_BOX_SIZE / w, MIN_TEXT_BOX_HEIGHT / h));
-      const scale = Math.max(minScale, (diag + proj) / diag);
+      
+      // 计算缩放后文本内容的实际高度
+      const targetScale = (diag + proj) / diag;
+      const scaledWidth = w * targetScale;
+      const requiredHeight = calculateScaledTextHeight(element.text, scaledWidth, targetScale);
+      
+      // 最小缩放：确保容器不小于能容纳文字内容的最小尺寸（取内容最小宽高的最大值）
+      const minScaleForContent = requiredHeight / h;
+      const contentMin = getMinTextContentSize(element.text);
+      const minScaleForBox = Math.max(contentMin.width / w, contentMin.height / h);
+      const minScale = Math.max(minScaleForContent, minScaleForBox);
+      
+      const scale = Math.max(minScale, targetScale);
 
       const nw = w * scale;
       const nh = h * scale;
@@ -177,7 +202,9 @@ export const withTextResize: PlaitPlugin = (board: PlaitBoard) => {
       }
 
       const newPoints: [Point, Point] = [[nx, ny], [nx + nw, ny + nh]];
-      const path = board.children.findIndex((c: any) => c.id === element.id);
+      const path = board.children.findIndex(
+        (c: PlaitElement) => (c as PlaitDrawElement).id === element.id
+      );
       if (path < 0) return;
 
       // 必须在同一次 setNode 中同时设置 text，否则 onContextChanged
@@ -186,7 +213,7 @@ export const withTextResize: PlaitPlugin = (board: PlaitBoard) => {
         ? scaleTextContent(element.text, scale)
         : undefined;
 
-      const props: Record<string, any> = {
+      const props: Record<string, unknown> = {
         points: normalizeShapePoints(newPoints),
         textHeight: nh,
         autoSize: false,
@@ -200,7 +227,8 @@ export const withTextResize: PlaitPlugin = (board: PlaitBoard) => {
     afterResize: (resizeRef: ResizeRef<PlaitText, ResizeHandle>) => {
       if (!resizeRef) return;
       const path = board.children.findIndex(
-        (c: any) => c.id === (resizeRef.element as PlaitText).id
+        (c: PlaitElement) =>
+          (c as PlaitDrawElement).id === (resizeRef.element as PlaitText).id
       );
       if (path < 0) return;
       const cur = board.children[path] as PlaitText;
@@ -232,32 +260,37 @@ export const withTextResize: PlaitPlugin = (board: PlaitBoard) => {
   // apply: 拦截框架多选缩放对 text 元素 set_node(points) 的操作，
   // 同步注入字体缩放，确保 points 和 text 在同一操作中更新
   const { apply } = board;
-  board.apply = (operation: any) => {
+  board.apply = (operation: PlaitOperation) => {
     if (
       operation.type === 'set_node' &&
       textSnapshots.size > 0 &&
       !handledBySingleResize &&
-      operation.newProperties?.points &&
-      !operation.newProperties?.text
+      'newProperties' in operation &&
+      operation.newProperties &&
+      typeof operation.newProperties === 'object' &&
+      'points' in operation.newProperties &&
+      operation.newProperties.points &&
+      !('text' in operation.newProperties && operation.newProperties.text)
     ) {
       const pathIndex = operation.path?.[0];
       const node = pathIndex != null ? board.children[pathIndex] : null;
       if (node && PlaitDrawElement.isText(node)) {
-        const snapshot = textSnapshots.get((node as any).id);
+        const textNode = node as PlaitText;
+        const snapshot = textSnapshots.get(textNode.id);
         if (snapshot) {
-          const newRect = RectangleClient.getRectangleByPoints(operation.newProperties.points);
+          const newRect = RectangleClient.getRectangleByPoints(
+            operation.newProperties.points as [Point, Point]
+          );
           const scale = newRect.width / snapshot.width;
           if (Math.abs(scale - 1) > 0.001 && snapshot.text) {
             const scaledText = scaleTextContent(snapshot.text, scale);
-            operation.newProperties = {
-              ...operation.newProperties,
-              text: scaledText,
+            Object.assign(operation.newProperties, {
+              text: scaledText ?? undefined,
               textHeight: newRect.height,
-            };
-            operation.properties = {
-              ...operation.properties,
-              text: (node as any).text,
-            };
+            });
+            if (operation.properties && typeof operation.properties === 'object') {
+              Object.assign(operation.properties, { text: textNode.text });
+            }
           }
         }
       }
@@ -265,25 +298,31 @@ export const withTextResize: PlaitPlugin = (board: PlaitBoard) => {
     apply(operation);
   };
 
-  // globalPointerUp: 多选缩放完成后，修正过小元素到最小尺寸（与单选 minScale 一致：宽度不小于 MIN_BOX_SIZE，高度不小于 MIN_TEXT_BOX_HEIGHT）
+  // globalPointerUp: 多选缩放完成后，修正过小元素到最小尺寸
   const { globalPointerUp } = board;
   board.globalPointerUp = (event: PointerEvent) => {
     globalPointerUp(event);
 
     if (!handledBySingleResize && textSnapshots.size > 0) {
       textSnapshots.forEach((snapshot, elementId) => {
-        const path = board.children.findIndex((c: any) => c.id === elementId);
+        const path = board.children.findIndex(
+          (c: PlaitElement) => (c as PlaitDrawElement).id === elementId
+        );
         if (path < 0) return;
         const cur = board.children[path] as PlaitText;
         const curRect = RectangleClient.getRectangleByPoints(cur.points);
 
+        // 计算当前文本内容实际需要的高度
+        const currentScale = curRect.width / snapshot.width;
+        const requiredHeight = calculateScaledTextHeight(cur.text, curRect.width, currentScale);
+        const contentMin = getMinTextContentSize(cur.text);
+        // 修正系数：确保宽高不小于能容纳文字内容的最小尺寸，且高度不小于内容实际需要
         const scaleW =
-          curRect.width >= MIN_BOX_SIZE ? 1 : MIN_BOX_SIZE / curRect.width;
+          curRect.width >= contentMin.width ? 1 : contentMin.width / curRect.width;
         const scaleH =
-          curRect.height >= MIN_TEXT_BOX_HEIGHT
-            ? 1
-            : MIN_TEXT_BOX_HEIGHT / curRect.height;
-        const correction = Math.max(1, scaleW, scaleH);
+          curRect.height >= contentMin.height ? 1 : contentMin.height / curRect.height;
+        const scaleContent = curRect.height >= requiredHeight ? 1 : requiredHeight / curRect.height;
+        const correction = Math.max(1, scaleW, scaleH, scaleContent);
 
         if (correction > 1) {
           const newW = curRect.width * correction;
@@ -303,7 +342,7 @@ export const withTextResize: PlaitPlugin = (board: PlaitBoard) => {
           DrawTransforms.resizeGeometry(board, normalizedPoints, newH, [path]);
           Transforms.setNode(
             board,
-            { text: scaledText, autoSize: false } as any,
+            { text: scaledText, autoSize: false } as Partial<PlaitText>,
             [path]
           );
         }
@@ -346,7 +385,11 @@ export const withTextResize: PlaitPlugin = (board: PlaitBoard) => {
         if (textEl.autoSize) continue;
         const rect = RectangleClient.getRectangleByPoints(textEl.points);
         if (textEl.textHeight !== undefined && Math.abs(textEl.textHeight - rect.height) > 0.01) {
-          Transforms.setNode(board, { textHeight: rect.height } as any, [i]);
+          Transforms.setNode(
+            board,
+            { textHeight: rect.height } as Partial<PlaitText>,
+            [i]
+          );
         }
       }
     } finally {

@@ -16,7 +16,7 @@ import {
 
 export class GifExecutor {
   private config: Required<ExecutorConfig>;
-  private startTime: number = 0;
+  private startTime = 0;
   private segments: GifTimeSegment[] = [];
 
   constructor(config: ExecutorConfig = {}) {

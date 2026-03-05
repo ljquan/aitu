@@ -1018,7 +1018,7 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
       setInlineTextInput(null);
       return;
     }
-    const text = inlineTextRef.current.textContent || '';
+    const text = inlineTextRef.current.innerText || '';
     if (text.trim()) {
       DrawTransforms.insertText(board, inlineTextInput.worldPoint, text);
     }
