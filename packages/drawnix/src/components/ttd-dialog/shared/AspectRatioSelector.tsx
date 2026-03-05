@@ -14,6 +14,7 @@ export interface AspectRatioSelectorProps {
   value: string;
   onChange: (value: string) => void;
   compact?: boolean;
+  options?: AspectRatioOption[];
 }
 
 /**
@@ -22,11 +23,13 @@ export interface AspectRatioSelectorProps {
 export const AspectRatioSelector: React.FC<AspectRatioSelectorProps> = ({
   value,
   onChange,
-  compact = true
+  compact = true,
+  options
 }) => {
   const { language } = useI18n();
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const visibleOptions = options && options.length > 0 ? options : ASPECT_RATIO_OPTIONS;
 
   const selectedOption = useMemo(() => {
     if (value === 'auto') return AUTO_ASPECT_RATIO;
@@ -73,7 +76,7 @@ export const AspectRatioSelector: React.FC<AspectRatioSelectorProps> = ({
         {isOpen && (
           <div className="aspect-ratio-selector__dropdown">
             <div className="aspect-ratio-selector__dropdown-grid">
-              {ASPECT_RATIO_OPTIONS.map((option) => (
+              {visibleOptions.map((option) => (
           <Tooltip
             key={option.value}
             content={option.description}
@@ -107,7 +110,7 @@ export const AspectRatioSelector: React.FC<AspectRatioSelectorProps> = ({
       </div>
 
       <div className="aspect-ratio-selector__options">
-        {ASPECT_RATIO_OPTIONS.map((option) => (
+        {visibleOptions.map((option) => (
           <Tooltip
             key={option.value}
             content={option.description}

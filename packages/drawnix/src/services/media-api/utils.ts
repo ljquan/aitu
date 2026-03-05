@@ -70,6 +70,10 @@ export function sizeToAspectRatio(size?: string): string | undefined {
  */
 const ASPECT_RATIO_TO_SIZE: Record<string, string> = {
   '1x1': '1024x1024',
+  '1x4': '512x2048',
+  '4x1': '2048x512',
+  '1x8': '256x2048',
+  '8x1': '2048x256',
   '16x9': '1792x1024',
   '9x16': '1024x1792',
   '4x3': '1536x1152',
@@ -94,6 +98,10 @@ export function aspectRatioToSize(aspectRatio?: string): string | undefined {
   // 支持冒号和 x 两种格式
   const ratioMap: Record<string, string> = {
     '1:1': '1x1',
+    '1:4': '1x4',
+    '4:1': '4x1',
+    '1:8': '1x8',
+    '8:1': '8x1',
     '2:3': '2x3',
     '3:2': '3x2',
     '3:4': '3x4',
@@ -193,7 +201,7 @@ export function sleep(ms: number, signal?: AbortSignal): Promise<void> {
 /**
  * 图片生成支持的宽高比列表（NxM 格式）
  */
-const VALID_IMAGE_SIZES = ['auto', '1x1', '16x9', '9x16', '3x2', '2x3', '4x3', '3x4', '5x4', '4x5', '21x9'];
+const VALID_IMAGE_SIZES = ['auto', '1x1', '1x4', '4x1', '1x8', '8x1', '16x9', '9x16', '3x2', '2x3', '4x3', '3x4', '5x4', '4x5', '21x9'];
 
 /**
  * 将宽高比字符串解析为数值比例

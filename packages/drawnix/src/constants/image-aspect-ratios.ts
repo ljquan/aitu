@@ -27,6 +27,10 @@ export const AUTO_ASPECT_RATIO: AspectRatioOption = {
 export const ASPECT_RATIO_OPTIONS: AspectRatioOption[] = [
   AUTO_ASPECT_RATIO,
   { label: '1:1', value: '1:1', width: 1, height: 1, description: '正方形' },
+  { label: '1:4', value: '1:4', width: 1, height: 4, description: '超长竖版' },
+  { label: '4:1', value: '4:1', width: 4, height: 1, description: '超长横版' },
+  { label: '1:8', value: '1:8', width: 1, height: 8, description: '极长竖版' },
+  { label: '8:1', value: '8:1', width: 8, height: 1, description: '极长横版' },
   { label: '2:3', value: '2:3', width: 2, height: 3, description: '竖版标准' },
   { label: '3:2', value: '3:2', width: 3, height: 2, description: '横版标准' },
   { label: '3:4', value: '3:4', width: 3, height: 4, description: '竖版' },
@@ -108,6 +112,10 @@ export function convertAspectRatioToSize(
 
   const ratioMap: Record<string, string> = {
     '1:1': '1x1',
+    '1:4': '1x4',
+    '4:1': '4x1',
+    '1:8': '1x8',
+    '8:1': '8x1',
     '2:3': '2x3',
     '3:2': '3x2',
     '3:4': '3x4',

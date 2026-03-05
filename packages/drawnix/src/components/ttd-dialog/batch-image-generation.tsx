@@ -32,6 +32,7 @@ import { TaskType, TaskStatus, Task } from '../../types/task.types';
 import { geminiSettings } from '../../utils/settings-manager';
 import { promptForApiKey } from '../../utils/gemini-api';
 import { ModelDropdown } from '../ai-input-bar/ModelDropdown';
+import { getSizeOptionsForModel } from '../../constants/model-config';
 import { useAssets } from '../../contexts/AssetContext';
 import { AssetType, AssetSource, SelectionMode } from '../../types/asset.types';
 import type { Asset } from '../../types/asset.types';
@@ -63,12 +64,16 @@ interface CellPosition {
 }
 
 // 尺寸选项（auto 表示自动，其余格式为 宽x高）
-const SIZE_OPTIONS = ['auto', '1x1', '2x3', '3x2', '3x4', '4x3', '4x5', '5x4', '9x16', '16x9', '21x9'];
+const SIZE_OPTIONS = ['auto', '1x1', '1x4', '4x1', '1x8', '8x1', '2x3', '3x2', '3x4', '4x3', '4x5', '5x4', '9x16', '16x9', '21x9'];
 
 // 尺寸显示名称
 const SIZE_LABELS: Record<string, string> = {
   'auto': '自动',
   '1x1': '1:1',
+  '1x4': '1:4',
+  '4x1': '4:1',
+  '1x8': '1:8',
+  '8x1': '8:1',
   '2x3': '2:3',
   '3x2': '3:2',
   '3x4': '3:4',
@@ -231,6 +236,25 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
     const settings = geminiSettings.get();
     return settings.imageModelName || 'gemini-2.5-flash-image-vip';
   });
+  const modelSizeOptions = useMemo(() => {
+    const options = getSizeOptionsForModel(selectedModel).map((option) => option.value);
+    return options.length > 0 ? options : SIZE_OPTIONS;
+  }, [selectedModel]);
+  const modelSizeOptionSet = useMemo(() => new Set(modelSizeOptions), [modelSizeOptions]);
+  const defaultModelSize = useMemo(() => {
+    if (modelSizeOptionSet.has('auto')) return 'auto';
+    return modelSizeOptions[0] || 'auto';
+  }, [modelSizeOptionSet, modelSizeOptions]);
+
+  useEffect(() => {
+    setTasks((prev) =>
+      prev.map((task) =>
+        modelSizeOptionSet.has(task.size)
+          ? task
+          : { ...task, size: defaultModelSize }
+      )
+    );
+  }, [defaultModelSize, modelSizeOptionSet]);
 
   // 图片预览（使用 MediaViewer）
   const { openViewer, viewerProps } = useMediaViewer();
@@ -370,7 +394,7 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
         newTasks.push({
           id: taskIdCounter + i,
           prompt: '',
-          size: 'auto',
+          size: defaultModelSize,
           images: [],
           count: 1,
           taskIds: []
@@ -379,7 +403,7 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
       return newTasks;
     });
     setTaskIdCounter(prev => prev + count);
-  }, [taskIdCounter]);
+  }, [defaultModelSize, taskIdCounter]);
 
   // 删除选中行（基于 checkbox 选中状态）
   const deleteSelected = useCallback(() => {
@@ -882,7 +906,7 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
           newTasks.push({
             id: taskIdCounter + newRowsCreated,
             prompt: '',
-            size: 'auto',
+            size: defaultModelSize,
             images: rowImages,
             count: 1,
             taskIds: []
@@ -910,7 +934,7 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
       ? `已导入 ${totalImages} 张图片，从第 ${importStartRow} 行开始`
       : `Imported ${totalImages} images starting from row ${importStartRow}`;
     MessagePlugin.success(message);
-  }, [pendingImportFiles, imagesPerRow, importStartRow, taskIdCounter, tasks.length, language, addAsset]);
+  }, [pendingImportFiles, imagesPerRow, importStartRow, taskIdCounter, tasks.length, language, addAsset, defaultModelSize]);
 
   // 取消批量导入
   const cancelBatchImport = useCallback(() => {
@@ -995,7 +1019,7 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
           const newTasks: TaskRow[] = jsonData.map((row: Record<string, unknown>, index: number) => {
             // 支持多种列名格式
             const prompt = (row['提示词'] || row['prompt'] || row['Prompt'] || '') as string;
-            const size = (row['尺寸'] || row['size'] || row['Size'] || '1x1') as string;
+            const size = (row['尺寸'] || row['size'] || row['Size'] || defaultModelSize) as string;
             const count = parseInt(String(row['数量'] || row['count'] || row['Count'] || '1')) || 1;
             
             // 解析参考图（支持换行分隔的多张图片URL）
@@ -1010,7 +1034,7 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
             return {
               id: taskIdCounter + index,
               prompt: String(prompt).trim(),
-              size: SIZE_OPTIONS.includes(size) ? size : '1x1',
+              size: modelSizeOptionSet.has(size) ? size : defaultModelSize,
               images,
               count: Math.max(1, count),
               taskIds: []
@@ -1050,7 +1074,7 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
     if (excelImportInputRef.current) {
       excelImportInputRef.current.value = '';
     }
-  }, [taskIdCounter, language]);
+  }, [defaultModelSize, taskIdCounter, language, modelSizeOptionSet]);
 
   // 获取行的关联任务状态
   const getRowTasksInfo = useCallback((taskRow: TaskRow): {
@@ -1609,7 +1633,7 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
                   if (!isNaN(num) && num >= 1) {
                     updateCellValue(cell.row, cell.col, num);
                   }
-                } else if (cell.col === 'size' && SIZE_OPTIONS.includes(value)) {
+                } else if (cell.col === 'size' && modelSizeOptionSet.has(value)) {
                   updateCellValue(cell.row, cell.col, value);
                 }
               });
@@ -1626,7 +1650,7 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
                   if (!isNaN(num) && num >= 1) {
                     updateCellValue(targetRow, col, num);
                   }
-                } else if (col === 'size' && SIZE_OPTIONS.includes(line)) {
+                } else if (col === 'size' && modelSizeOptionSet.has(line)) {
                   updateCellValue(targetRow, col, line);
                 }
               });
@@ -1694,7 +1718,7 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
             } else if (cell.col === 'images') {
               updateCellValue(cell.row, cell.col, []);
             } else if (cell.col === 'size') {
-              updateCellValue(cell.row, cell.col, 'auto');
+              updateCellValue(cell.row, cell.col, defaultModelSize);
             }
           });
           break;
@@ -1703,7 +1727,7 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [activeCell, editingCell, tasks, selectedCells, selectCell, enterEditMode, updateCellValue, undo, redo]);
+  }, [activeCell, defaultModelSize, editingCell, tasks, selectedCells, selectCell, enterEditMode, updateCellValue, undo, redo, modelSizeOptionSet]);
 
   // 全局鼠标释放监听 - 确保拖拽在任何地方释放都能结束
   useEffect(() => {
@@ -1856,7 +1880,7 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
                   </svg>
                 </div>
                 <div className="dropdown-menu">
-                  {SIZE_OPTIONS.map(size => (
+                  {modelSizeOptions.map(size => (
                     <div
                       key={size}
                       className={`dropdown-item ${task.size === size ? 'selected' : ''}`}

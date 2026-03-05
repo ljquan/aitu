@@ -25,13 +25,15 @@ import {
 } from './shared';
 import {
   DEFAULT_ASPECT_RATIO,
+  ASPECT_RATIO_OPTIONS,
+  type AspectRatioOption,
   convertAspectRatioToSize,
 } from '../../constants/image-aspect-ratios';
 import { DialogTaskList } from '../task-queue/DialogTaskList';
 import { geminiSettings } from '../../utils/settings-manager';
 import { promptForApiKey } from '../../utils/gemini-api';
 import { buildMJPromptSuffix } from '../../utils/mj-params';
-import { getCompatibleParams } from '../../constants/model-config';
+import { getCompatibleParams, getSizeOptionsForModel } from '../../constants/model-config';
 
 interface AIImageGenerationProps {
   initialPrompt?: string;
@@ -89,6 +91,28 @@ const AIImageGeneration = ({
   const { createTask } = useTaskQueue();
 
   const isMJModel = currentModel.startsWith('mj');
+  const modelAspectRatioOptions = React.useMemo<AspectRatioOption[]>(() => {
+    if (isMJModel) return [];
+
+    const sizeOptions = getSizeOptionsForModel(currentModel);
+    if (sizeOptions.length === 0) return ASPECT_RATIO_OPTIONS;
+
+    const byValue = new Map(ASPECT_RATIO_OPTIONS.map((option) => [option.value, option]));
+    const mapped: AspectRatioOption[] = [];
+
+    sizeOptions.forEach((sizeOption) => {
+      const normalized = sizeOption.value === 'auto'
+        ? 'auto'
+        : sizeOption.value.replace('x', ':');
+      const option = byValue.get(normalized);
+      if (option && !mapped.some((item) => item.value === option.value)) {
+        mapped.push(option);
+      }
+    });
+
+    return mapped.length > 0 ? mapped : ASPECT_RATIO_OPTIONS;
+  }, [currentModel, isMJModel]);
+
   const hasCompatibleParams = React.useMemo(() => {
     const params = getCompatibleParams(currentModel);
     // MJ 模型所有参数都走 dropdown；非 MJ 模型排除 size（已有 AspectRatioSelector）
@@ -200,6 +224,17 @@ const AIImageGeneration = ({
       setMjSelectedParams({});
     }
   }, [hasCompatibleParams, mjSelectedParams]);
+
+  useEffect(() => {
+    if (isMJModel || modelAspectRatioOptions.length === 0) return;
+    const supportedValues = new Set(modelAspectRatioOptions.map((option) => option.value));
+    if (!supportedValues.has(aspectRatio)) {
+      const nextValue = supportedValues.has('auto')
+        ? 'auto'
+        : modelAspectRatioOptions[0]?.value || DEFAULT_ASPECT_RATIO;
+      setAspectRatio(nextValue);
+    }
+  }, [aspectRatio, isMJModel, modelAspectRatioOptions]);
 
   // 清除错误状态当组件挂载时（对话框打开时）
   useEffect(() => {
@@ -595,6 +630,7 @@ const AIImageGeneration = ({
                   value={aspectRatio}
                   onChange={setAspectRatio}
                   compact={true}
+                  options={modelAspectRatioOptions}
                 />
               )
             }

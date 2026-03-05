@@ -1022,6 +1022,7 @@ const SEEDREAM_IMAGE_MODEL_IDS = [
 /** GPT 图片模型 ID（仅支持有限尺寸） */
 const GPT_IMAGE_MODEL_IDS = ['gpt-image-1.5'];
 const MJ_IMAGE_MODEL_IDS = ['mj-imagine'];
+const GEMINI_31_FLASH_IMAGE_MODEL_IDS = ['gemini-3.1-flash-image-preview'];
 
 /** Gemini 图片模型 ID（支持完整尺寸） */
 const GEMINI_IMAGE_MODEL_IDS = IMAGE_MODELS.filter(
@@ -1030,6 +1031,9 @@ const GEMINI_IMAGE_MODEL_IDS = IMAGE_MODELS.filter(
     !SEEDREAM_IMAGE_MODEL_IDS.includes(m.id) &&
     !MJ_IMAGE_MODEL_IDS.includes(m.id)
 ).map((m) => m.id);
+const GEMINI_IMAGE_MODEL_IDS_EXCLUDING_FLASH31 = GEMINI_IMAGE_MODEL_IDS.filter(
+  (id) => !GEMINI_31_FLASH_IMAGE_MODEL_IDS.includes(id)
+);
 
 /** 所有图片模型 ID */
 const ALL_IMAGE_MODEL_IDS = IMAGE_MODELS.map((m) => m.id);
@@ -1227,7 +1231,35 @@ export const IMAGE_PARAMS: ParamConfig[] = [
       { value: '21x9', label: '21:9 超宽' },
     ],
     defaultValue: 'auto',
-    compatibleModels: GEMINI_IMAGE_MODEL_IDS,
+    compatibleModels: GEMINI_IMAGE_MODEL_IDS_EXCLUDING_FLASH31,
+    modelType: 'image',
+  },
+  // Gemini 3.1 Flash 图片模型尺寸（支持扩展极端宽高比）
+  {
+    id: 'size',
+    label: '图片尺寸',
+    shortLabel: '尺寸',
+    description: '生成图片的尺寸比例',
+    valueType: 'enum',
+    options: [
+      { value: 'auto', label: '自动' },
+      { value: '1x1', label: '1:1 方形' },
+      { value: '1x4', label: '1:4 超长竖版' },
+      { value: '4x1', label: '4:1 超长横版' },
+      { value: '1x8', label: '1:8 极长竖版' },
+      { value: '8x1', label: '8:1 极长横版' },
+      { value: '16x9', label: '16:9 横版' },
+      { value: '9x16', label: '9:16 竖版' },
+      { value: '3x2', label: '3:2 横版' },
+      { value: '2x3', label: '2:3 竖版' },
+      { value: '4x3', label: '4:3 横版' },
+      { value: '3x4', label: '3:4 竖版' },
+      { value: '5x4', label: '5:4 横版' },
+      { value: '4x5', label: '4:5 竖版' },
+      { value: '21x9', label: '21:9 超宽' },
+    ],
+    defaultValue: 'auto',
+    compatibleModels: GEMINI_31_FLASH_IMAGE_MODEL_IDS,
     modelType: 'image',
   },
   // Seedream 图片模型尺寸（支持 8 种宽高比，label 显示具体像素）
@@ -1283,16 +1315,17 @@ export const IMAGE_PARAMS: ParamConfig[] = [
     compatibleModels: ['doubao-seedream-5-0-260128'],
     modelType: 'image',
   },
-  // nano-banana-2 图片质量（1K/2K）- 适用于 gemini-3-pro-image-preview 和 gemini-3.1-flash-image-preview
+  // nano-banana-2 图片质量（1K/2K/4K）- 适用于 gemini-3-pro-image-preview 和 gemini-3.1-flash-image-preview
   {
     id: 'quality',
     label: '图片质量',
     shortLabel: '质量',
-    description: '选择图像生成质量（1K/2K）',
+    description: '选择图像生成质量（1K/2K/4K）',
     valueType: 'enum',
     options: [
       { value: '1k', label: '1K' },
       { value: '2k', label: '2K' },
+      { value: '4k', label: '4K' }
     ],
     defaultValue: '1k',
     compatibleModels: ['gemini-3.1-flash-image-preview', 'gemini-3-pro-image-preview'],
