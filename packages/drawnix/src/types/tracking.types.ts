@@ -133,11 +133,18 @@ export interface TrackConfig {
 }
 
 /**
+ * Weak reference interface fallback for environments without global WeakRef lib typing.
+ */
+export interface WeakRefLike<T extends object> {
+  deref(): T | undefined;
+}
+
+/**
  * Tracked element information
  */
 export interface TrackedElement {
   /** Element reference (WeakRef to avoid memory leaks) */
-  elementRef: WeakRef<Element>;
+  elementRef: WeakRefLike<Element>;
 
   /** Event name */
   eventName: string;
