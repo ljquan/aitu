@@ -206,7 +206,7 @@ export const KBKnowledgeExtraction: React.FC<KBKnowledgeExtractionProps> = ({
         {
           id: aiMsgId,
           role: 'model',
-          content: '',
+          content: '正在思考...',
           type: 'text',
           timestamp: Date.now(),
         },
@@ -376,22 +376,37 @@ export const KBKnowledgeExtraction: React.FC<KBKnowledgeExtractionProps> = ({
             </div>
             <div className="kb-message__body">
               <div className="kb-message__content">
-                {msg.type === 'text' ? (
-                  msg.role === 'model' && msg.content && msg.id !== streamingMsgId ? (
-                    <div className="kb-message__markdown-wrap">
-                      <MarkdownEditor
-                        markdown={msg.content}
-                        readOnly
-                        showModeSwitch={false}
-                        initialMode="wysiwyg"
-                        className="kb-extraction-markdown"
-                      />
-                    </div>
-                  ) : (
-                    <div className="kb-message__text">{msg.content}</div>
-                  )
+                {msg.role === 'model' ? (
+                  <div className="kb-message__content-scroll">
+                    {msg.type === 'text' ? (
+                      msg.id === streamingMsgId && (msg.content === '正在思考...' || msg.content === '正在分析笔记内容并提取知识点...') ? (
+                        <div className="kb-message__thinking" aria-label="思考中">
+                          <span className="kb-message__thinking-text">{msg.content.replace(/\.+$/, '')}</span>
+                          <span className="kb-message__thinking-dots">
+                            <span>.</span><span>.</span><span>.</span>
+                          </span>
+                        </div>
+                      ) : msg.content ? (
+                        <div className="kb-message__markdown-wrap">
+                          <MarkdownEditor
+                            markdown={msg.content}
+                            readOnly
+                            showModeSwitch={false}
+                            initialMode="wysiwyg"
+                            className="kb-extraction-markdown"
+                          />
+                        </div>
+                      ) : null
+                    ) : (
+                      <ExtractionResultView result={msg.data!} />
+                    )}
+                  </div>
                 ) : (
-                  <ExtractionResultView result={msg.data!} />
+                  msg.type === 'text' ? (
+                    <div className="kb-message__text">{msg.content}</div>
+                  ) : (
+                    <ExtractionResultView result={msg.data!} />
+                  )
                 )}
               </div>
               {msg.role === 'model' && (
