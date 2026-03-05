@@ -14,7 +14,7 @@ import {
   Transforms,
   Point,
 } from '@plait/core';
-import { CARD_TITLE_HEIGHT, CARD_BODY_MIN_HEIGHT } from '../../constants/card-colors';
+import { CARD_TITLE_HEIGHT, CARD_BODY_MIN_HEIGHT, CARD_BODY_MAX_HEIGHT } from '../../constants/card-colors';
 import {
   CommonElementFlavour,
   createActiveGenerator,
@@ -71,8 +71,10 @@ export class CardComponent
 
   private autoResizeIfNeeded(measuredHeight: number): void {
     const currentRect = RectangleClient.getRectangleByPoints(this.element.points);
-    const minHeight = (this.element.title?.trim() ? CARD_TITLE_HEIGHT : 0) + CARD_BODY_MIN_HEIGHT;
-    const targetHeight = Math.max(measuredHeight, minHeight);
+    const titleHeight = this.element.title?.trim() ? CARD_TITLE_HEIGHT : 0;
+    const minHeight = titleHeight + CARD_BODY_MIN_HEIGHT;
+    const maxHeight = titleHeight + CARD_BODY_MAX_HEIGHT;
+    const targetHeight = Math.min(Math.max(measuredHeight, minHeight), maxHeight);
     const heightDiff = Math.abs(currentRect.height - targetHeight);
 
     if (heightDiff <= 5) return;
