@@ -17,7 +17,8 @@
  */
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Send, Check } from 'lucide-react';
+import { Send } from 'lucide-react';
+import { MessagePlugin } from 'tdesign-react';
 import {
   ImageUploadIcon,
   MediaLibraryIcon,
@@ -419,6 +420,23 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
   const allContent = useMemo(() => {
     return [...uploadedContent, ...selectedContent];
   }, [uploadedContent, selectedContent]);
+
+  const localImageMessages = useMemo(() => ({
+    invalidFile: language === 'zh' ? '请上传图片文件' : 'Please upload image files',
+    fileTooLarge: language === 'zh' ? '图片大小不能超过 25MB' : 'Image size cannot exceed 25MB',
+    loadFailed: language === 'zh' ? '加载图片失败' : 'Failed to load image',
+    compressionFailed: language === 'zh' ? '图片压缩失败' : 'Image compression failed',
+    compressing: (sizeMb: number) => (
+      language === 'zh'
+        ? `正在压缩图片 (${sizeMb.toFixed(1)}MB)...`
+        : `Compressing image (${sizeMb.toFixed(1)}MB)...`
+    ),
+    compressed: (fromMb: number, toMb: number) => (
+      language === 'zh'
+        ? `压缩完成: ${fromMb.toFixed(1)}MB → ${toMb.toFixed(1)}MB`
+        : `Compressed: ${fromMb.toFixed(1)}MB → ${toMb.toFixed(1)}MB`
+    ),
+  }), [language]);
 
   // 监听生成类型变化，自动切换模型和尺寸
   useEffect(() => {
@@ -837,7 +855,7 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
   }, []);
 
   // 将文件转换为 base64 data URL 并获取尺寸
-  const fileToBase64WithDimensions = useCallback((file: File): Promise<{ url: string; width: number; height: number }> => {
+  const fileToBase64WithDimensions = useCallback((file: Blob): Promise<{ url: string; width: number; height: number }> => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = () => {
@@ -862,47 +880,92 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
     });
   }, []);
 
+  const importLocalImages = useCallback(async (files: File[] | FileList) => {
+    const fileList = Array.from(files);
+    if (fileList.length === 0) return;
+
+    const newContent: SelectedContent[] = [];
+
+    for (const [index, file] of fileList.entries()) {
+      if (!file.type.startsWith('image/')) {
+        MessagePlugin.error(localImageMessages.invalidFile);
+        continue;
+      }
+
+      if (file.size > 25 * 1024 * 1024) {
+        MessagePlugin.error(localImageMessages.fileTooLarge);
+        continue;
+      }
+
+      try {
+        let processedBlob: Blob = file;
+
+        if (file.size > 10 * 1024 * 1024) {
+          const { compressImageBlob, getCompressionStrategy } = await import('@aitu/utils');
+          const strategy = getCompressionStrategy(file.size / (1024 * 1024));
+          const messageId = MessagePlugin.loading({
+            content: localImageMessages.compressing(file.size / (1024 * 1024)),
+            duration: 0,
+            placement: 'top',
+          });
+
+          try {
+            processedBlob = await compressImageBlob(file, strategy.targetSizeMB);
+            MessagePlugin.close(messageId);
+            MessagePlugin.success({
+              content: localImageMessages.compressed(
+                file.size / (1024 * 1024),
+                processedBlob.size / (1024 * 1024)
+              ),
+              duration: 2,
+            });
+          } catch (compressionError) {
+            MessagePlugin.close(messageId);
+            console.error('[AIInputBar] Failed to compress image:', compressionError);
+            MessagePlugin.error(localImageMessages.compressionFailed);
+            continue;
+          }
+        }
+
+        const normalizedFile = processedBlob instanceof File
+          ? processedBlob
+          : new File([processedBlob], file.name || `pasted-image-${Date.now()}.png`, {
+            type: processedBlob.type || file.type || 'image/png',
+          });
+
+        addAsset(normalizedFile, AssetType.IMAGE, AssetSource.LOCAL, normalizedFile.name).catch((err) => {
+          console.warn('[AIInputBar] Failed to add asset to library:', err);
+        });
+
+        const { url, width, height } = await fileToBase64WithDimensions(normalizedFile);
+        newContent.push({
+          type: 'image',
+          url,
+          name: normalizedFile.name || `上传图片 ${index + 1}`,
+          width: width || undefined,
+          height: height || undefined,
+        });
+      } catch (error) {
+        console.error('[AIInputBar] Failed to import local image:', error);
+        MessagePlugin.error(localImageMessages.loadFailed);
+      }
+    }
+
+    if (newContent.length > 0) {
+      setUploadedContent(prev => [...prev, ...newContent]);
+    }
+  }, [addAsset, fileToBase64WithDimensions, localImageMessages]);
+
   // 处理文件选择
   const handleFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
-    // 处理选中的文件（转换为 base64 并获取尺寸）
-    const newContent: SelectedContent[] = [];
-
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      // 只处理图片文件
-      if (!file.type.startsWith('image/')) continue;
-
-      // Add to asset library (async, don't block UI)
-      addAsset(file, AssetType.IMAGE, AssetSource.LOCAL, file.name).catch((err) => {
-        console.warn('[AIInputBar] Failed to add asset to library:', err);
-      });
-
-      try {
-        // 转换为 base64 data URL 并获取尺寸
-        const { url, width, height } = await fileToBase64WithDimensions(file);
-        newContent.push({
-          type: 'image',
-          url,
-          name: file.name || `上传图片 ${i + 1}`,
-          width: width || undefined,
-          height: height || undefined,
-        });
-      } catch (error) {
-        console.error('Failed to convert file to base64:', error);
-      }
-    }
-
-    if (newContent.length > 0) {
-      // 追加到用户上传内容（独立于画布选中内容）
-      setUploadedContent(prev => [...prev, ...newContent]);
-    }
+    await importLocalImages(files);
 
     // 重置 input 以便可以再次选择相同文件
     e.target.value = '';
-  }, [fileToBase64WithDimensions, addAsset]);
+  }, [importLocalImages]);
 
   // 处理选择变化的回调（由 SelectionWatcher 调用）
   const handleSelectionChange = useCallback((content: SelectedContent[]) => {
@@ -940,6 +1003,46 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
       name: c.name,
     })));
   }, [allContent]);
+
+  // 处理粘贴图片，仅在 AIInputBar 处于激活状态时接管
+  useEffect(() => {
+    const handlePaste = (e: ClipboardEvent) => {
+      const items = e.clipboardData?.items;
+      if (!items || items.length === 0) return;
+
+      const hasImage = Array.from(items).some((item) => item.type.startsWith('image/'));
+      if (!hasImage) return;
+
+      const activeElement = document.activeElement;
+      const container = containerRef.current;
+      const isInputBarActive = !!container && (
+        container.contains(activeElement) ||
+        (isFocused && (activeElement === document.body || activeElement?.tagName === 'BODY'))
+      );
+
+      if (!isInputBarActive) return;
+
+      const imageFiles: File[] = [];
+      for (const item of Array.from(items)) {
+        if (!item.type.startsWith('image/')) continue;
+        const file = item.getAsFile();
+        if (file) {
+          imageFiles.push(file);
+        }
+      }
+
+      if (imageFiles.length === 0) return;
+
+      e.preventDefault();
+      void importLocalImages(imageFiles);
+      inputRef.current?.focus();
+    };
+
+    document.addEventListener('paste', handlePaste);
+    return () => {
+      document.removeEventListener('paste', handlePaste);
+    };
+  }, [importLocalImages, isFocused]);
 
   // 清除输入框中的触发符号
   const clearTriggerSymbol = useCallback(() => {
