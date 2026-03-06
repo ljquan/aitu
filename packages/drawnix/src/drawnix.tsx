@@ -15,6 +15,8 @@ import {
   toHostPoint,
   toViewBoxPoint,
   getViewportOrigination,
+  RectangleClient,
+  Transforms,
   type Point,
 } from '@plait/core';
 import React, { useState, useRef, useEffect, useMemo, useCallback, lazy, Suspense } from 'react';
@@ -52,8 +54,8 @@ import { withTracking } from './plugins/tracking';
 import { withTool } from './plugins/with-tool';
 import { withToolFocus } from './plugins/with-tool-focus';
 import { withToolResize } from './plugins/with-tool-resize';
-import { withTextResize } from './plugins/with-text-resize';
 import { withMultiResize } from './plugins/with-multi-resize';
+import { withTextResize } from './plugins/with-text-resize';
 import { withWorkZone } from './plugins/with-workzone';
 import { MultiSelectionHandles } from './components/multi-selection-handles';
 import { ActiveTaskWarning } from './components/task-queue/ActiveTaskWarning';
@@ -100,7 +102,7 @@ import { calculateEditedImagePoints } from './utils/image';
 import { safeReload } from './utils/active-tasks';
 import { CommandPalette } from './components/command-palette/command-palette';
 import { CanvasSearch } from './components/canvas-search/canvas-search';
-import { useTabSync, markTabSyncVersion } from './hooks/useTabSync';
+import { useTabSync } from './hooks/useTabSync';
 
 const TTDDialog = lazy(() => import('./components/ttd-dialog/ttd-dialog').then(module => ({ default: module.TTDDialog })));
 const SettingsDialog = lazy(() => import('./components/settings-dialog/settings-dialog').then(module => ({ default: module.SettingsDialog })));
@@ -559,7 +561,6 @@ export const Drawnix: React.FC<DrawnixProps> = ({
 
   const plugins: PlaitPlugin[] = [
     withDraw,
-    withTextResize, // 文本框等比缩放 - 角落手柄 + 字体缩放
     withGroup,
     withMind,
     withMindExtend,
@@ -567,6 +568,7 @@ export const Drawnix: React.FC<DrawnixProps> = ({
     buildDrawnixHotkeyPlugin(updateAppState),
     withFreehand,
     withPen,
+    withTextResize, // 文本缩放 - 拖拽缩放文本框时连带字体大小等比缩放
     withMultiResize, // 多选缩放 - 支持 Freehand 和 PenPath 的多选缩放
     buildPencilPlugin(updateAppState),
     buildTextLinkPlugin(updateAppState),
@@ -956,7 +958,6 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
     try {
       const { unifiedCacheService } = await import('./services/unified-cache-service');
       const { insertImageFromUrl } = await import('./data/image');
-      const { PlaitBoard } = await import('@plait/core');
       
       const taskId = `edited-image-${Date.now()}`;
       const stableUrl = `/__aitu_cache__/image/${taskId}.png`;
@@ -1021,6 +1022,18 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
     const text = inlineTextRef.current.innerText || '';
     if (text.trim()) {
       DrawTransforms.insertText(board, inlineTextInput.worldPoint, text);
+      
+      // 修正可能的 Infinity 高度问题
+      requestAnimationFrame(() => {
+        const lastElement = board.children[board.children.length - 1];
+        if (PlaitDrawElement.isText(lastElement)) {
+          const textEl = lastElement as any;
+          if (!isFinite(textEl.textHeight)) {
+            const rect = RectangleClient.getRectangleByPoints(textEl.points);
+            Transforms.setNode(board, { textHeight: rect.height }, [board.children.length - 1]);
+          }
+        }
+      });
     }
     setInlineTextInput(null);
     BoardTransforms.updatePointerType(board, PlaitPointerType.selection);

@@ -16,8 +16,6 @@ import {
   createG,
   isSelectionMoving,
   toActiveRectangleFromViewBoxRectangle,
-  toHostPoint,
-  toViewBoxPoint,
 } from '@plait/core';
 import {
   withResize,
@@ -26,11 +24,8 @@ import {
   getRectangleResizeHandleRefs,
   RESIZE_HANDLE_DIAMETER,
   drawHandle,
-  normalizeShapePoints,
-  ResizeHandle as PlaitResizeHandle,
 } from '@plait/common';
-import { PlaitDrawElement, PlaitText } from '@plait/draw';
-import { DEFAULT_FONT_SIZE } from '@plait/text-plugins';
+import { PlaitDrawElement } from '@plait/draw';
 import { Freehand } from './freehand/type';
 import { PenPath, PenAnchor } from './pen/type';
 import { getFreehandRectangle } from './freehand/utils';
@@ -38,12 +33,8 @@ import { getPenPathRectangle } from './pen/utils';
 import {
   ResizeHandle,
   calculateResizedRect,
+  getShiftKeyState,
 } from '../utils/resize-utils';
-
-// 与 with-text-resize 一致：文本框最小尺寸，用于多选时取「所有元素最小缩放」的最大值，避免任意元素溢出
-const MIN_BOX_SIZE = 10;
-const LINE_HEIGHT_FACTOR = 1.4;
-const MIN_TEXT_BOX_HEIGHT = DEFAULT_FONT_SIZE * LINE_HEIGHT_FACTOR;
 
 // 存储多选元素信息的接口
 interface MultiResizeInfo {
@@ -76,27 +67,6 @@ function getElementRectangle(board: PlaitBoard, element: PlaitElement): Rectangl
 }
 
 /**
- * 递归缩放文本节点的 font-size（与 with-text-resize 一致，供多选缩放文本框时使用）
- */
-function scaleTextContent(node: any, scaleFactor: number): any {
-  if (!node) return node;
-  if ('text' in node && typeof node.text === 'string') {
-    const cur = node['font-size']
-      ? parseFloat(node['font-size'])
-      : DEFAULT_FONT_SIZE;
-    const next = Math.max(1, parseFloat((cur * scaleFactor).toFixed(1)));
-    return { ...node, 'font-size': `${next}` };
-  }
-  if ('children' in node && Array.isArray(node.children)) {
-    return {
-      ...node,
-      children: node.children.map((c: any) => scaleTextContent(c, scaleFactor)),
-    };
-  }
-  return node;
-}
-
-/**
  * 命中测试辅助函数 - 检测点是否在缩放手柄上
  */
 function getHitRectangleResizeHandleRef(
@@ -117,38 +87,33 @@ function getHitRectangleResizeHandleRef(
 }
 
 /**
- * 检查选中元素是否包含需要特殊处理的类型（手绘、钢笔等）
+ * 检查选中元素是否包含需要特殊处理的类型（Freehand、PenPath、Text）
  */
 function hasCustomResizableElements(elements: PlaitElement[]): boolean {
   return elements.some(
-    (el) => Freehand.isFreehand(el) || PenPath.isPenPath(el)
+    (el) => Freehand.isFreehand(el) || PenPath.isPenPath(el) || PlaitDrawElement.isText(el)
   );
 }
 
 /**
- * 检查选中元素是否全部为 Draw 元素（文本框、图形、图片等，用于多选仅角点缩放）
+ * 检查元素列表中是否包含文本元素
  */
-function hasOnlyDrawElements(elements: PlaitElement[]): boolean {
-  return (
-    elements.length >= 2 &&
-    elements.every((el) => PlaitDrawElement.isDrawElement(el))
-  );
+function hasTextElements(elements: PlaitElement[]): boolean {
+  return elements.some((el) => PlaitDrawElement.isText(el));
 }
 
 /**
  * 获取多选信息
- * 多选时统一由此插件处理，只显示四角手柄、等比例缩放，且不允许边中点横向/纵向单独拖拽
  */
 function getMultiResizeInfo(board: PlaitBoard): MultiResizeInfo | null {
   const selectedElements = getSelectedElements(board);
-
+  
+  // 需要至少2个元素，且至少包含一个需要特殊处理的元素
   if (selectedElements.length < 2) {
     return null;
   }
-
-  const custom = hasCustomResizableElements(selectedElements);
-  const onlyDraw = hasOnlyDrawElements(selectedElements);
-  if (!custom && !onlyDraw) {
+  
+  if (!hasCustomResizableElements(selectedElements)) {
     return null;
   }
 
@@ -180,32 +145,31 @@ function hitTest(board: PlaitBoard, point: Point) {
   }
 
   const handleRef = getHitRectangleResizeHandleRef(info.rectangle, point);
-  if (!handleRef) return null;
 
-  // 多选与单选文本框一致：只允许角点拖拽等比缩放，不允许边中点单独横向/纵向拖动
-  const handleIndex = parseInt(handleRef.handle as string, 10);
-  if (handleIndex >= 4) return null;
-
-  // 保存所有选中元素的原始状态（深拷贝）
-  // 这样在拖拽过程中元素被修改后，我们仍然可以基于原始状态计算
-  originalStatesMap = new Map();
-  for (const element of info.elements) {
-    const elementRect = getElementRectangle(board, element);
-    if (elementRect) {
-      // 深拷贝元素，确保原始数据不被修改
-      originalStatesMap.set(element.id, {
-        element: JSON.parse(JSON.stringify(element)),
-        rectangle: { ...elementRect },
-      });
+  if (handleRef) {
+    // 保存所有选中元素的原始状态（深拷贝）
+    // 这样在拖拽过程中元素被修改后，我们仍然可以基于原始状态计算
+    originalStatesMap = new Map();
+    for (const element of info.elements) {
+      const elementRect = getElementRectangle(board, element);
+      if (elementRect) {
+        // 深拷贝元素，确保原始数据不被修改
+        originalStatesMap.set(element.id, {
+          element: JSON.parse(JSON.stringify(element)),
+          rectangle: { ...elementRect },
+        });
+      }
     }
+
+    return {
+      element: info.elements as any, // 存储所有元素（引用，用于查找路径）
+      rectangle: info.rectangle,
+      handle: handleRef.handle,
+      cursorClass: handleRef.cursorClass,
+    };
   }
 
-  return {
-    element: info.elements as any, // 存储所有元素（引用，用于查找路径）
-    rectangle: info.rectangle,
-    handle: handleRef.handle,
-    cursorClass: handleRef.cursorClass,
-  };
+  return null;
 }
 
 
@@ -304,9 +268,36 @@ function scalePenPathElement(
   }
 }
 
+const DEFAULT_FONT_SIZE = 14;
+
+interface TextNode {
+  text?: string;
+  'font-size'?: string;
+  children?: TextNode[];
+  [key: string]: unknown;
+}
+
+function scaleTextFontSizes(node: TextNode, scaleFactor: number): TextNode {
+  const result: TextNode = { ...node };
+  if ('text' in node && typeof node.text === 'string') {
+    const currentSize = node['font-size']
+      ? parseFloat(node['font-size'])
+      : DEFAULT_FONT_SIZE;
+    const newSize = Math.max(1, Math.round(currentSize * scaleFactor * 10) / 10);
+    result['font-size'] = `${newSize}`;
+  }
+  if (Array.isArray(node.children)) {
+    result.children = node.children.map((child) =>
+      scaleTextFontSizes(child, scaleFactor)
+    );
+  }
+  return result;
+}
+
 /**
- * 缩放通用 Plait 元素（图片、图形等）
+ * 缩放通用 Plait 元素（图片、图形、文本等）
  * 使用原始元素状态来计算，避免累积误差
+ * 文本元素会同时缩放字体大小
  */
 function scaleGenericElement(
   board: PlaitBoard,
@@ -319,13 +310,11 @@ function scaleGenericElement(
   const scaleX = newRect.width / startRect.width;
   const scaleY = newRect.height / startRect.height;
 
-  // 计算元素相对于选区的位置
   const relX = originalElementRect.x - startRect.x;
   const relY = originalElementRect.y - startRect.y;
   const newElementX = newRect.x + relX * scaleX;
   const newElementY = newRect.y + relY * scaleY;
 
-  // 计算新的宽高
   const newWidth = originalElementRect.width * scaleX;
   const newHeight = originalElementRect.height * scaleY;
 
@@ -347,20 +336,19 @@ function scaleGenericElement(
         [path]
       );
     } else if (PlaitDrawElement.isText(originalElement)) {
-      const scale = newWidth / originalElementRect.width;
-      const textEl = originalElement as PlaitText;
-      const scaledText =
-        textEl.text && Math.abs(scale - 1) > 0.001
-          ? scaleTextContent(textEl.text, scale)
-          : textEl.text;
+      // 参考 Excalidraw: nextFontSize = fontSize * (nextWidth / width)
+      // 多选时已强制等比 (scaleX = scaleY)，用 scaleX 即宽度比
+      const origEl = originalElement as any;
+      const scaledText = scaleTextFontSizes(origEl.text, scaleX);
+      const origTextHeight = origEl.textHeight || DEFAULT_FONT_SIZE * 1.4;
       Transforms.setNode(
         board,
         {
-          points: normalizeShapePoints(newPoints),
-          textHeight: newHeight,
+          points: newPoints,
           text: scaledText,
+          textHeight: origTextHeight * scaleX,
           autoSize: false,
-        } as Partial<PlaitText>,
+        } as Partial<PlaitElement>,
         [path]
       );
     } else {
@@ -374,56 +362,11 @@ function scaleGenericElement(
 }
 
 /**
- * 单元素允许的最小缩放比（再小会溢出或过小），与 with-text-resize 一致
- */
-function getMinScaleForElement(
-  element: PlaitElement,
-  rect: RectangleClient
-): number {
-  const w = rect.width;
-  const h = rect.height;
-  if (PlaitDrawElement.isText(element)) {
-    const minScale = Math.max(MIN_BOX_SIZE / w, MIN_TEXT_BOX_HEIGHT / h);
-    return Math.min(1, minScale);
-  }
-  const minDim = Math.min(w, h);
-  if (minDim <= 0) return 0;
-  const minScale = MIN_BOX_SIZE / minDim;
-  return Math.min(1, minScale);
-}
-
-/**
- * 按等比 scale 从固定角计算新矩形（仅角点 0-3）
- */
-function rectFromUniformScale(
-  startRect: RectangleClient,
-  handle: string,
-  scale: number
-): RectangleClient {
-  const w = startRect.width * scale;
-  const h = startRect.height * scale;
-  const x = startRect.x;
-  const y = startRect.y;
-  switch (handle) {
-    case '0': // NW
-      return { x: x + startRect.width - w, y: y + startRect.height - h, width: w, height: h };
-    case '1': // NE
-      return { x, y: y + startRect.height - h, width: w, height: h };
-    case '3': // SW
-      return { x: x + startRect.width - w, y, width: w, height: h };
-    case '2': // SE
-    default:
-      return { x, y, width: w, height: h };
-  }
-}
-
-/**
  * 缩放回调 - 当用户拖拽缩放手柄时调用
- * 多选整体最小缩放取「选中元素各自最小缩放」的最大值，避免任意元素溢出
  */
 function onResize(
   board: PlaitBoard,
-  resizeRef: ResizeRef<PlaitElement[], PlaitResizeHandle>,
+  resizeRef: ResizeRef<PlaitElement[], ResizeHandle>,
   resizeState: ResizeState
 ): void {
   const { element: elements, rectangle: startRectangle, handle } = resizeRef;
@@ -436,30 +379,17 @@ function onResize(
   const dx = endPoint[0] - startPoint[0];
   const dy = endPoint[1] - startPoint[1];
 
-  // 多选与单选文本框一致：始终等比例缩放；handle 为 @plait/common 枚举，值与本地 ResizeHandle 一致 ("0"-"7")
-  let newRect = calculateResizedRect(
+  // 参考 Excalidraw：只要选中元素含文本（或旋转、分组），就强制等比缩放
+  // keepAspectRatio = shouldMaintainAspectRatio || hasTextElement
+  const keepAspectRatio = getShiftKeyState() || hasTextElements(elements);
+
+  const newRect = calculateResizedRect(
     startRectangle,
-    handle as unknown as ResizeHandle,
+    handle,
     dx,
     dy,
-    true,
-    20
+    keepAspectRatio
   );
-
-  let scale = newRect.width / startRectangle.width;
-  // 取多选内「限制缩放内容」的最大值作为整体下限，避免任意元素溢出
-  let maxMinScale = 0;
-  for (const element of elements) {
-    const state = originalStatesMap.get(element.id);
-    if (state) {
-      const minS = getMinScaleForElement(state.element, state.rectangle);
-      if (minS > maxMinScale) maxMinScale = minS;
-    }
-  }
-  if (scale < maxMinScale) {
-    scale = maxMinScale;
-    newRect = rectFromUniformScale(startRectangle, handle, scale);
-  }
 
   // 缩放所有选中的元素（使用原始状态计算，避免累积误差）
   for (const element of elements) {
@@ -549,81 +479,24 @@ export const withMultiResize = (board: PlaitBoard) => {
       handleG = null;
     }
     
-    // 检查是否需要渲染多选控制点（含「仅 draw 元素」多选，保证只显示四角）
-    const multiResizeInfo = getMultiResizeInfo(board);
+    // 检查是否需要渲染多选控制点
+    const selectedElements = getSelectedElements(board);
     if (
-      multiResizeInfo !== null &&
+      selectedElements.length > 1 &&
+      hasCustomResizableElements(selectedElements) &&
       !isSelectionMoving(board)
     ) {
       handleG = generatorResizeHandles(board);
       if (handleG) {
-        const host = PlaitBoard.getActiveHost(board);
-        // 多选时只保留本插件的四角手柄，移除 draw 的 8 手柄组，避免出现边中点
-        Array.from(host.children).forEach((el) => {
-          if (
-            el instanceof SVGGElement &&
-            el !== handleG &&
-            el.querySelector('.resize-handle')
-          ) {
-            el.remove();
-          }
-        });
-        host.append(handleG);
+        PlaitBoard.getActiveHost(board).append(handleG);
       }
     }
   };
   
-  const result = withResize<PlaitElement[], PlaitResizeHandle>(board, {
+  return withResize<PlaitElement[], ResizeHandle>(board, {
     key: 'multi-resize',
     canResize: () => canResize(board),
     hitTest: (point: Point) => hitTest(board, point),
     onResize: (resizeRef, resizeState) => onResize(board, resizeRef, resizeState),
   });
-
-  // 多选时只允许角点缩放：若点击在边中点上，吞掉事件，不交给下层 draw 的 8 手柄逻辑
-  const prevPointerDown = result.pointerDown;
-  result.pointerDown = (event: PointerEvent) => {
-    const info = getMultiResizeInfo(result);
-    if (info) {
-      const point = toViewBoxPoint(
-        result,
-        toHostPoint(result, event.x, event.y)
-      ) as Point;
-      const handleRef = getHitRectangleResizeHandleRef(info.rectangle, point);
-      const handleIndex =
-        handleRef != null
-          ? parseInt(handleRef.handle as string, 10)
-          : -1;
-      if (handleRef != null && handleIndex >= 4) {
-        return;
-      }
-    }
-    prevPointerDown(event);
-  };
-
-  // 多选时悬停在边中点上不显示横向/纵向箭头：不交给 draw 的 pointerMove，并清除可能的光标
-  const RESIZE_CURSOR_CLASSES = ['ns-resize', 'ew-resize', 'nwse-resize', 'nesw-resize'];
-  const prevPointerMove = result.pointerMove;
-  result.pointerMove = (event: PointerEvent) => {
-    const info = getMultiResizeInfo(result);
-    if (info) {
-      const point = toViewBoxPoint(
-        result,
-        toHostPoint(result, event.x, event.y)
-      ) as Point;
-      const handleRef = getHitRectangleResizeHandleRef(info.rectangle, point);
-      if (handleRef) {
-        const handleIndex = parseInt(handleRef.handle as string, 10);
-        if (handleIndex >= 4) {
-          RESIZE_CURSOR_CLASSES.forEach((cls) =>
-            PlaitBoard.getBoardContainer(result).classList.remove(cls)
-          );
-          return;
-        }
-      }
-    }
-    prevPointerMove(event);
-  };
-
-  return result;
 };

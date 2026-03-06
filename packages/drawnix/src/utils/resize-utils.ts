@@ -39,14 +39,14 @@ export function getShiftKeyState(): boolean {
 
 // ResizeHandle 枚举值
 export enum ResizeHandle {
-  NW = '0', // 左上
-  NE = '1', // 右上
-  SE = '2', // 右下
-  SW = '3', // 左下
-  N = '4',  // 上
-  E = '5',  // 右
-  S = '6',  // 下
-  W = '7',  // 左
+  nw = '0',
+  n = '4',
+  ne = '1',
+  e = '5',
+  se = '2',
+  s = '6',
+  sw = '3',
+  w = '7'
 }
 
 /**
@@ -64,8 +64,8 @@ export function calculateResizedRect(
   handle: ResizeHandle | string,
   dx: number,
   dy: number,
-  lockAspectRatio: boolean = false,
-  minSize: number = 20
+  lockAspectRatio = false,
+  minSize = 20
 ): RectangleClient {
   let newX = startRectangle.x;
   let newY = startRectangle.y;
@@ -77,37 +77,37 @@ export function calculateResizedRect(
 
   // 根据手柄类型计算新尺寸
   switch (handle) {
-    case ResizeHandle.NW: // 左上角
+    case ResizeHandle.nw: // 左上角
       newX = startRectangle.x + dx;
       newY = startRectangle.y + dy;
       newWidth = startRectangle.width - dx;
       newHeight = startRectangle.height - dy;
       break;
-    case ResizeHandle.NE: // 右上角
+    case ResizeHandle.ne: // 右上角
       newY = startRectangle.y + dy;
       newWidth = startRectangle.width + dx;
       newHeight = startRectangle.height - dy;
       break;
-    case ResizeHandle.SE: // 右下角
+    case ResizeHandle.se: // 右下角
       newWidth = startRectangle.width + dx;
       newHeight = startRectangle.height + dy;
       break;
-    case ResizeHandle.SW: // 左下角
+    case ResizeHandle.sw: // 左下角
       newX = startRectangle.x + dx;
       newWidth = startRectangle.width - dx;
       newHeight = startRectangle.height + dy;
       break;
-    case ResizeHandle.N: // 上边
+    case ResizeHandle.n: // 上边
       newY = startRectangle.y + dy;
       newHeight = startRectangle.height - dy;
       break;
-    case ResizeHandle.E: // 右边
+    case ResizeHandle.e: // 右边
       newWidth = startRectangle.width + dx;
       break;
-    case ResizeHandle.S: // 下边
+    case ResizeHandle.s: // 下边
       newHeight = startRectangle.height + dy;
       break;
-    case ResizeHandle.W: // 左边
+    case ResizeHandle.w: // 左边
       newX = startRectangle.x + dx;
       newWidth = startRectangle.width - dx;
       break;
@@ -116,16 +116,16 @@ export function calculateResizedRect(
   // 如果锁定比例，调整宽高以保持比例
   if (lockAspectRatio) {
     const isCornerHandle = [
-      ResizeHandle.NW,
-      ResizeHandle.NE,
-      ResizeHandle.SE,
-      ResizeHandle.SW,
+      ResizeHandle.nw,
+      ResizeHandle.ne,
+      ResizeHandle.se,
+      ResizeHandle.sw,
     ].includes(handle as ResizeHandle);
 
-    const isHorizontalEdge = [ResizeHandle.E, ResizeHandle.W].includes(
+    const isHorizontalEdge = [ResizeHandle.e, ResizeHandle.w].includes(
       handle as ResizeHandle
     );
-    const isVerticalEdge = [ResizeHandle.N, ResizeHandle.S].includes(
+    const isVerticalEdge = [ResizeHandle.n, ResizeHandle.s].includes(
       handle as ResizeHandle
     );
 
@@ -137,17 +137,16 @@ export function calculateResizedRect(
       if (widthChange > heightChange) {
         // 以宽度变化为主
         const targetHeight = newWidth / aspectRatio;
-        const heightDiff = targetHeight - startRectangle.height;
 
         switch (handle) {
-          case ResizeHandle.NW:
-          case ResizeHandle.NE:
+          case ResizeHandle.nw:
+          case ResizeHandle.ne:
             // 上方手柄：调整 Y 坐标和高度
             newY = startRectangle.y + startRectangle.height - targetHeight;
             newHeight = targetHeight;
             break;
-          case ResizeHandle.SE:
-          case ResizeHandle.SW:
+          case ResizeHandle.se:
+          case ResizeHandle.sw:
             // 下方手柄：只调整高度
             newHeight = targetHeight;
             break;
@@ -155,17 +154,16 @@ export function calculateResizedRect(
       } else {
         // 以高度变化为主
         const targetWidth = newHeight * aspectRatio;
-        const widthDiff = targetWidth - startRectangle.width;
 
         switch (handle) {
-          case ResizeHandle.NW:
-          case ResizeHandle.SW:
+          case ResizeHandle.nw:
+          case ResizeHandle.sw:
             // 左侧手柄：调整 X 坐标和宽度
             newX = startRectangle.x + startRectangle.width - targetWidth;
             newWidth = targetWidth;
             break;
-          case ResizeHandle.NE:
-          case ResizeHandle.SE:
+          case ResizeHandle.ne:
+          case ResizeHandle.se:
             // 右侧手柄：只调整宽度
             newWidth = targetWidth;
             break;
@@ -191,9 +189,9 @@ export function calculateResizedRect(
   // 确保最小尺寸
   if (newWidth < minSize) {
     if (
-      handle === ResizeHandle.NW ||
-      handle === ResizeHandle.W ||
-      handle === ResizeHandle.SW
+      handle === ResizeHandle.nw ||
+      handle === ResizeHandle.w ||
+      handle === ResizeHandle.sw
     ) {
       newX = startRectangle.x + startRectangle.width - minSize;
     }
@@ -203,9 +201,9 @@ export function calculateResizedRect(
     if (lockAspectRatio) {
       const targetHeight = minSize / aspectRatio;
       if (
-        handle === ResizeHandle.NW ||
-        handle === ResizeHandle.N ||
-        handle === ResizeHandle.NE
+        handle === ResizeHandle.nw ||
+        handle === ResizeHandle.n ||
+        handle === ResizeHandle.ne
       ) {
         newY = startRectangle.y + startRectangle.height - targetHeight;
       }
@@ -215,9 +213,9 @@ export function calculateResizedRect(
 
   if (newHeight < minSize) {
     if (
-      handle === ResizeHandle.NW ||
-      handle === ResizeHandle.N ||
-      handle === ResizeHandle.NE
+      handle === ResizeHandle.nw ||
+      handle === ResizeHandle.n ||
+      handle === ResizeHandle.ne
     ) {
       newY = startRectangle.y + startRectangle.height - minSize;
     }
@@ -227,9 +225,9 @@ export function calculateResizedRect(
     if (lockAspectRatio) {
       const targetWidth = minSize * aspectRatio;
       if (
-        handle === ResizeHandle.NW ||
-        handle === ResizeHandle.W ||
-        handle === ResizeHandle.SW
+        handle === ResizeHandle.nw ||
+        handle === ResizeHandle.w ||
+        handle === ResizeHandle.sw
       ) {
         newX = startRectangle.x + startRectangle.width - targetWidth;
       }
