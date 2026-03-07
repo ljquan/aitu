@@ -1362,6 +1362,10 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
     for (const { task, rowIndex } of validTasks) {
       const generateCount = task.count || 1;
       const batchId = `batch_${task.id}_${globalBatchTimestamp}`;
+      const normalizedAspectRatio = task.size || defaultModelSize;
+      const normalizedSize = normalizedAspectRatio === 'auto'
+        ? undefined
+        : normalizedAspectRatio;
 
       const uploadedImages = task.images.map((url, index) => ({
         type: 'url',
@@ -1376,7 +1380,8 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
 
         const taskParams = {
           prompt: task.prompt.trim(),
-          aspectRatio: task.size,
+          aspectRatio: normalizedAspectRatio,
+          size: normalizedSize,
           model: selectedModel || settings.imageModelName || 'gemini-2.5-flash-image-vip',
           uploadedImages,
           batchId,
@@ -1417,7 +1422,7 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({ onSwitchToS
           : `Submitted ${submittedCount} tasks to queue`
       );
     }
-  }, [createTask, language, selectedModel, setTasks, setEditingCell, setActiveCell]);
+  }, [createTask, defaultModelSize, language, selectedModel, setTasks, setEditingCell, setActiveCell]);
 
   // 提交到任务队列 - 只提交选中的行
   const submitToQueue = useCallback(async () => {
