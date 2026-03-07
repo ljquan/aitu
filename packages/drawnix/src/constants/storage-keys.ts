@@ -31,6 +31,12 @@ export const LS_KEYS = {
   AI_IMAGE_QUANTITY: 'aitu_image_generation_quantity',
   /** 视频生成数量记忆 */
   AI_VIDEO_QUANTITY: 'aitu_video_generation_quantity',
+  /** 图片生成后是否自动插入画布 */
+  AI_IMAGE_AUTO_INSERT: 'aitu_image_auto_insert_canvas',
+  /** 视频生成后是否自动插入画布 */
+  AI_VIDEO_AUTO_INSERT: 'aitu_video_auto_insert_canvas',
+  /** 是否显示画布上的 WorkZone 进度卡片 */
+  WORKZONE_CARD_VISIBLE: 'aitu_workzone_card_visible',
 
   // ---- 抽屉状态（轻量 UI 状态，保留在 LocalStorage） ----
   /** 聊天抽屉状态 */

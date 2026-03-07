@@ -22,6 +22,8 @@ import {
   savePromptToHistory as savePromptToHistoryUtil,
   ResizableDivider,
   loadSavedWidth,
+  AutoInsertCheckbox,
+  getAutoInsertValue,
 } from './shared';
 import {
   DEFAULT_ASPECT_RATIO,
@@ -30,6 +32,7 @@ import {
   convertAspectRatioToSize,
 } from '../../constants/image-aspect-ratios';
 import { DialogTaskList } from '../task-queue/DialogTaskList';
+import { LS_KEYS } from '../../constants/storage-keys';
 import { geminiSettings } from '../../utils/settings-manager';
 import { promptForApiKey } from '../../utils/gemini-api';
 import { buildMJPromptSuffix } from '../../utils/mj-params';
@@ -416,7 +419,7 @@ const AIImageGeneration = ({
             batchId,
             batchIndex: i + 1,
             batchTotal: count,
-            autoInsertToCanvas: true,
+            autoInsertToCanvas: getAutoInsertValue(LS_KEYS.AI_IMAGE_AUTO_INSERT),
             targetFrameId,
             targetFrameDimensions,
             ...(extraParams ? { params: extraParams } : {}),
@@ -482,7 +485,7 @@ const AIImageGeneration = ({
         model: currentImageModel,
         // 保存上传的图片（已转换为可序列化的格式）
         uploadedImages: convertedImages,
-        autoInsertToCanvas: true,
+        autoInsertToCanvas: getAutoInsertValue(LS_KEYS.AI_IMAGE_AUTO_INSERT),
         // 始终包含 batchId 以跳过重复检测
         batchId: `image_single_${Date.now()}`,
         batchIndex: 1,
@@ -625,14 +628,20 @@ const AIImageGeneration = ({
             onGenerate={handleGenerate}
             onReset={handleReset}
             leftContent={
-              isMJModel ? null : (
-                <AspectRatioSelector
-                  value={aspectRatio}
-                  onChange={setAspectRatio}
-                  compact={true}
-                  options={modelAspectRatioOptions}
+              <>
+                <AutoInsertCheckbox
+                  storageKey={LS_KEYS.AI_IMAGE_AUTO_INSERT}
+                  language={language}
                 />
-              )
+                {!isMJModel && (
+                  <AspectRatioSelector
+                    value={aspectRatio}
+                    onChange={setAspectRatio}
+                    compact={true}
+                    options={modelAspectRatioOptions}
+                  />
+                )}
+              </>
             }
           />
         </div>

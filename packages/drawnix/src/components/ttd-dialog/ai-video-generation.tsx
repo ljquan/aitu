@@ -19,12 +19,15 @@ import {
   StoryboardEditor,
   ResizableDivider,
   loadSavedWidth,
+  AutoInsertCheckbox,
+  getAutoInsertValue,
 } from './shared';
 import { geminiSettings } from '../../utils/settings-manager';
 import { useTaskQueue } from '../../hooks/useTaskQueue';
 import { TaskType } from '../../types/task.types';
 import { MessagePlugin } from 'tdesign-react';
 import { DialogTaskList } from '../task-queue/DialogTaskList';
+import { LS_KEYS } from '../../constants/storage-keys';
 import type { VideoModel, UploadedVideoImage, StoryboardScene } from '../../types/video.types';
 import { ModelDropdown } from '../ai-input-bar/ModelDropdown';
 import { ParametersDropdown } from '../ai-input-bar/ParametersDropdown';
@@ -568,7 +571,7 @@ const AIVideoGeneration = ({
           batchId,
           batchIndex: i + 1,
           batchTotal: count,
-          autoInsertToCanvas: true,
+          autoInsertToCanvas: getAutoInsertValue(LS_KEYS.AI_VIDEO_AUTO_INSERT),
           ...(extraParams ? { params: extraParams } : {}),
         };
 
@@ -746,6 +749,12 @@ const AIVideoGeneration = ({
             canGenerate={storyboardEnabled ? storyboardScenes.length > 0 : !!(prompt && prompt.trim())}
             onGenerate={handleGenerate}
             onReset={handleReset}
+            leftContent={
+              <AutoInsertCheckbox
+                storageKey={LS_KEYS.AI_VIDEO_AUTO_INSERT}
+                language={language}
+              />
+            }
           />
         </div>
 

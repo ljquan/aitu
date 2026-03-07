@@ -106,6 +106,12 @@ $brand-orange-light: rgba(243, 156, 18, 0.1);
     min-width: 0;
   }
 
+  &__divider {
+    height: 1px;
+    background: #f3f4f6;
+    margin: 8px 0;
+  }
+
   &__actions {
     display: flex;
     justify-content: flex-end;

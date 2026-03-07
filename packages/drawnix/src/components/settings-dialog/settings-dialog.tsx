@@ -4,8 +4,9 @@ import './settings-dialog.scss';
 import { useI18n } from '../../i18n';
 import { useState, useEffect } from 'react';
 import { geminiSettings } from '../../utils/settings-manager';
-import { Tooltip } from 'tdesign-react';
+import { Tooltip, Checkbox } from 'tdesign-react';
 import { InfoCircleIcon } from 'tdesign-icons-react';
+import { LS_KEYS } from '../../constants/storage-keys';
 import { ModelDropdown } from '../ai-input-bar/ModelDropdown';
 import {
   IMAGE_MODEL_GROUPED_SELECT_OPTIONS,
@@ -33,8 +34,7 @@ export const SettingsDialog = ({
   const [imageModelName, setImageModelName] = useState('');
   const [videoModelName, setVideoModelName] = useState('');
   const [textModelName, setTextModelName] = useState('');
-
-
+  const [showWorkZoneCard, setShowWorkZoneCard] = useState(true);
 
   // 加载当前配置
   useEffect(() => {
@@ -45,6 +45,11 @@ export const SettingsDialog = ({
       setImageModelName(config.imageModelName || getDefaultImageModel());
       setVideoModelName(config.videoModelName || getDefaultVideoModel());
       setTextModelName(config.textModelName || getDefaultTextModel());
+      try {
+        setShowWorkZoneCard(localStorage.getItem(LS_KEYS.WORKZONE_CARD_VISIBLE) !== 'false');
+      } catch {
+        setShowWorkZoneCard(true);
+      }
     }
   }, [appState.openSettings]);
 
@@ -65,6 +70,14 @@ export const SettingsDialog = ({
     });
 
     // 配置随任务传递，无需同步到 SW
+
+    // 保存 WorkZone 卡片显示设置
+    try {
+      localStorage.setItem(LS_KEYS.WORKZONE_CARD_VISIBLE, String(showWorkZoneCard));
+      window.dispatchEvent(new CustomEvent('workzone-visibility-changed'));
+    } catch {
+      // localStorage not available
+    }
 
     // 关闭弹窗
     setAppState({ ...appState, openSettings: false });
@@ -220,6 +233,16 @@ export const SettingsDialog = ({
             </div>
           </div>
 
+          <div className="settings-dialog__divider" />
+          <div className="settings-dialog__field">
+            <label className="settings-dialog__label">画布显示</label>
+            <Checkbox
+              checked={showWorkZoneCard}
+              onChange={(checked) => setShowWorkZoneCard(checked as boolean)}
+            >
+              显示任务进度卡片
+            </Checkbox>
+          </div>
 
         </form>
         <div className="settings-dialog__actions">

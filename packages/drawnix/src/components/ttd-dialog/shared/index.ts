@@ -14,3 +14,4 @@ export * from './AspectRatioSelector';
 export * from './StoryboardEditor';
 export * from './ReferenceImageUpload';
 export * from './ResizableDivider';
+export * from './AutoInsertCheckbox';

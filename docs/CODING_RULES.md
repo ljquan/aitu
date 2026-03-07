@@ -1317,6 +1317,47 @@ const query = useSearchHighlightQuery(); // ✅ 正常工作
 
 **原因**: `createRoot` 创建的 React 树是完全独立的，不共享父级 Context。`useSyncExternalStore` 订阅模块级全局 store，不依赖 React 树结构，因此能跨 Root 工作。此模式适用于所有需要从主应用向 Plait 文本组件传递状态的场景。
 
+### RxJS 事件传递对象引用导致 React.memo 失效
+
+**场景**: Service 层通过 RxJS Subject 推送任务更新事件，多个 React 组件通过不同方式消费（增量替换 vs 全量快照），但 `TaskItem` 共用同一个 `React.memo` 自定义比较
+
+❌ **错误示例**:
+```typescript
+// Service: 原地修改对象再 emit
+onProgress: (progress) => {
+  const localTask = this.tasks.get(taskId);
+  localTask.progress = progress;         // 原地修改
+  localTask.updatedAt = Date.now();
+  this.emitEvent('taskUpdated', localTask); // 传递同一引用
+}
+
+// Hook A（增量替换）：event.task 与数组中旧对象是同一引用
+setTasks(prev => prev.map(t => t.id === event.task.id ? event.task : t));
+// React.memo: prev.task === next.task（同一对象）→ 不渲染
+
+// Hook B（全量快照）：getAllTasks() 返回 Map 中的原始对象
+setTasks(taskQueueService.getAllTasks());
+// React.memo: prev.task.progress === next.task.progress（同一对象，值已被改过）→ 不渲染
+```
+
+✅ **正确示例**:
+```typescript
+// Service: 创建新对象存入 Map 再 emit
+onProgress: (progress) => {
+  const localTask = this.tasks.get(taskId);
+  const updatedTask = { ...localTask, progress, updatedAt: Date.now() };
+  this.tasks.set(taskId, updatedTask);         // 新对象存入 Map
+  this.emitEvent('taskUpdated', updatedTask);  // 新引用
+}
+
+// emitEvent 中额外浅拷贝（双保险）
+private emitEvent(type, task) {
+  this.taskUpdates$.next({ type, task: { ...task }, timestamp: Date.now() });
+}
+```
+
+**原因**: React.memo 的自定义比较函数比较的是属性值，但如果 `prev.task` 和 `next.task` 指向同一个被原地修改的对象，所有属性比较都会返回 `true`（值已经被改过了）。必须确保每次更新都产生新的对象引用，让 `prev.task.progress !== next.task.progress` 成立。
+
 ### CSS/SCSS 规范
 - 使用 BEM 命名规范
 - 优先使用设计系统 CSS 变量
@@ -6621,7 +6662,61 @@ const matchesSource = filters.activeSource === 'ALL' || asset.source === filters
 const matchesSource = !filters.activeSource || filters.activeSource === 'ALL' || asset.source === filters.activeSource;
 ```
 
-**原因**: 初始状态下筛选变量可能为 `undefined`。进行逻辑判断时，必须同时考虑 `undefined`、`null` 和 `'ALL'` 这几种代表“不筛选”的情况，否则会导致筛选结果意外为空。
+**原因**: 初始状态下筛选变量可能为 `undefined`。进行逻辑判断时，必须同时考虑 `undefined`、`null` 和 `'ALL'` 这几种代表”不筛选”的情况，否则会导致筛选结果意外为空。
+
+### API 错误字段类型安全
+
+**场景**: 处理外部 API 返回的 error 字段时，`error` 可能是字符串也可能是对象
+
+❌ **错误示例**:
+```typescript
+// API 返回：{ error: { code: “generation_failed”, message: “[403]...” } }
+const data = await response.json();
+throw new Error(data.error || data.message || 'Failed');
+// data.error 是对象 → new Error({...}) → error.message = “[object Object]”
+```
+
+✅ **正确示例**:
+```typescript
+const data = await response.json();
+const errMsg = typeof data.error === 'string'
+  ? data.error
+  : (data.error?.message || data.message || 'Failed');
+const error = new Error(errMsg);
+if (typeof data.error === 'object' && data.error?.code) {
+  (error as any).code = data.error.code;
+}
+throw error;
+```
+
+**原因**: `new Error(value)` 内部调用 `String(value)`，对象会变成 `”[object Object]”`。API 的 `error` 字段格式不统一（有的返回字符串，有的返回 `{ code, message }` 对象），必须用 `typeof` 区分处理。
+
+### 数值范围转换规则
+
+**场景**: 回调链中传递进度/百分比等数值时，必须明确每一层的值域范围并保持一致
+
+❌ **错误示例**:
+```typescript
+// pollVideoStatus 回调返回 0-1 范围
+onProgress(apiProgress / 100); // 100 → 1.0
+
+// 调用方误以为是 0-100 范围，乘以 0.8
+options?.onProgress?.({ progress: 10 + progress * 0.8 });
+// 结果：10 + 1.0 * 0.8 = 10.8，而非预期的 90
+```
+
+✅ **正确示例**:
+```typescript
+// 明确注释值域范围
+onProgress(apiProgress / 100); // 输出 0-1
+
+// 正确映射：0-1 → 10-90 需乘以 80
+// progress 是 0-1 范围，映射到 10-90：10 + (0~1) * 80
+options?.onProgress?.({ progress: 10 + progress * 80 });
+// 结果：10 + 1.0 * 80 = 90 ✓
+```
+
+**原因**: 回调链跨多层传递数值时，0-1 和 0-100 两种范围容易混淆。每个回调的输入/输出值域必须用注释明确标注，映射公式应能通过边界值（0 和 max）验证正确性。
 
 ---
 

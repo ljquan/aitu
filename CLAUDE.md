@@ -97,15 +97,7 @@ aitu/
 
 ### AI 生成流程
 
-```
-AIInputBar → swTaskQueueService.createTask()
-    ↓ postMessage
-Service Worker (后台执行)
-    ├── ImageHandler / VideoHandler
-    └── IndexedDB 持久化
-    ↓ broadcastToClients
-应用层 → Canvas 插入 / 媒体库缓存
-```
+`AIInputBar → swTaskQueueService.createTask() → postMessage → Service Worker (ImageHandler/VideoHandler + IndexedDB) → broadcastToClients → Canvas 插入 / 媒体库缓存`
 
 **核心特性**：页面刷新不影响任务执行，通过 `remoteId` 恢复视频轮询。
 
@@ -117,63 +109,27 @@ Service Worker (后台执行)
 - **图片生成**：Gemini (Imagen 3)、Midjourney、Flux、Seedream 5.0
 - **视频生成**：Veo 3、Sora 2、Kling、Seedance
 
-**适配器注册与路由**：
-```typescript
-// 1. 定义适配器（实现 ImageModelAdapter 或 VideoModelAdapter）
-export const mjImageAdapter: ImageModelAdapter = {
-  id: 'mj-image-adapter',
-  matchTags: ['mj'],  // 模型标签匹配
-  supportedModels: ['mj-imagine'],
-  async generateImage(context, request) { /* ... */ }
-};
+**适配器注册与路由**：定义适配器 → `registerModelAdapter()` 注册 → `resolveAdapterForModel()` 运行时路由。关键文件：`services/model-adapters/registry.ts`、`types.ts`、`default-adapters.ts`、`services/media-executor/fallback-adapter-routes.ts`
 
-// 2. 注册到全局 registry
-registerModelAdapter(mjImageAdapter);
-
-// 3. 运行时路由（generation-api-service.ts）
-const adapter = resolveAdapterForModel(model);
-if (adapter) {
-  await executeImageViaAdapter(taskId, adapter, params);
-}
-```
-
-**关键文件**：
-- `services/model-adapters/registry.ts` - 适配器注册表
-- `services/model-adapters/types.ts` - 适配器接口定义
-- `services/model-adapters/default-adapters.ts` - 默认适配器注册
-- `services/media-executor/fallback-adapter-routes.ts` - 适配器执行路由
-
-**多图结果处理**：
-- 适配器返回 `{ url, urls?, format }` 结构
-- `urls` 数组包含所有生成的图片 URL
-- 任务完成前自动缓存远程 URL 到本地 `/__aitu_cache__/`
-- UI 层展开多图为独立预览项，支持水平排列插入
-
-**签名 URL 处理**：
-- TOS/Volces 等签名 URL 会校验 Referer 导致 403
-- 所有 `<img>`/`<video>`/`new Image()` 使用 `referrerPolicy="no-referrer"`
-- `fetch` 下载时传 `{ referrerPolicy: 'no-referrer' }`
-- 任务完成时通过 `cacheRemoteUrl()` 将远程 URL 缓存到本地
+**多图与签名 URL**：适配器返回 `{ url, urls?, format }`，`urls` 展开为独立预览项；任务完成前自动 `cacheRemoteUrl()` 到 `/__aitu_cache__/`；所有媒体元素使用 `referrerPolicy="no-referrer"` 避免签名 URL 403
 
 ### 素材库数据来源
 
-1. **本地上传素材** → IndexedDB 元数据 + Cache Storage 数据
-2. **AI 生成素材** → 任务队列已完成任务
-3. **Cache Storage 媒体** → `/__aitu_cache__/` 前缀
-
-**设计原则**：Cache Storage 是唯一数据真相，IndexedDB 只存元数据。
+本地上传素材（IndexedDB 元数据 + Cache Storage 数据）、AI 生成素材（任务队列已完成任务）、Cache Storage 媒体（`/__aitu_cache__/` 前缀）。**设计原则**：Cache Storage 是唯一数据真相，IndexedDB 只存元数据。
 
 ### 插件系统
 
+> 详细规则和示例请参考 `docs/CODING_RULES.md` → Plait 插件规范
+
 采用 `withXxx` 组合式模式：`withTool`, `withFreehand`, `withImage`, `withVideo`, `withWorkzone` 等。
 
-- **新画布功能必须作为 Plait 插件**：涉及画布交互的功能（如激光笔、画笔变体）必须实现为 `withXxx` 插件复用 Generator/Smoother 等已有基础设施，禁止使用独立 React 组件 + SVG overlay（坐标系不一致、事件冲突）
-- **工具互斥通过 `board.pointer` 管理**：新增工具类型应加入对应枚举（如 `FreehandShape`），通过 Plait 的 `board.pointer` 单值机制自动互斥，禁止使用独立布尔状态（如 `xxxActive`）手动管理
-- **Viewport 缩放+平移用 `updateViewport` 一步完成**：需要同时改变 zoom 和 origination 时，使用 `BoardTransforms.updateViewport(board, origination, zoom)` 一次性设置；禁止 `updateZoom()` + `moveToCenter()` 分两步调用，`updateZoom` 会先改变视口位置，导致 `moveToCenter` 基于错误的视口状态计算偏移。`origination` 是视口左上角在世界坐标中的位置，居中公式：`origination = [centerX - viewportWidth/2/zoom, centerY - viewportHeight/2/zoom]`
-- **全屏展示画布局部内容用「viewport 对准 + 隐藏 UI + 蒙层挖洞」**：需要全屏/沉浸式展示某个区域（如 Frame 幻灯片播放）时，三步走：① viewport 对准目标区域（`updateViewport`）；② 给 `document.documentElement` 添加 CSS class（如 `slideshow-active`），用 `display: none !important` 隐藏所有 UI 覆盖层（工具栏、抽屉、面板、输入栏等）；③ 在画布上方渲染全屏蒙层，用四块黑色 div 围住目标区域，中间留出"窗口"。注意：不要用 `toImage` 截图方案（`<defs>` 引用丢失、子元素绑定不完全导致内容缺失），也不要仅操纵 viewport 而不隐藏 UI（抽屉/工具栏会露出来）
-- **自定义组件 `onContextChanged` 必须处理 viewport 变化**：自定义 Plait 组件（如 `FrameComponent`、`FreehandComponent`、`PenPathComponent`）的 `onContextChanged` 中，必须检测 viewport 变化（`board.viewport.zoom/offsetX/offsetY`）并在元素被选中时重绘选择框（`activeGenerator.processDrawing`）。选择框渲染在 `board-active-svg`（无 viewBox，坐标通过 `toActiveRectangleFromViewBoxRectangle` 实时计算），而元素渲染在 `board-host-svg`（有 viewBox 自动映射），viewport 变化时选择框不会自动跟随，必须手动重绘。参考 `ToolComponent.onContextChanged` 的实现模式
-- **编程式选中元素后必须触发 `onChange` 才会渲染选中框**：`cacheSelectedElements(board, elements)` 只是在 WeakMap 中缓存选中元素列表，不会触发框架的 `onChange` 回调链，因此选中框不会渲染。`addSelectedElement` 内部也只是调用 `cacheSelectedElements`，同样不会触发渲染。要让选中框立即显示，需要使用 `Transforms.addSelectionWithTemporaryElements(board, elements)`——它会将元素存入 `BOARD_TO_TEMPORARY_ELEMENTS`，然后在下一个事件循环调用 `Transforms.setSelection` 触发 `onChange`，`onChange` 中检测到 temporary elements 后执行 `cacheSelectedElements` 并渲染选中框。适用场景：自定义选择逻辑（如套索选择、编程式批量选中）。如果是单个元素在交互流程中选中（如 pointerUp 点击），框架的 `withSelection` 插件会自动处理，无需手动调用
-- **Frame 拖动元素检测只在开始时执行**：Frame 移动时同步移动内部元素，必须在 `pointerDown` 时记录相交元素 ID，`afterChange` 中只移动预先记录的元素；禁止每次移动都重新检测相交，否则会"吸附"路过的元素
+- **新画布功能必须作为 Plait 插件**，禁止独立 React 组件 + SVG overlay（坐标系不一致、事件冲突）
+- **工具互斥通过 `board.pointer` 管理**，禁止独立布尔状态手动管理
+- **Viewport 缩放+平移用 `updateViewport` 一步完成**，禁止 `updateZoom()` + `moveToCenter()` 分两步
+- **全屏展示用「viewport 对准 + 隐藏 UI + 蒙层挖洞」**，禁止 `toImage` 截图方案
+- **自定义组件 `onContextChanged` 必须处理 viewport 变化**，viewport 变化时选择框不会自动跟随
+- **编程式选中元素用 `Transforms.addSelectionWithTemporaryElements`**，`cacheSelectedElements` 不触发渲染
+- **Frame 拖动元素检测只在 `pointerDown` 时执行**，禁止每次移动重新检测
 
 ---
 
@@ -185,11 +141,9 @@ if (adapter) {
 
 > **极简主义是本项目的核心哲学。代码越少，Bug 越少，维护成本越低。**
 
-1. **坚决删除冗余代码**：发现无用代码立即删除，不犹豫、不"留着以后可能用到"
-2. **拒绝重复实现**：主线程已实现的功能，SW 不要再实现一遍；一处写入成功，不需要另一处"同步通知"
-3. **质疑每一行代码**：新增代码前问"这真的需要吗？"；能用 10 行解决的不写 100 行
-4. **历史包袱及时清理**：架构演进后的遗留代码、废弃的 RPC 调用、不再使用的 Handler 都要删除
-5. **YAGNI 原则**：You Aren't Gonna Need It —— 不为假想的未来需求预留代码
+1. **坚决删除冗余代码**：发现无用代码立即删除，不犹豫、不"留着以后可能用到"；架构演进后的遗留代码及时清理
+2. **拒绝重复实现**：主线程已实现的功能，SW 不要再实现一遍；相似功能提取共享模块
+3. **YAGNI 原则**：新增代码前问"这真的需要吗？"；能用 10 行解决的不写 100 行；不为假想的未来需求预留代码
 
 ### 必须遵守
 
@@ -266,102 +220,14 @@ if (adapter) {
 13. **CPU 密集型循环需 yield**：大量 JSON.stringify/加密等操作的循环，每 3-5 次迭代调用 `await yieldToMain()` 让出主线程
 14. **跨 React Root 状态共享**：Plait 文本组件通过 `createRoot` 渲染在独立 React 树中，Context 无法穿透；需用 `useSyncExternalStore` + 模块级 store 共享状态
 15. **列表索引引用须用 ID 追踪**：当 Viewer/弹窗通过 `currentIndex` 引用列表项时，若列表可能动态变化（新项插入/删除），必须通过 item ID 在列表变化后修正索引，否则会显示错误的内容
-16. **RxJS 事件/全局 Store 传递的对象必须是新引用**：当 Service 通过 RxJS Subject 推送事件、或通过 `getAllXxx()` 返回内存中的对象时，React 组件的 `React.memo` 自定义比较函数比较的是属性值而非引用。如果原地修改对象再 emit，`prev.task.progress === next.task.progress` 看到的是同一个已变异对象的同一个值 → 永远相等 → 不重渲染。**必须创建新对象后再存入 Map 并 emit**
+16. **RxJS 事件/全局 Store 传递的对象必须是新引用**：原地修改对象再 emit 会导致 React.memo 失效，必须创建新对象后再存入 Map 并 emit
 
-#### RxJS 事件传递对象引用导致 React.memo 失效
+### 其他常见陷阱
 
-**场景**: Service 层通过 RxJS Subject 推送任务更新事件，多个 React 组件通过不同方式消费（增量替换 vs 全量快照），但 `TaskItem` 共用同一个 `React.memo` 自定义比较
+> 详细示例请参考 `docs/CODING_RULES.md`
 
-❌ **错误示例**:
-```typescript
-// Service: 原地修改对象再 emit
-onProgress: (progress) => {
-  const localTask = this.tasks.get(taskId);
-  localTask.progress = progress;         // 原地修改
-  localTask.updatedAt = Date.now();
-  this.emitEvent('taskUpdated', localTask); // 传递同一引用
-}
-
-// Hook A（增量替换）：event.task 与数组中旧对象是同一引用
-setTasks(prev => prev.map(t => t.id === event.task.id ? event.task : t));
-// React.memo: prev.task === next.task（同一对象）→ 不渲染
-
-// Hook B（全量快照）：getAllTasks() 返回 Map 中的原始对象
-setTasks(taskQueueService.getAllTasks());
-// React.memo: prev.task.progress === next.task.progress（同一对象，值已被改过）→ 不渲染
-```
-
-✅ **正确示例**:
-```typescript
-// Service: 创建新对象存入 Map 再 emit
-onProgress: (progress) => {
-  const localTask = this.tasks.get(taskId);
-  const updatedTask = { ...localTask, progress, updatedAt: Date.now() };
-  this.tasks.set(taskId, updatedTask);         // 新对象存入 Map
-  this.emitEvent('taskUpdated', updatedTask);  // 新引用
-}
-
-// emitEvent 中额外浅拷贝（双保险）
-private emitEvent(type, task) {
-  this.taskUpdates$.next({ type, task: { ...task }, timestamp: Date.now() });
-}
-```
-
-**原因**: React.memo 的自定义比较函数比较的是属性值，但如果 `prev.task` 和 `next.task` 指向同一个被原地修改的对象，所有属性比较都会返回 `true`（值已经被改过了）。必须确保每次更新都产生新的对象引用，让 `prev.task.progress !== next.task.progress` 成立。
-
-### API 错误字段类型安全
-
-**场景**: 处理外部 API 返回的 error 字段时，`error` 可能是字符串也可能是对象
-
-❌ **错误示例**:
-```typescript
-// API 返回：{ error: { code: "generation_failed", message: "[403]..." } }
-const data = await response.json();
-throw new Error(data.error || data.message || 'Failed');
-// data.error 是对象 → new Error({...}) → error.message = "[object Object]"
-```
-
-✅ **正确示例**:
-```typescript
-const data = await response.json();
-const errMsg = typeof data.error === 'string'
-  ? data.error
-  : (data.error?.message || data.message || 'Failed');
-const error = new Error(errMsg);
-if (typeof data.error === 'object' && data.error?.code) {
-  (error as any).code = data.error.code;
-}
-throw error;
-```
-
-**原因**: `new Error(value)` 内部调用 `String(value)`，对象会变成 `"[object Object]"`。API 的 `error` 字段格式不统一（有的返回字符串，有的返回 `{ code, message }` 对象），必须用 `typeof` 区分处理。
-
-### 数值范围转换规则
-
-回调链中传递进度/百分比等数值时，必须明确每一层的值域范围并保持一致：
-
-❌ **错误示例**:
-```typescript
-// pollVideoStatus 回调返回 0-1 范围
-onProgress(apiProgress / 100); // 100 → 1.0
-
-// 调用方误以为是 0-100 范围，乘以 0.8
-options?.onProgress?.({ progress: 10 + progress * 0.8 });
-// 结果：10 + 1.0 * 0.8 = 10.8，而非预期的 90
-```
-
-✅ **正确示例**:
-```typescript
-// 明确注释值域范围
-onProgress(apiProgress / 100); // 输出 0-1
-
-// 正确映射：0-1 → 10-90 需乘以 80
-// progress 是 0-1 范围，映射到 10-90：10 + (0~1) * 80
-options?.onProgress?.({ progress: 10 + progress * 80 });
-// 结果：10 + 1.0 * 80 = 90 ✓
-```
-
-**原因**: 回调链跨多层传递数值时，0-1 和 0-100 两种范围容易混淆。每个回调的输入/输出值域必须用注释明确标注，映射公式应能通过边界值（0 和 max）验证正确性。
+1. **API 错误字段类型安全**：`data.error` 可能是字符串或对象，必须用 `typeof` 区分后再传给 `new Error()`
+2. **数值范围转换**：回调链传递进度值时，0-1 和 0-100 范围容易混淆，每层输入/输出值域必须注释标注
 
 ### 缓存规则
 
@@ -412,25 +278,17 @@ options?.onProgress?.({ progress: 10 + progress * 80 });
 
 ### 专题文档
 
-- `docs/Z_INDEX_GUIDE.md` - Z-Index 层级管理
-- `docs/UNIFIED_CACHE_DESIGN.md` - 缓存架构设计
-- `docs/SW_DEBUG_POSTMESSAGE_LOGGING.md` - SW 调试日志
-- `docs/CLAUDE_CODE_BEST_PRACTICES.md` - Claude Code 使用技巧
+`docs/Z_INDEX_GUIDE.md`（层级管理）、`docs/UNIFIED_CACHE_DESIGN.md`（缓存架构）、`docs/SW_DEBUG_POSTMESSAGE_LOGGING.md`（SW 调试）、`docs/CLAUDE_CODE_BEST_PRACTICES.md`（使用技巧）
 
 ### 规范文档
 
-- `openspec/AGENTS.md` - OpenSpec 规范（涉及架构变更时必读）
+`openspec/AGENTS.md` - OpenSpec 规范（涉及架构变更时必读）
 
 ---
 
 ## OpenSpec 说明
 
-当请求涉及以下内容时，请先打开 `@/openspec/AGENTS.md`：
-- 提及计划或提案 (proposal, spec, change, plan)
-- 引入新功能、破坏性变更、架构调整
-- 需要权威规范才能编码的模糊情况
-
----
+当请求涉及计划/提案/破坏性变更/架构调整时，请先打开 `@/openspec/AGENTS.md`。
 
 ## 验证命令
 
