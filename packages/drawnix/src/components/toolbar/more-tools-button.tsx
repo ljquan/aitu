@@ -367,14 +367,18 @@ const MoreToolsPanel: React.FC<MoreToolsPanelProps> = ({
 
   // 指针操作
   const onPointerDown = useCallback((pointer: DrawnixPointerType) => {
-    // 切换工具前，结束钢笔绘制
     finishPenOnToolSwitch(board);
-    setCreationMode(board, BoardCreationMode.dnd);
+    if (pointer === BasicShapes.text) {
+      setCreationMode(board, null as any);
+    } else {
+      setCreationMode(board, BoardCreationMode.dnd);
+    }
     BoardTransforms.updatePointerType(board, pointer);
     setPointer(pointer);
   }, [board, setPointer]);
 
-  const onPointerUp = useCallback(() => {
+  const onPointerUp = useCallback((pointer?: DrawnixPointerType) => {
+    if (pointer === BasicShapes.text) return;
     setCreationMode(board, BoardCreationMode.drawing);
   }, [board]);
 
@@ -398,7 +402,7 @@ const MoreToolsPanel: React.FC<MoreToolsPanelProps> = ({
     if (meta.pointer) {
       if (!isBasicPointer(meta.pointer)) {
         onPointerDown(meta.pointer);
-        onPointerUp();
+        onPointerUp(meta.pointer);
       } else {
         BoardTransforms.updatePointerType(board, meta.pointer);
         setPointer(meta.pointer);

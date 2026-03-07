@@ -9,15 +9,19 @@ import {
   Selection,
   ThemeColorMode,
   Viewport,
+  BoardTransforms,
   getSelectedElements,
   getHitElementByPoint,
   toHostPoint,
   toViewBoxPoint,
   getViewportOrigination,
+  RectangleClient,
+  Transforms,
+  type Point,
 } from '@plait/core';
 import React, { useState, useRef, useEffect, useMemo, useCallback, lazy, Suspense } from 'react';
 import { withGroup } from '@plait/common';
-import { withDraw } from '@plait/draw';
+import { withDraw, BasicShapes, DrawTransforms } from '@plait/draw';
 import { MindThemeColors, withMind } from '@plait/mind';
 import MobileDetect from 'mobile-detect';
 import { withMindExtend } from './plugins/with-mind-extend';
@@ -51,6 +55,7 @@ import { withTool } from './plugins/with-tool';
 import { withToolFocus } from './plugins/with-tool-focus';
 import { withToolResize } from './plugins/with-tool-resize';
 import { withMultiResize } from './plugins/with-multi-resize';
+import { withTextResize } from './plugins/with-text-resize';
 import { withWorkZone } from './plugins/with-workzone';
 import { MultiSelectionHandles } from './components/multi-selection-handles';
 import { ActiveTaskWarning } from './components/task-queue/ActiveTaskWarning';
@@ -105,7 +110,7 @@ import { useI18n } from './i18n';
 import { safeReload } from './utils/active-tasks';
 import { CommandPalette } from './components/command-palette/command-palette';
 import { CanvasSearch } from './components/canvas-search/canvas-search';
-import { useTabSync, markTabSyncVersion } from './hooks/useTabSync';
+import { useTabSync } from './hooks/useTabSync';
 
 const TTDDialog = lazy(() => import('./components/ttd-dialog/ttd-dialog').then(module => ({ default: module.TTDDialog })));
 const SettingsDialog = lazy(() => import('./components/settings-dialog/settings-dialog').then(module => ({ default: module.SettingsDialog })));
@@ -603,6 +608,7 @@ export const Drawnix: React.FC<DrawnixProps> = ({
     buildDrawnixHotkeyPlugin(updateAppState),
     withFreehand,
     withPen,
+    withTextResize, // 文本缩放 - 拖拽缩放文本框时连带字体大小等比缩放
     withMultiResize, // 多选缩放 - 支持 Freehand 和 PenPath 的多选缩放
     buildPencilPlugin(updateAppState),
     buildTextLinkPlugin(updateAppState),
@@ -874,6 +880,15 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
   const [quickToolbarVisible, setQuickToolbarVisible] = useState(false);
   const [quickToolbarPosition, setQuickToolbarPosition] = useState<[number, number] | null>(null);
 
+  // 浮动文本输入状态（文本工具单击画布时使用）
+  const [inlineTextInput, setInlineTextInput] = useState<{
+    screenX: number;
+    screenY: number;
+    worldPoint: Point;
+    zoom: number;
+  } | null>(null);
+  const inlineTextRef = useRef<HTMLDivElement>(null);
+
   // 媒体预览状态
   const [mediaPreviewVisible, setMediaPreviewVisible] = useState(false);
   const [mediaPreviewItems, setMediaPreviewItems] = useState<UnifiedMediaItem[]>([]);
@@ -990,7 +1005,6 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
     try {
       const { unifiedCacheService } = await import('./services/unified-cache-service');
       const { insertImageFromUrl } = await import('./data/image');
-      const { PlaitBoard } = await import('@plait/core');
       
       const taskId = `edited-image-${Date.now()}`;
       const stableUrl = `/__aitu_cache__/image/${taskId}.png`;
@@ -1038,6 +1052,40 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
     selectShape: selectAutoCompleteShape,
     closePicker: closeAutoCompletePicker,
   } = useAutoCompleteShapePicker(board);
+
+  // 浮动文本输入：自动聚焦
+  useEffect(() => {
+    if (inlineTextInput && inlineTextRef.current) {
+      inlineTextRef.current.focus();
+    }
+  }, [inlineTextInput]);
+
+  // 浮动文本输入：提交文本到画布
+  const commitInlineText = useCallback(() => {
+    if (!board || !inlineTextInput || !inlineTextRef.current) {
+      setInlineTextInput(null);
+      return;
+    }
+    const text = inlineTextRef.current.innerText || '';
+    if (text.trim()) {
+      DrawTransforms.insertText(board, inlineTextInput.worldPoint, text);
+      
+      // 修正可能的 Infinity 高度问题
+      requestAnimationFrame(() => {
+        const lastElement = board.children[board.children.length - 1];
+        if (PlaitDrawElement.isText(lastElement)) {
+          const textEl = lastElement as any;
+          if (!isFinite(textEl.textHeight)) {
+            const rect = RectangleClient.getRectangleByPoints(textEl.points);
+            Transforms.setNode(board, { textHeight: rect.height }, [board.children.length - 1]);
+          }
+        }
+      });
+    }
+    setInlineTextInput(null);
+    BoardTransforms.updatePointerType(board, PlaitPointerType.selection);
+    updateState(prev => ({ ...prev, pointer: PlaitPointerType.selection }));
+  }, [board, inlineTextInput, updateState]);
 
   // 监听双击事件 - 处理图片/视频预览和空白区域快捷工具栏
   useEffect(() => {
@@ -1088,7 +1136,7 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
                                    target.closest('.plait-workzone-container') ||
                                    target.closest('foreignObject');
 
-      // 只有双击空白区域时才显示快速创建工具栏
+      // 只有双击空白区域时才处理
       if (!hitElement && !isInsideInteractive) {
         const position: [number, number] = [event.clientX, event.clientY];
         setQuickToolbarPosition(position);
@@ -1121,6 +1169,28 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
 
       if (!isInsideCanvas) {
         return;
+      }
+
+      // 文本工具激活时：单击空白区域显示浮动文本输入
+      if (PlaitBoard.isPointer(board, BasicShapes.text)) {
+        const isInsideInteractive = target.closest('.plait-tool-container') ||
+                                     target.closest('.plait-workzone-container') ||
+                                     target.closest('foreignObject');
+        if (!isInsideInteractive) {
+          const viewBoxPoint = toViewBoxPoint(board, toHostPoint(board, event.clientX, event.clientY));
+          const hitElement = getHitElementByPoint(board, viewBoxPoint);
+          if (!hitElement) {
+            setInlineTextInput({
+              screenX: event.clientX,
+              screenY: event.clientY,
+              worldPoint: viewBoxPoint,
+              zoom: board.viewport.zoom,
+            });
+            event.preventDefault();
+            event.stopPropagation();
+            return;
+          }
+        }
       }
 
       // 关闭项目抽屉和工具箱抽屉
@@ -1266,6 +1336,38 @@ const DrawnixContent: React.FC<DrawnixContentProps> = ({
             visible={quickToolbarVisible}
             onClose={() => setQuickToolbarVisible(false)}
           />
+          {/* 浮动文本输入 - 文本工具双击画布时出现 */}
+          {inlineTextInput && (
+            <div
+              ref={inlineTextRef}
+              contentEditable
+              suppressContentEditableWarning
+              style={{
+                position: 'fixed',
+                left: inlineTextInput.screenX,
+                top: inlineTextInput.screenY - 14 * inlineTextInput.zoom / 2,
+                minWidth: '2px',
+                minHeight: '1.5em',
+                outline: 'none',
+                border: 'none',
+                background: 'transparent',
+                fontSize: `${14 * inlineTextInput.zoom}px`,
+                lineHeight: '1.5',
+                color: '#333',
+                caretColor: '#333',
+                zIndex: 10000,
+                whiteSpace: 'pre-wrap',
+                fontFamily: 'inherit',
+              }}
+              onBlur={commitInlineText}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') {
+                  setInlineTextInput(null);
+                }
+                e.stopPropagation();
+              }}
+            />
+          )}
           {/* Media Viewer - 画布图片/视频预览（支持内置编辑模式） */}
           <UnifiedMediaViewer
             visible={mediaPreviewVisible}

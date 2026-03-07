@@ -87,12 +87,19 @@ function getHitRectangleResizeHandleRef(
 }
 
 /**
- * 检查选中元素是否包含需要特殊处理的类型
+ * 检查选中元素是否包含需要特殊处理的类型（Freehand、PenPath、Text）
  */
 function hasCustomResizableElements(elements: PlaitElement[]): boolean {
   return elements.some(
-    (el) => Freehand.isFreehand(el) || PenPath.isPenPath(el)
+    (el) => Freehand.isFreehand(el) || PenPath.isPenPath(el) || PlaitDrawElement.isText(el)
   );
+}
+
+/**
+ * 检查元素列表中是否包含文本元素
+ */
+function hasTextElements(elements: PlaitElement[]): boolean {
+  return elements.some((el) => PlaitDrawElement.isText(el));
 }
 
 /**
@@ -261,9 +268,36 @@ function scalePenPathElement(
   }
 }
 
+const DEFAULT_FONT_SIZE = 14;
+
+interface TextNode {
+  text?: string;
+  'font-size'?: string;
+  children?: TextNode[];
+  [key: string]: unknown;
+}
+
+function scaleTextFontSizes(node: TextNode, scaleFactor: number): TextNode {
+  const result: TextNode = { ...node };
+  if ('text' in node && typeof node.text === 'string') {
+    const currentSize = node['font-size']
+      ? parseFloat(node['font-size'])
+      : DEFAULT_FONT_SIZE;
+    const newSize = Math.max(1, Math.round(currentSize * scaleFactor * 10) / 10);
+    result['font-size'] = `${newSize}`;
+  }
+  if (Array.isArray(node.children)) {
+    result.children = node.children.map((child) =>
+      scaleTextFontSizes(child, scaleFactor)
+    );
+  }
+  return result;
+}
+
 /**
- * 缩放通用 Plait 元素（图片、图形等）
+ * 缩放通用 Plait 元素（图片、图形、文本等）
  * 使用原始元素状态来计算，避免累积误差
+ * 文本元素会同时缩放字体大小
  */
 function scaleGenericElement(
   board: PlaitBoard,
@@ -276,13 +310,11 @@ function scaleGenericElement(
   const scaleX = newRect.width / startRect.width;
   const scaleY = newRect.height / startRect.height;
 
-  // 计算元素相对于选区的位置
   const relX = originalElementRect.x - startRect.x;
   const relY = originalElementRect.y - startRect.y;
   const newElementX = newRect.x + relX * scaleX;
   const newElementY = newRect.y + relY * scaleY;
 
-  // 计算新的宽高
   const newWidth = originalElementRect.width * scaleX;
   const newHeight = originalElementRect.height * scaleY;
 
@@ -293,8 +325,6 @@ function scaleGenericElement(
 
   const path = board.children.findIndex((el: any) => el.id === elementId);
   if (path >= 0) {
-    // 检查是否是图片元素，如果是则同时更新 width 和 height 属性
-    // 图片元素的实际渲染尺寸由 width 和 height 属性控制
     if (PlaitDrawElement.isDrawElement(originalElement) && PlaitDrawElement.isImage(originalElement)) {
       Transforms.setNode(
         board,
@@ -302,6 +332,22 @@ function scaleGenericElement(
           points: newPoints,
           width: newWidth,
           height: newHeight,
+        } as Partial<PlaitElement>,
+        [path]
+      );
+    } else if (PlaitDrawElement.isText(originalElement)) {
+      // 参考 Excalidraw: nextFontSize = fontSize * (nextWidth / width)
+      // 多选时已强制等比 (scaleX = scaleY)，用 scaleX 即宽度比
+      const origEl = originalElement as any;
+      const scaledText = scaleTextFontSizes(origEl.text, scaleX);
+      const origTextHeight = origEl.textHeight || DEFAULT_FONT_SIZE * 1.4;
+      Transforms.setNode(
+        board,
+        {
+          points: newPoints,
+          text: scaledText,
+          textHeight: origTextHeight * scaleX,
+          autoSize: false,
         } as Partial<PlaitElement>,
         [path]
       );
@@ -333,13 +379,16 @@ function onResize(
   const dx = endPoint[0] - startPoint[0];
   const dy = endPoint[1] - startPoint[1];
 
-  // 使用公共函数计算新矩形，支持 Shift 锁定比例
+  // 参考 Excalidraw：只要选中元素含文本（或旋转、分组），就强制等比缩放
+  // keepAspectRatio = shouldMaintainAspectRatio || hasTextElement
+  const keepAspectRatio = getShiftKeyState() || hasTextElements(elements);
+
   const newRect = calculateResizedRect(
     startRectangle,
     handle,
     dx,
     dy,
-    getShiftKeyState() // Shift 键锁定比例
+    keepAspectRatio
   );
 
   // 缩放所有选中的元素（使用原始状态计算，避免累积误差）

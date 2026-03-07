@@ -1,10 +1,11 @@
 /**
- * 画笔/橡皮擦自定义光标 Hook
- * 根据画笔颜色和大小生成动态光标，考虑画布缩放
+ * 画笔/橡皮擦/文本工具自定义光标 Hook
+ * 根据工具类型设置对应光标，画笔根据颜色和大小生成动态光标，考虑画布缩放
  */
 
 import { useEffect, useCallback, useRef } from 'react';
 import { PlaitBoard } from '@plait/core';
+import { BasicShapes } from '@plait/draw';
 import { BrushShape, getFreehandSettings } from '../plugins/freehand/freehand-settings';
 import { FreehandShape } from '../plugins/freehand/type';
 import { getFreehandPointers } from '../plugins/freehand/utils';
@@ -117,6 +118,8 @@ function applyCursorStyle(board: PlaitBoard, pointer: string) {
     const scaledSize = settings.eraserWidth * zoom;
     const cursorStyle = generateCursorSvg(ERASER_COLOR, scaledSize, settings.eraserShape);
     hostSvg.style.cursor = cursorStyle;
+  } else if (pointer === BasicShapes.text) {
+    hostSvg.style.cursor = 'crosshair';
   } else {
     hostSvg.style.cursor = '';
   }

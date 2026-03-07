@@ -156,10 +156,8 @@ export const QuickCreationToolbar: React.FC<QuickCreationToolbarProps> = ({
   // 工具按钮处理函数
   const handleTextClick = () => {
     resetAllPopovers();
-    // 切换工具前，结束钢笔绘制
     finishPenOnToolSwitch(board);
-    // 设置创建模式为 drawing，允许在画布上点击创建文本
-    setCreationMode(board, BoardCreationMode.drawing);
+    setCreationMode(board, null as any);
     BoardTransforms.updatePointerType(board, BasicShapes.text);
     setPointer(BasicShapes.text);
     onClose();

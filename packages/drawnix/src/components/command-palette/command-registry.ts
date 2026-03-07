@@ -97,7 +97,7 @@ export function buildDefaultCommands(
       category: 'tool',
       shortcut: 'T',
       perform: (board) => {
-        setCreationMode(board, BoardCreationMode.dnd);
+        setCreationMode(board, null as any);
         BoardTransforms.updatePointerType(board, BasicShapes.text);
         updateAppState({ pointer: BasicShapes.text });
       },

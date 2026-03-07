@@ -87,9 +87,6 @@ export const AddFrameDialog: React.FC<AddFrameDialogProps> = ({
   const [customWidth, setCustomWidth] = useState<number>(1920);
   const [customHeight, setCustomHeight] = useState<number>(1080);
 
-  const finalWidth = selectedPreset ? selectedPreset.width : customWidth;
-  const finalHeight = selectedPreset ? selectedPreset.height : customHeight;
-
   const addFrame = useCallback(
     (w: number, h: number) => {
       if (!board) return;

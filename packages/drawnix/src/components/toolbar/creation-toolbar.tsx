@@ -383,12 +383,20 @@ export const CreationToolbar: React.FC<ToolbarSectionProps> = ({
   const onPointerDown = (pointer: DrawnixPointerType) => {
     // 切换工具前，结束钢笔绘制
     finishPenOnToolSwitch(board);
-    setCreationMode(board, BoardCreationMode.dnd);
-    BoardTransforms.updatePointerType(board, pointer);
-    setPointer(pointer);
+    if (pointer === BasicShapes.text) {
+      // 文本工具：清除创建模式，改为双击画布创建
+      setCreationMode(board, null as any);
+      BoardTransforms.updatePointerType(board, pointer);
+      setPointer(pointer);
+    } else {
+      setCreationMode(board, BoardCreationMode.dnd);
+      BoardTransforms.updatePointerType(board, pointer);
+      setPointer(pointer);
+    }
   };
 
-  const onPointerUp = () => {
+  const onPointerUp = (pointer?: DrawnixPointerType) => {
+    if (pointer === BasicShapes.text) return;
     setCreationMode(board, BoardCreationMode.drawing);
   };
 
@@ -417,7 +425,7 @@ export const CreationToolbar: React.FC<ToolbarSectionProps> = ({
     finishPenOnToolSwitch(board);
 
     if (button.pointer && !isBasicPointer(button.pointer)) {
-      onPointerUp();
+      onPointerUp(button.pointer);
     } else if (button.pointer && isBasicPointer(button.pointer)) {
       BoardTransforms.updatePointerType(board, button.pointer);
       setPointer(button.pointer);
