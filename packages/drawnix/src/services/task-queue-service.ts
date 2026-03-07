@@ -531,6 +531,7 @@ class TaskQueueService {
     });
 
     // Emit a single batch update event instead of per-task events
+    console.warn(`[TaskQueueService] restoreTasks: ${restoredCount}/${tasks.length} restored, total in memory: ${this.tasks.size}`);
     if (restoredCount > 0) {
       // Use the first task to emit a generic update that triggers UI refresh
       const allTasks = Array.from(this.tasks.values());

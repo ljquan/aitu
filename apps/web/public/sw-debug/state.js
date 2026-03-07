@@ -195,6 +195,9 @@ export function cacheElements() {
     panelTitle: document.getElementById('panelTitle'),
     // Backup button
     backupDataBtn: document.getElementById('backupData'),
+    // Restore button
+    restoreBackupBtn: document.getElementById('restoreBackup'),
+    restoreBackupInput: document.getElementById('restoreBackupInput'),
   };
 }
 

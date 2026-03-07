@@ -77,6 +77,7 @@ export function useFilteredTaskQueue(
       const isAvailable = await taskStorageReader.isAvailable();
       if (isAvailable) {
         const result = await taskStorageReader.getTasksByType(taskType, offset, pageSize);
+        console.warn(`[useFilteredTaskQueue] Loaded ${result.tasks.length}/${result.total} tasks (type=${taskType}, offset=${offset})`);
         
         if (append) {
           setTasks(prev => {

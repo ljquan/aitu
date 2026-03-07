@@ -15,6 +15,11 @@ let memoryMonitorInterval = null;
  * Load crash logs from SW (uses duplex RPC)
  */
 export async function loadCrashLogs() {
+  // 分析模式下不从 SW 重新加载，直接渲染已导入的数据
+  if (state.isAnalysisMode) {
+    renderCrashLogs();
+    return;
+  }
   try {
     const result = await loadCrashSnapshots();
     if (result && result.snapshots) {

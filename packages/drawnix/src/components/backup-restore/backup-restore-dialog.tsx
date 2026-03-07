@@ -14,7 +14,8 @@ import {
   BackupOptions,
   ImportResult,
   BackupWorkspaceState,
-} from '../../services/backup-restore-service';
+  ExportResult,
+} from '../../services/backup-restore';
 import { workspaceService } from '../../services/workspace-service';
 import { safeReload } from '../../utils/active-tasks';
 import './backup-restore-dialog.scss';
@@ -133,7 +134,7 @@ export const BackupRestoreDialog = ({
     setProgressMessage('正在准备...');
 
     try {
-      const blob = await backupRestoreService.exportToZip(
+      const result: ExportResult = await backupRestoreService.exportToZip(
         backupOptions,
         (p, msg) => {
           setProgress(p);
@@ -141,8 +142,7 @@ export const BackupRestoreDialog = ({
         }
       );
 
-      backupRestoreService.downloadZip(blob);
-      MessagePlugin.success('备份成功！');
+      MessagePlugin.success(`备份成功！共 ${result.totalParts} 个文件`);
       handleClose();
     } catch (error) {
       console.error('[BackupRestore] Export failed:', error);

@@ -655,7 +655,7 @@ interface ReferenceImageUploadProps {
 支持将用户数据（提示词、项目、素材）导出为 ZIP 文件，并从 ZIP 文件恢复数据。
 
 **核心文件**：
-- `services/backup-restore-service.ts` - 备份恢复服务
+- `services/backup-restore/` - 备份恢复服务（支持自动分片）
 - `components/backup-restore/backup-restore-dialog.tsx` - UI 对话框
 
 **功能特点**：

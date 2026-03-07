@@ -62,6 +62,7 @@ export function useTaskStorage(): void {
 
       // Wait for browser idle time to avoid blocking page load
       await waitForIdle(50);
+      console.warn('[useTaskStorage] Idle callback fired, starting init');
 
       try {
         // 数据迁移：从旧 sw-task-queue 数据库迁移到 aitu-app（一次性）
@@ -72,11 +73,11 @@ export function useTaskStorage(): void {
 
         // Load tasks from IndexedDB (aitu-app)
         const storedTasks = await taskStorageReader.getAllTasks();
-        // console.log(`[useTaskStorage] Loaded ${storedTasks.length} tasks from IndexedDB`);
+        console.warn(`[useTaskStorage] Loaded ${storedTasks.length} tasks from IndexedDB`);
 
         if (storedTasks.length > 0 && subscriptionActive) {
           taskQueueService.restoreTasks(storedTasks);
-          // console.log(`[useTaskStorage] Restored ${storedTasks.length} tasks from storage`);
+          console.warn(`[useTaskStorage] Restored ${storedTasks.length} tasks to memory`);
 
           // Handle interrupted processing tasks based on task type and remoteId
           const processingTasks = storedTasks.filter(

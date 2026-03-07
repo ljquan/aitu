@@ -265,19 +265,27 @@ export async function fetchFromCDNWithFallback(
         }
         
         // 3. 内容采样验证（检测 HTML 错误页面）
+        // 只读取前几百字节，避免将整个响应体加载到内存
         const clonedResponse = response.clone();
         try {
-          const textSample = await clonedResponse.text().then(t => t.slice(0, 200));
-          const looksLikeHtml = textSample.includes('<!DOCTYPE') || 
-                               textSample.includes('<html') || 
-                               textSample.includes('<HTML') ||
-                               textSample.includes('Not Found') ||
-                               textSample.includes('404');
-          
-          if (isTextResource && looksLikeHtml) {
-            console.warn(`[CDN Fallback] ${cdn.name} returned HTML instead of ${contentType}`);
-            markCDNFailure(cdn.name);
-            continue;
+          const reader = clonedResponse.body?.getReader();
+          if (reader) {
+            const { value } = await reader.read();
+            reader.cancel(); // 立即释放流，不读取剩余数据
+            if (value) {
+              const textSample = new TextDecoder().decode(value.slice(0, 200));
+              const looksLikeHtml = textSample.includes('<!DOCTYPE') ||
+                                   textSample.includes('<html') ||
+                                   textSample.includes('<HTML') ||
+                                   textSample.includes('Not Found') ||
+                                   textSample.includes('404');
+
+              if (isTextResource && looksLikeHtml) {
+                console.warn(`[CDN Fallback] ${cdn.name} returned HTML instead of ${contentType}`);
+                markCDNFailure(cdn.name);
+                continue;
+              }
+            }
           }
         } catch (sampleError) {
           // 采样失败不阻止使用（可能是二进制文件）

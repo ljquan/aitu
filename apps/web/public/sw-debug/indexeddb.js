@@ -141,3 +141,57 @@ export async function readKVItem(key) {
     };
   });
 }
+
+/**
+ * 向 IndexedDB 写入单条数据（put 语义，按 key 覆盖）
+ */
+export async function writeToIDB(dbName, storeName, item) {
+  const db = await openIDB(dbName, storeName);
+  if (!db) {
+    throw new Error(`Database ${dbName} or store ${storeName} not found`);
+  }
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(storeName, 'readwrite');
+    const store = tx.objectStore(storeName);
+    const request = store.put(item);
+    request.onerror = () => { db.close(); reject(request.error); };
+    request.onsuccess = () => { db.close(); resolve(); };
+  });
+}
+
+/**
+ * 向 KV 存储写入数据
+ */
+export async function writeKVItem(key, value) {
+  const db = await openIDB(IDB_STORES.KV.name, IDB_STORES.KV.store);
+  if (!db) {
+    throw new Error('KV store not found');
+  }
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(IDB_STORES.KV.store, 'readwrite');
+    const store = tx.objectStore(IDB_STORES.KV.store);
+    const request = store.put({ key, value });
+    request.onerror = () => { db.close(); reject(request.error); };
+    request.onsuccess = () => { db.close(); resolve(); };
+  });
+}
+
+/**
+ * 批量写入 IndexedDB（单事务内完成）
+ */
+export async function writeBatchToIDB(dbName, storeName, items) {
+  if (!items || items.length === 0) return;
+  const db = await openIDB(dbName, storeName);
+  if (!db) {
+    throw new Error(`Database ${dbName} or store ${storeName} not found`);
+  }
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(storeName, 'readwrite');
+    const store = tx.objectStore(storeName);
+    for (const item of items) {
+      store.put(item);
+    }
+    tx.oncomplete = () => { db.close(); resolve(); };
+    tx.onerror = () => { db.close(); reject(tx.error); };
+  });
+}

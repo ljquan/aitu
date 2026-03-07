@@ -169,14 +169,42 @@ function getFriendlyErrorMessage(error: any): string {
  *   return <YourComponents />;
  * }
  */
+// 最大并发任务数，防止页面加载时大量任务同时执行导致 OOM
+const MAX_CONCURRENT_TASKS = 3;
+// 页面加载后延迟执行积压任务，避免与页面初始化竞争资源
+const STARTUP_DELAY_MS = 2000;
+
 export function useTaskExecutor(): void {
   const executingTasksRef = useRef<Set<string>>(new Set());
+  const pendingQueueRef = useRef<Task[]>([]);
   const timeoutCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     let isActive = true;
 
     // All tasks execute in main thread
+
+    // 尝试从等待队列中执行下一个任务（并发控制）
+    // 注意：引用了 executeTask，但 executeTask 也是 const，
+    // 由于 tryExecuteNext 只在异步回调中被调用，此时 executeTask 已定义
+    const tryExecuteNext = () => {
+      if (!isActive) return;
+      while (
+        pendingQueueRef.current.length > 0 &&
+        executingTasksRef.current.size < MAX_CONCURRENT_TASKS
+      ) {
+        const next = pendingQueueRef.current.shift();
+        if (next && !executingTasksRef.current.has(next.id)) {
+          executeTask(next);
+        }
+      }
+    };
+
+    // 任务完成后释放并发槽位，触发队列中下一个任务
+    const onTaskFinished = (taskId: string) => {
+      executingTasksRef.current.delete(taskId);
+      tryExecuteNext();
+    };
 
     // Function to resume a video task that has a remoteId
     const resumeVideoTask = async (task: Task) => {
@@ -185,12 +213,10 @@ export function useTaskExecutor(): void {
 
       // Prevent duplicate execution
       if (executingTasksRef.current.has(taskId)) {
-        // console.log(`[TaskExecutor] Task ${taskId} is already executing`);
         return;
       }
 
       executingTasksRef.current.add(taskId);
-      // console.log(`[TaskExecutor] Resuming video task ${taskId} with remoteId ${remoteId}`);
 
       try {
         // Resume video polling
@@ -206,7 +232,6 @@ export function useTaskExecutor(): void {
           result,
         });
 
-        // console.log(`[TaskExecutor] Resumed task ${taskId} completed successfully`);
 
         // Register image/video metadata in unified cache
         if (result.url) {
@@ -217,7 +242,6 @@ export function useTaskExecutor(): void {
               prompt: task.params.prompt,
               params: task.params,
             });
-            // console.log(`[TaskExecutor] Registered metadata for resumed task ${taskId}`);
           } catch (error) {
             console.error(
               `[TaskExecutor] Failed to register metadata for resumed task ${taskId}:`,
@@ -258,9 +282,8 @@ export function useTaskExecutor(): void {
           },
         });
 
-        // console.log(`[TaskExecutor] Resumed task ${taskId} failed`);
       } finally {
-        executingTasksRef.current.delete(taskId);
+        onTaskFinished(taskId);
       }
     };
 
@@ -326,7 +349,7 @@ export function useTaskExecutor(): void {
           },
         });
       } finally {
-        executingTasksRef.current.delete(taskId);
+        onTaskFinished(taskId);
       }
     };
 
@@ -336,12 +359,10 @@ export function useTaskExecutor(): void {
 
       // Prevent duplicate execution
       if (executingTasksRef.current.has(taskId)) {
-        // console.log(`[TaskExecutor] Character task ${taskId} is already executing`);
         return;
       }
 
       executingTasksRef.current.add(taskId);
-      // console.log(`[TaskExecutor] Starting character task ${taskId}`);
 
       try {
         // Update status to processing
@@ -365,7 +386,6 @@ export function useTaskExecutor(): void {
           },
           {
             onStatusChange: (status: CharacterStatus) => {
-              // console.log(`[TaskExecutor] Character ${taskId} status: ${status}`);
             },
           }
         );
@@ -400,7 +420,6 @@ export function useTaskExecutor(): void {
           remoteId: result.characterId,
         });
 
-        // console.log(`[TaskExecutor] Character task ${taskId} completed: @${result.username}`);
       } catch (error: any) {
         if (!isActive) return;
 
@@ -432,9 +451,8 @@ export function useTaskExecutor(): void {
           },
         });
 
-        // console.log(`[TaskExecutor] Character task ${taskId} failed`);
       } finally {
-        executingTasksRef.current.delete(taskId);
+        onTaskFinished(taskId);
       }
     };
 
@@ -468,12 +486,10 @@ export function useTaskExecutor(): void {
 
       // Prevent duplicate execution
       if (executingTasksRef.current.has(taskId)) {
-        // console.log(`[TaskExecutor] Task ${taskId} is already executing`);
         return;
       }
 
       executingTasksRef.current.add(taskId);
-      // console.log(`[TaskExecutor] Starting execution of task ${taskId}`);
 
       try {
         // Update status to processing
@@ -493,7 +509,6 @@ export function useTaskExecutor(): void {
           result,
         });
 
-        // console.log(`[TaskExecutor] Task ${taskId} completed successfully`);
 
         // Register image/video metadata in unified cache
         if (result.url) {
@@ -504,7 +519,6 @@ export function useTaskExecutor(): void {
               prompt: task.params.prompt,
               params: task.params,
             });
-            // console.log(`[TaskExecutor] Registered metadata for task ${taskId}`);
           } catch (error) {
             console.error(
               `[TaskExecutor] Failed to register metadata for task ${taskId}:`,
@@ -545,9 +559,21 @@ export function useTaskExecutor(): void {
           },
         });
 
-        // console.log(`[TaskExecutor] Task ${taskId} failed`);
       } finally {
-        executingTasksRef.current.delete(taskId);
+        onTaskFinished(taskId);
+      }
+    };
+
+    // 将任务加入执行队列（带并发控制）
+    const enqueueTask = (task: Task) => {
+      if (executingTasksRef.current.has(task.id)) return;
+      // 避免重复入队
+      if (pendingQueueRef.current.some(t => t.id === task.id)) return;
+
+      if (executingTasksRef.current.size < MAX_CONCURRENT_TASKS) {
+        executeTask(task);
+      } else {
+        pendingQueueRef.current.push(task);
       }
     };
 
@@ -561,9 +587,6 @@ export function useTaskExecutor(): void {
       const pendingTasks = tasks.filter(
         (task) => task.status === TaskStatus.PENDING
       );
-      pendingTasks.forEach((task) => {
-        executeTask(task);
-      });
 
       // Process resumable tasks (processing with remoteId)
       const resumableTasks = tasks.filter(
@@ -576,8 +599,16 @@ export function useTaskExecutor(): void {
             task.status === TaskStatus.PROCESSING &&
             isAsyncImageModel(task.params.model))
       );
+
+      console.warn(
+        `[TaskExecutor] processPendingTasks: ${tasks.length} total, ${pendingTasks.length} pending, ${resumableTasks.length} resumable, ${executingTasksRef.current.size} executing`
+      );
+
+      pendingTasks.forEach((task) => {
+        enqueueTask(task);
+      });
       resumableTasks.forEach((task) => {
-        executeTask(task);
+        enqueueTask(task);
       });
     };
 
@@ -625,7 +656,7 @@ export function useTaskExecutor(): void {
 
           // Execute pending tasks
           if (task.status === TaskStatus.PENDING) {
-            executeTask(task);
+            enqueueTask(task);
           }
           // Resume tasks that have remoteId and are in processing state (video or async image)
           else if (
@@ -637,15 +668,14 @@ export function useTaskExecutor(): void {
                 task.status === TaskStatus.PROCESSING &&
                 isAsyncImageModel(task.params.model)))
           ) {
-            executeTask(task);
+            enqueueTask(task);
           }
         }
       });
 
-    // Process existing pending tasks on mount
-    // Note: This runs synchronously, but tasks may be restored asynchronously by useTaskStorage
-    // The subscription above will catch tasks restored after this point
-    processPendingTasks();
+    // Process existing pending tasks on mount (delayed to avoid competing with page initialization)
+    // The subscription above will catch tasks created/restored after this point
+    const startupTimer = setTimeout(processPendingTasks, STARTUP_DELAY_MS);
 
     // Set up timeout checker (every 10 seconds)
     timeoutCheckIntervalRef.current = setInterval(checkTimeouts, 10000);
@@ -654,6 +684,8 @@ export function useTaskExecutor(): void {
     return () => {
       isActive = false;
       subscription.unsubscribe();
+      clearTimeout(startupTimer);
+      pendingQueueRef.current = [];
 
       if (timeoutCheckIntervalRef.current) {
         clearInterval(timeoutCheckIntervalRef.current);

@@ -52,6 +52,14 @@
         </svg>
         数据备份
       </button>
+      <!-- 恢复备份按钮 -->
+      <button id="restoreBackup" class="primary" title="从备份 ZIP 恢复数据">
+        <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M3 15v4a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-4M7 10l5 5 5-5M12 15V3"/>
+        </svg>
+        恢复备份
+      </button>
+      <input type="file" id="restoreBackupInput" accept=".zip" style="display: none;">
       <button id="toggleTheme" class="icon-btn" title="切换深色/浅色主题">
         <svg id="themeIcon" class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
@@ -447,7 +455,7 @@
           <div class="tab" data-tab="console">控制台日志 <span id="consoleCount" style="opacity:0.6">(0)</span><span id="consoleErrorDot" class="error-dot" style="display:none"></span></div>
           <div class="tab" data-tab="postmessage">PostMessage日志 <span id="postmessageCount" style="opacity:0.6">(0)</span></div>
           <div class="tab" data-tab="llmapi">LLM API <span id="llmapiErrorDot" class="error-dot" style="display:none"></span></div>
-          <div class="tab" data-tab="gist">Gist 管理</div>
+          <div class="tab debug-mode-only" data-tab="gist">Gist 管理</div>
           <div class="tab" data-tab="crash">内存日志 <span id="crashCount" style="opacity:0.6">(0)</span><span id="crashErrorDot" class="error-dot" style="display:none"></span></div>
         </div>
         

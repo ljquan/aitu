@@ -2971,6 +2971,36 @@ body.analysis-mode .log-entry {
   cursor: not-allowed;
 }
 
+/* Restore button */
+#restoreBackup {
+  background: var(--primary-color);
+  border-color: var(--primary-color);
+  color: #fff;
+}
+
+#restoreBackup:hover {
+  background: var(--primary-hover);
+  border-color: var(--primary-hover);
+}
+
+#restoreBackup:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+/* Restore notification */
+.restore-notification .import-notification-content {
+  border-color: var(--primary-color);
+}
+
+.restore-notification .import-notification-content > .icon {
+  color: var(--primary-color);
+}
+
+.restore-notification .info strong {
+  color: var(--primary-color);
+}
+
 /* Backup progress container */
 .backup-progress-container {
   position: fixed;

@@ -109,6 +109,15 @@ export function updateAnalysisModeUI() {
   document.querySelectorAll('.debug-mode-only').forEach(el => {
     el.style.display = isAnalysis ? 'none' : '';
   });
+
+  // If entering analysis mode while on a hidden tab (e.g. gist), switch to fetch
+  if (isAnalysis) {
+    const activeTab = document.querySelector('.tab.active');
+    if (activeTab && activeTab.classList.contains('debug-mode-only')) {
+      const fetchTab = document.querySelector('.tab[data-tab="fetch"]');
+      if (fetchTab) fetchTab.click();
+    }
+  }
   
   // In analysis mode, left panel shows user info instead of SW status
   // The panel is always visible, but content changes based on mode

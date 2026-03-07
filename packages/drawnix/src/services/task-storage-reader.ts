@@ -166,7 +166,8 @@ class TaskStorageReader extends BaseStorageReader<TaskCache> {
           
           // 按创建时间倒序排序
           rawTasks.sort((a, b) => b.createdAt - a.createdAt);
-          
+
+          console.warn(`[TaskStorageReader] getAllTasks: ${rawTasks.length} tasks from IndexedDB (filter: type=${options?.type}, status=${options?.status})`);
           resolve(rawTasks.map(convertSWTaskToTask));
         };
 

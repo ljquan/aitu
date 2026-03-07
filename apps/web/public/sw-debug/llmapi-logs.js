@@ -29,6 +29,11 @@ function getCurrentFilter() {
  * @param {number} page - 页码，默认使用当前页
  */
 export async function loadLLMApiLogs(page) {
+  // 分析模式下不从 SW 重新加载，直接渲染已导入的数据
+  if (state.isAnalysisMode) {
+    renderLLMApiLogs();
+    return;
+  }
   try {
     const targetPage = typeof page === 'number' ? page : (state.llmapiPagination.page || 1);
     const pageSize = state.llmapiPagination.pageSize || 20;

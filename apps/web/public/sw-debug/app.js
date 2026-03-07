@@ -38,6 +38,7 @@ import {
 
 // Feature modules
 import { performBackup } from './backup.js';
+import { triggerRestoreDialog, handleRestoreFile } from './backup-restore.js';
 import {
   toggleAnalysisMode,
   updateAnalysisModeUI,
@@ -689,6 +690,10 @@ function setupEventListeners() {
   
   // Backup button event listener
   elements.backupDataBtn?.addEventListener('click', performBackup);
+
+  // Restore button event listeners
+  elements.restoreBackupBtn?.addEventListener('click', triggerRestoreDialog);
+  elements.restoreBackupInput?.addEventListener('change', handleRestoreFile);
   
   elements.toggleDebugBtn?.addEventListener('click', toggleDebug);
   elements.exportLogsBtn?.addEventListener('click', openExportModal);

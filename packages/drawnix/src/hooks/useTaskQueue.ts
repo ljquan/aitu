@@ -5,7 +5,7 @@
  * Subscribes to task updates and provides memoized selectors.
  */
 
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { taskQueueService } from '../services/task-queue';
 import { taskStorageReader } from '../services/task-storage-reader';
 import { Task, TaskStatus, TaskType, GenerationParams } from '../types/task.types';
@@ -83,107 +83,91 @@ export function useTaskQueue(): UseTaskQueueReturn {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [updateCounter, setUpdateCounter] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const [hasMore, setHasMore] = useState(true);
+  const [isLoadingMore] = useState(false);
+  const [hasMore] = useState(false);
   const [totalCount, setTotalCount] = useState(0);
   const [loadedCount, setLoadedCount] = useState(0);
-  const loadSucceeded = useRef(false);
-  const loadMoreLock = useRef(false);
-  // 重试计数器
-  const [retryCount, setRetryCount] = useState(0);
-  const maxRetries = 3;
-  const retryDelay = 500;
 
-  // 分页状态（不再使用 SW 分页，数据直接从 IndexedDB 加载）
-  const updatePaginationState = useCallback(() => {
-    // No-op: all data loaded from IndexedDB directly
-  }, []);
-
-  // Subscribe to task updates
+  // Subscribe to task updates (useTaskStorage handles IndexedDB loading and restoreTasks)
   useEffect(() => {
-    // Initialize with current tasks
-    setTasks(taskQueueService.getAllTasks());
+    let cancelled = false;
 
-    // Subscribe to updates
+    // Initialize with current in-memory tasks
+    const currentTasks = taskQueueService.getAllTasks();
+    setTasks(currentTasks);
+    setTotalCount(currentTasks.length);
+    setLoadedCount(currentTasks.length);
+    if (currentTasks.length > 0) {
+      console.warn(`[useTaskQueue] Init: ${currentTasks.length} tasks from memory`);
+      setIsLoading(false);
+    } else {
+      console.warn('[useTaskQueue] Init: memory empty, waiting for restore or DB fallback');
+    }
+
+    // Subscribe to updates — catches tasks restored by useTaskStorage
     const subscription = taskQueueService.observeTaskUpdates().subscribe(() => {
-      setTasks(taskQueueService.getAllTasks());
+      const allTasks = taskQueueService.getAllTasks();
+      setTasks(allTasks);
       setUpdateCounter(prev => prev + 1);
-      // 更新分页状态
-      updatePaginationState();
+      setTotalCount(allTasks.length);
+      setLoadedCount(allTasks.length);
+      setIsLoading(false);
     });
 
-    return () => {
-      subscription.unsubscribe();
-    };
-  }, [updatePaginationState]);
+    // 如果内存中没有数据（useTaskStorage 可能还没完成），
+    // 延迟从 IndexedDB 补充加载，避免面板打开时显示空数据
+    if (currentTasks.length === 0) {
+      const loadFromDB = async () => {
+        // 先等一小段时间，给 useTaskStorage 机会先完成
+        await new Promise(r => setTimeout(r, 500));
+        if (cancelled) return;
 
-  // 渲染时从 IndexedDB 加载任务数据（带重试逻辑）
-  useEffect(() => {
-    // 如果已成功加载，跳过
-    if (loadSucceeded.current) return;
-
-    let cancelled = false;
-    let retryTimer: ReturnType<typeof setTimeout> | null = null;
-
-    const loadTasks = async (): Promise<boolean> => {
-      try {
-        // 检查 IndexedDB 是否可用
-        const isAvailable = await taskStorageReader.isAvailable();
-        if (!isAvailable) {
-          return false;
+        // 再次检查内存，useTaskStorage 可能已经完成了
+        const memTasks = taskQueueService.getAllTasks();
+        if (memTasks.length > 0) {
+          console.warn(`[useTaskQueue] Fallback: ${memTasks.length} tasks appeared in memory`);
+          setTasks(memTasks);
+          setTotalCount(memTasks.length);
+          setLoadedCount(memTasks.length);
+          setIsLoading(false);
+          return;
         }
-        // 直接从 IndexedDB 读取任务（SW 和降级模式统一逻辑）
-        const storedTasks = await taskStorageReader.getAllTasks();
-        
-        // 先恢复到 taskQueueService 内存中（merge 模式，不会覆盖正在执行的任务）
-        // 然后从内存读取合并后的最新状态，确保 UI 显示与内存一致
-        if (storedTasks.length > 0) {
-          taskQueueService.restoreTasks(storedTasks);
-        }
-        
-        // 从 taskQueueService 内存获取合并后的状态（比 storedTasks 更准确）
-        setTasks(taskQueueService.getAllTasks());
-        
-        // 设置分页状态
-        const allTasks = taskQueueService.getAllTasks();
-        setTotalCount(allTasks.length);
-        setLoadedCount(allTasks.length);
-        setHasMore(false); // 直接从 IndexedDB 加载的是全部数据
-        return true;
-      } catch {
-        return false;
-      }
-    };
 
-    const init = async () => {
-      setIsLoading(true);
-      const success = await loadTasks();
-
-      if (cancelled) return;
-
-      setIsLoading(false);
-
-      if (success) {
-        loadSucceeded.current = true;
-      } else if (retryCount < maxRetries) {
-        // 加载失败，安排重试（指数退避）
-        retryTimer = setTimeout(() => {
-          if (!cancelled) {
-            setRetryCount(prev => prev + 1);
+        // 内存仍为空，直接从 IndexedDB 读取
+        console.warn('[useTaskQueue] Fallback: loading from IndexedDB');
+        try {
+          const isAvailable = await taskStorageReader.isAvailable();
+          if (!isAvailable || cancelled) {
+            console.warn('[useTaskQueue] Fallback: IndexedDB not available');
+            setIsLoading(false);
+            return;
           }
-        }, retryDelay * (retryCount + 1));
-      }
-    };
+          const storedTasks = await taskStorageReader.getAllTasks();
+          if (cancelled) return;
 
-    init();
+          console.warn(`[useTaskQueue] Fallback: loaded ${storedTasks.length} tasks from IndexedDB`);
+          if (storedTasks.length > 0) {
+            taskQueueService.restoreTasks(storedTasks);
+          }
+          const allTasks = taskQueueService.getAllTasks();
+          setTasks(allTasks);
+          setTotalCount(allTasks.length);
+          setLoadedCount(allTasks.length);
+        } catch (error) {
+          console.warn('[useTaskQueue] Fallback: IndexedDB load failed', error);
+        }
+        if (!cancelled) {
+          setIsLoading(false);
+        }
+      };
+      loadFromDB();
+    }
 
     return () => {
       cancelled = true;
-      if (retryTimer) {
-        clearTimeout(retryTimer);
-      }
+      subscription.unsubscribe();
     };
-  }, [updatePaginationState, retryCount]);
+  }, []);
 
   // 加载更多任务（不再需要 SW 分页，直接返回）
   const loadMore = useCallback(async () => {
