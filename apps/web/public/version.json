@@ -1,8 +1,15 @@
 {
-  "version": "0.6.7",
-  "buildTime": "2026-03-07T16:29:29.739Z",
+  "version": "0.6.8",
+  "buildTime": "2026-03-07T16:34:14.088Z",
   "gitCommit": "unknown",
   "changelog": [
-    "优化Service Worker激活和CDN策略"
+    "update app version to 0.6.7 and adjust build time in version.json; refactor WeakRef usage in tracking.types.ts",
+    "仅为 gemini-3.1-flash-image-preview 开放新增比例并按模型过滤尺寸选项",
+    "feat：优化缩放文本框&实现点击输入",
+    "优化多行输入取消聚焦会换行的问题",
+    "修复批量生图模型尺寸失效",
+    "支持剪贴板图片粘贴",
+    "优化缩放累计误差",
+    "新增插入画布开关"
   ]
 }

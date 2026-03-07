@@ -1,6 +1,28 @@
 {
   "versions": [
     {
+      "version": "0.6.8",
+      "date": "2026-03-07",
+      "changes": {
+        "features": [
+          "add backup restoration functionality with automatic chunking support",
+          "支持剪贴板图片粘贴",
+          "优化缩放累计误差",
+          "优化多行输入取消聚焦会换行的问题",
+          "新增插入画布开关"
+        ],
+        "fixes": [
+          "修复批量生图模型尺寸失效",
+          "仅为 gemini-3.1-flash-image-preview 开放新增比例并按模型过滤尺寸选项"
+        ],
+        "improvements": [
+          "feat：优化缩放文本框&实现点击输入"
+        ]
+      },
+      "type": "patch",
+      "highlights": "add backup restoration functionality with automatic chunking support"
+    },
+    {
       "version": "0.6.7",
       "date": "2026-03-04",
       "changes": {

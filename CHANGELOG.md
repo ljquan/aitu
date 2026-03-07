@@ -1,3 +1,30 @@
+## 0.6.8 (2026-03-07)
+
+### 🚀 Features
+
+- add backup restoration functionality with automatic chunking support ([7d76899a](https://github.com/ljquan/aitu/commit/7d76899a))
+- 支持剪贴板图片粘贴 ([367830ca](https://github.com/ljquan/aitu/commit/367830ca))
+- 优化缩放累计误差 ([f5330602](https://github.com/ljquan/aitu/commit/f5330602))
+- 优化多行输入取消聚焦会换行的问题 ([4ab79120](https://github.com/ljquan/aitu/commit/4ab79120))
+- 新增插入画布开关 ([60f6c041](https://github.com/ljquan/aitu/commit/60f6c041))
+- 优化 ([1630ecbf](https://github.com/ljquan/aitu/commit/1630ecbf))
+
+### 🩹 Fixes
+
+- 修复批量生图模型尺寸失效 ([eee26c35](https://github.com/ljquan/aitu/commit/eee26c35))
+- 仅为 gemini-3.1-flash-image-preview 开放新增比例并按模型过滤尺寸选项 ([4b3600d7](https://github.com/ljquan/aitu/commit/4b3600d7))
+- update app version to 0.6.7 and adjust build time in version.json; refactor WeakRef usage in tracking.types.ts ([ad9d7769](https://github.com/ljquan/aitu/commit/ad9d7769))
+
+### 🔧 Chores
+
+- feat：优化缩放文本框&实现点击输入 ([4ac4244e](https://github.com/ljquan/aitu/commit/4ac4244e))
+
+### ❤️  Thank You
+
+- liquid <ljquan@qq.com>
+- gongchengtu <1817063960@qq.com>
+- liangyufeng <l.yfeng@qq.com>
+
 ## 0.6.7 (2026-03-04)
 
 ### 🚀 Features
