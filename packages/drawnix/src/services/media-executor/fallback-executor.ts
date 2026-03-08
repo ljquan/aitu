@@ -15,7 +15,9 @@ import type {
   GeminiConfig,
   VideoAPIConfig,
 } from './types';
+import { Task, TaskStatus } from '../../types/task.types';
 import { taskStorageWriter } from './task-storage-writer';
+import { taskStorageReader } from '../task-storage-reader';
 import { geminiSettings } from '../../utils/settings-manager';
 import {
   startLLMApiLog,
@@ -433,6 +435,9 @@ export class FallbackMediaExecutor implements IMediaExecutor {
         httpStatus: 200,
       });
 
+      // 保存 remoteId，用于页面刷新后恢复轮询
+      await taskStorageWriter.updateRemoteId(taskId, videoId);
+
       options?.onProgress?.({ progress: 10, phase: 'polling' });
 
       // 轮询等待视频完成
@@ -648,6 +653,80 @@ export class FallbackMediaExecutor implements IMediaExecutor {
         errorMessage,
       });
       throw error;
+    }
+  }
+
+  /**
+   * 恢复未完成的任务（例如页面刷新导致中断的任务）
+   * 仅恢复有 remoteId 且状态为 processing 的任务
+   */
+  async resumePendingTasks(): Promise<void> {
+    try {
+      const pendingTasks = await taskStorageReader.getAllTasks({ status: TaskStatus.PROCESSING });
+      
+      // 筛选出有 remoteId 的视频任务
+      const videoTasks = pendingTasks.filter(t => 
+        t.type === 'video' && t.remoteId && t.status === TaskStatus.PROCESSING
+      );
+      
+      if (videoTasks.length === 0) {
+        return;
+      }
+      
+      console.log(`[FallbackMediaExecutor] Resuming ${videoTasks.length} pending video tasks...`);
+      
+      // 并行恢复
+      await Promise.all(videoTasks.map(task => this.resumeVideoTask(task)));
+    } catch (error) {
+      console.error('[FallbackMediaExecutor] Failed to resume pending tasks:', error);
+    }
+  }
+
+  /**
+   * 恢复单个视频任务的轮询
+   */
+  private async resumeVideoTask(task: Task): Promise<void> {
+    const config = this.getConfig();
+    const videoId = task.remoteId!;
+    
+    try {
+      console.log(`[FallbackMediaExecutor] Resuming video task: ${task.id} (remoteId: ${videoId})`);
+      
+      // 重新开始轮询
+      const result = await pollVideoStatus(
+        videoId,
+        config.videoConfig,
+        (progress) => {
+          // 这里的 progress 是 0-1
+          // 视频生成中，polling 阶段通常对应 10%-90%
+          const mappedProgress = 10 + progress * 80;
+          // taskStorageWriter.updateStatus 会写入 storage，触发 observer
+          taskStorageWriter.updateStatus(task.id, TaskStatus.PROCESSING).catch(() => {});
+          taskStorageWriter.updateProgress(task.id, mappedProgress).catch(() => {});
+        }
+      );
+      
+      // 缓存远程 URL
+      const cachedVidUrl = await cacheRemoteUrl(result.url, task.id, 'video', 'mp4');
+      
+      const duration = task.params.duration as string | undefined;
+
+      // 完成任务
+      await taskStorageWriter.completeTask(task.id, {
+        url: cachedVidUrl,
+        format: 'mp4',
+        size: 0,
+        duration: duration ? parseInt(duration, 10) : undefined,
+      });
+      
+      console.log(`[FallbackMediaExecutor] Resumed video task completed: ${task.id}`);
+    } catch (error: any) {
+      console.error(`[FallbackMediaExecutor] Failed to resume task ${task.id}:`, error);
+      
+      await taskStorageWriter.failTask(task.id, {
+        code: error.code || 'RESUME_FAILED',
+        message: error.message || 'Failed to resume task'
+      });
     }
   }
 

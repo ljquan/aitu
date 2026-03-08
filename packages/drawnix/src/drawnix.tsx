@@ -326,6 +326,21 @@ export const Drawnix: React.FC<DrawnixProps> = ({
     }
   }, [board]);
 
+  // Initialize fallback media executor to resume pending tasks
+  useEffect(() => {
+    const resumeTasks = () => {
+      import('./services/media-executor/fallback-executor').then(({ fallbackMediaExecutor }) => {
+        fallbackMediaExecutor.resumePendingTasks();
+      });
+    };
+
+    if ('requestIdleCallback' in window) {
+      (window as Window).requestIdleCallback(resumeTasks, { timeout: 5000 });
+    } else {
+      setTimeout(resumeTasks, 1000);
+    }
+  }, []);
+
   // 监听 API 认证错误事件，自动打开设置对话框
   useEffect(() => {
     const handleApiAuthError = (event: Event) => {
