@@ -1,3 +1,13 @@
+## 0.6.9 (2026-03-08)
+
+### 🚀 Features
+
+- 添加页面刷新后恢复视频任务轮询的功能 ([d434c165](https://github.com/ljquan/aitu/commit/d434c165))
+
+### ❤️  Thank You
+
+- liquid <ljquan@qq.com>
+
 ## 0.6.8 (2026-03-07)
 
 ### 🚀 Features

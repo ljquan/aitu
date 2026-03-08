@@ -1,6 +1,19 @@
 {
   "versions": [
     {
+      "version": "0.6.9",
+      "date": "2026-03-08",
+      "changes": {
+        "features": [
+          "添加页面刷新后恢复视频任务轮询的功能"
+        ],
+        "fixes": [],
+        "improvements": []
+      },
+      "type": "patch",
+      "highlights": "添加页面刷新后恢复视频任务轮询的功能"
+    },
+    {
       "version": "0.6.8",
       "date": "2026-03-07",
       "changes": {
