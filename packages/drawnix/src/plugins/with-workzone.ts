@@ -27,7 +27,7 @@ import { DEFAULT_WORKZONE_SIZE } from '../types/workzone.types';
 import type { WorkflowMessageData } from '../types/chat.types';
 import { WorkZoneContent } from '../components/workzone-element/WorkZoneContent';
 import { ToolProviderWrapper } from '../components/toolbox-drawer/ToolProviderWrapper';
-import { workflowStatusSyncService } from '../services/workflow-status-sync';
+
 import { LS_KEYS } from '../constants/storage-keys';
 
 /**
@@ -54,14 +54,11 @@ export class WorkZoneComponent extends CommonElementFlavour<PlaitWorkZone, Plait
   private g: SVGGElement | null = null;
   private container: HTMLElement | null = null;
   private reactRoot: Root | null = null;
-  private statusSyncUnsubscribe: (() => void) | null = null;
+
   activeGenerator!: ActiveGenerator<PlaitWorkZone>;
 
   initialize(): void {
     super.initialize();
-
-    // 订阅工作流状态同步
-    this.setupStatusSync();
 
     // 创建选中状态生成器
     this.activeGenerator = createActiveGenerator(this.board, {
@@ -151,23 +148,20 @@ export class WorkZoneComponent extends CommonElementFlavour<PlaitWorkZone, Plait
    * 当 SW 中的工作流已完成/失败/不存在时更新 UI
    */
   private handleWorkflowStateChange = (workflowId: string, status: 'completed' | 'failed', error?: string): void => {
+    // 失败的工作流直接删除 WorkZone，避免残留无用卡片
+    if (status === 'failed') {
+      setTimeout(() => {
+        WorkZoneTransforms.removeWorkZone(this.board, this.element.id);
+      }, 1500);
+      return;
+    }
+
     // 更新 workflow 状态
     const updatedWorkflow = {
       ...this.element.workflow,
       status,
-      error: error || (status === 'failed' ? '工作流执行失败' : undefined),
     };
-    
-    // 更新步骤状态
-    if (status === 'failed') {
-      updatedWorkflow.steps = this.element.workflow.steps.map(step => {
-        if (step.status === 'running' || step.status === 'pending') {
-          return { ...step, status: 'failed' as const, error: error || '执行中断' };
-        }
-        return step;
-      });
-    }
-    
+
     // 通过 WorkZoneTransforms 更新工作流
     WorkZoneTransforms.updateWorkflow(this.board, this.element.id, updatedWorkflow);
   };
@@ -275,58 +269,10 @@ export class WorkZoneComponent extends CommonElementFlavour<PlaitWorkZone, Plait
   }
 
   /**
-   * 设置工作流状态同步
-   * 通过轮询 IndexedDB 获取最新状态，确保 UI 与数据同步
-   */
-  private setupStatusSync(): void {
-    const workflowId = this.element.workflow.id;
-    
-    // 检查工作流是否需要同步（运行中或有 pending 步骤）
-    const needsSync = 
-      this.element.workflow.status === 'running' || 
-      this.element.workflow.status === 'pending' ||
-      this.element.workflow.steps.some(s => 
-        s.status === 'running' || s.status === 'pending'
-      );
-    
-    if (!needsSync) return;
-
-    this.statusSyncUnsubscribe = workflowStatusSyncService.subscribe(workflowId, (change) => {
-      // 更新 WorkZone 的 workflow 数据
-      WorkZoneTransforms.updateWorkflow(this.board, this.element.id, {
-        status: change.currentStatus as PlaitWorkZone['workflow']['status'],
-        steps: change.steps.map(s => ({
-          id: s.id,
-          mcp: s.mcp,
-          args: s.args,
-          description: s.description,
-          status: s.status as 'pending' | 'running' | 'completed' | 'failed' | 'skipped',
-          result: s.result,
-          error: s.error,
-          duration: s.duration,
-          options: s.options,
-        })),
-      });
-
-      // 如果工作流完成，取消订阅
-      if (change.currentStatus === 'completed' || change.currentStatus === 'failed' || change.currentStatus === 'cancelled') {
-        this.statusSyncUnsubscribe?.();
-        this.statusSyncUnsubscribe = null;
-      }
-    });
-  }
-
-  /**
    * 销毁
    */
   destroy(): void {
     window.removeEventListener(WORKZONE_VISIBILITY_EVENT, this.handleVisibilityChange);
-
-    // 取消状态同步订阅
-    if (this.statusSyncUnsubscribe) {
-      this.statusSyncUnsubscribe();
-      this.statusSyncUnsubscribe = null;
-    }
 
     // 先从 DOM 中移除 SVG 元素（同步）
     if (this.g && this.g.parentNode) {

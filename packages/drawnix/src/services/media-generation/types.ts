@@ -31,6 +31,8 @@ export interface ImageGenerationOptions {
   signal?: AbortSignal;
   /** 强制使用主线程（跳过 SW） */
   forceMainThread?: boolean;
+  /** 任务创建后立即回调，用于提前持久化 taskId 到工作流步骤 */
+  onTaskCreated?: (taskId: string) => void;
 }
 
 /**
@@ -47,6 +49,8 @@ export interface VideoGenerationOptions {
   params?: Record<string, unknown>;
   signal?: AbortSignal;
   forceMainThread?: boolean;
+  /** 任务创建后立即回调，用于提前持久化 taskId 到工作流步骤 */
+  onTaskCreated?: (taskId: string) => void;
 }
 
 /**

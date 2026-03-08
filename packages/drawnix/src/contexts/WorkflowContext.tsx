@@ -31,6 +31,8 @@ interface WorkflowContextValue {
   resetWorkflow: () => void;
   /** 中止工作流 */
   abortWorkflow: () => void;
+  /** 恢复工作流（重置 aborted 标志，允许后续 updateStep 生效） */
+  resumeWorkflow: () => void;
   /** 获取当前工作流 */
   getWorkflow: () => WorkflowDefinition | null;
 }
@@ -57,6 +59,7 @@ export const WorkflowProvider: React.FC<WorkflowProviderProps> = ({ children }) 
     addStepsFromAIResponse: workflow.addStepsFromAIResponse,
     resetWorkflow: workflow.resetWorkflow,
     abortWorkflow: workflow.abortWorkflow,
+    resumeWorkflow: workflow.resumeWorkflow,
     getWorkflow: workflow.getWorkflow,
   }), [
     workflow.state,
@@ -67,6 +70,7 @@ export const WorkflowProvider: React.FC<WorkflowProviderProps> = ({ children }) 
     workflow.addStepsFromAIResponse,
     workflow.resetWorkflow,
     workflow.abortWorkflow,
+    workflow.resumeWorkflow,
     workflow.getWorkflow,
   ]);
 
@@ -110,6 +114,7 @@ export function useWorkflowControl() {
     addStepsFromAIResponse: context.addStepsFromAIResponse,
     resetWorkflow: context.resetWorkflow,
     abortWorkflow: context.abortWorkflow,
+    resumeWorkflow: context.resumeWorkflow,
     getWorkflow: context.getWorkflow,
   };
 }

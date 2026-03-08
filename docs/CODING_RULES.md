@@ -6099,57 +6099,40 @@ while (attempts < maxAttempts) {
 
 #### 错误 2: 页面刷新后自动恢复所有失败任务
 
-❌ **错误示例**:
+❌ **错误示例（黑名单 - 太宽松）**:
 ```typescript
-// 恢复所有有 remoteId 的失败任务 - 错误！
-const failedTasks = storedTasks.filter(task =>
-  task.status === 'failed' && task.remoteId
-);
+// 排除少数已知失败，其余全部恢复 - 错误！
+const isDefinitiveFailure = (task: Task): boolean => {
+  const msg = task.error?.message?.toLowerCase() || '';
+  return msg.includes('prohibited') || msg.includes('content policy');
+};
 failedTasks.forEach(task => {
-  // 所有失败任务都恢复
+  if (!isDefinitiveFailure(task)) {
+    taskService.updateStatus(task.id, 'processing'); // 服务端真正失败的也被恢复了！
+  }
+});
+```
+
+✅ **正确示例（白名单 - 只恢复客户端中断）**:
+```typescript
+// 白名单：只恢复因页面刷新/客户端中断导致的失败
+const RECOVERABLE_ERROR_CODES = new Set([
+  'INTERRUPTED',                  // 页面刷新中断
+  'INTERRUPTED_DURING_SUBMISSION', // 提交过程中中断
+  'RESUME_FAILED',                // 上次恢复尝试失败
+]);
+
+failedTasks.forEach(task => {
+  const errorCode = task.error?.code || '';
+  if (!RECOVERABLE_ERROR_CODES.has(errorCode)) return; // 服务端失败不恢复
   taskService.updateStatus(task.id, 'processing');
 });
 ```
 
-✅ **正确示例**:
-```typescript
-// 只恢复网络错误导致的失败任务
-const isNetworkError = (task: Task): boolean => {
-  const errorMsg = `${task.error?.message || ''} ${task.error?.details?.originalError || ''}`.toLowerCase();
-  
-  // 排除业务失败 - 这些不应该自动恢复
-  const isBusinessFailure = (
-    errorMsg.includes('generation_failed') ||
-    errorMsg.includes('invalid_argument') ||
-    errorMsg.includes('prohibited') ||
-    errorMsg.includes('content policy')
-  );
-  if (isBusinessFailure) {
-    // 429 限流属于可恢复的临时业务错误
-    return errorMsg.includes('429') || errorMsg.includes('too many requests');
-  }
-  
-  // 只有网络错误才恢复
-  return (
-    errorMsg.includes('failed to fetch') ||
-    errorMsg.includes('network') ||
-    errorMsg.includes('timeout')
-  );
-};
-
-// 只恢复视频/角色任务（图片任务不恢复，因为每次调用都扣费）
-const failedVideoTasks = storedTasks.filter(task =>
-  task.type === TaskType.VIDEO &&
-  task.status === 'failed' &&
-  task.remoteId &&
-  isNetworkError(task)
-);
-```
-
 **原因**:
-1. **业务失败不恢复**：API 返回的明确失败（如内容违规）重试也不会成功
-2. **图片任务不恢复**：图片生成是同步调用，每次重试都会扣费
-3. **视频任务可恢复**：视频有 `remoteId`，重新查询状态不会产生额外费用
+1. **黑名单遗漏**：无法穷举所有服务端错误类型，新增的错误类型会被误恢复
+2. **白名单安全**：只有我们自己设置的中断错误码才恢复，服务端返回的任何失败都保持终态
+3. **failed 是终态**：用户看到失败后刷新页面，不应该看到任务又变成进行中
 
 ---
 
@@ -6221,11 +6204,86 @@ async resumeTask(task) {
 
 #### 任务恢复决策表
 
-| 任务类型 | 错误类型 | 是否自动恢复 | 原因 |
+| 任务类型 | 错误码 | 是否自动恢复 | 原因 |
 |---------|---------|-------------|------|
-| 视频/角色 | 网络/限流错误 | ✅ 是 | 查询状态不扣费 |
-| 视频/角色 | 业务失败 | ❌ 否 | 重试也不会成功 |
-| 图片 | 任何错误 | ❌ 否 | 每次调用都扣费 |
+| 视频/异步图片 | `INTERRUPTED` | ✅ 是 | 页面刷新中断，查询状态不扣费 |
+| 视频/异步图片 | `INTERRUPTED_DURING_SUBMISSION` | ✅ 是 | 提交中断，可能已在后台执行 |
+| 视频/异步图片 | `RESUME_FAILED` | ✅ 是 | 上次恢复失败，值得重试 |
+| 任何类型 | 服务端返回的错误 | ❌ 否 | 业务失败重试也不会成功 |
+| 同步图片 | 任何错误 | ❌ 否 | 每次调用都扣费 |
+
+---
+
+#### 错误 5: fire-and-forget 写入后立即异步读取导致竞态
+
+**场景**: 内存状态更新后通过 fire-and-forget 持久化到 IndexedDB，另一个模块随后从 IndexedDB 读取
+
+❌ **错误示例**:
+```typescript
+// useTaskStorage: 恢复任务状态（内存同步更新 + IndexedDB 异步写入）
+taskQueueService.updateTaskStatus(task.id, 'processing'); // 内存立即更新，persistTask() fire-and-forget
+
+// fallback-executor: 从 IndexedDB 读取（可能读到旧状态！）
+const tasks = await taskStorageReader.getAllTasks({ status: 'processing' });
+// tasks 可能为空 — IndexedDB 写入尚未完成
+```
+
+✅ **正确示例**:
+```typescript
+// 从内存读取，始终是最新状态
+const allTasks = taskQueueService.getAllTasks();
+fallbackExecutor.resumePendingTasks(onUpdate, allTasks);
+
+// resumePendingTasks 优先使用传入的内存数据
+async resumePendingTasks(onUpdate, tasksFromMemory?: Task[]) {
+  const tasks = tasksFromMemory
+    ? tasksFromMemory.filter(t => t.status === 'processing')
+    : await taskStorageReader.getAllTasks({ status: 'processing' }); // fallback
+}
+```
+
+**原因**: `persistTask()` 是 fire-and-forget（不 await），IndexedDB 写入有延迟。如果另一个模块紧接着从 IndexedDB 读取，可能读到写入前的旧数据。内存中的状态是同步更新的，应优先使用。
+
+---
+
+#### 错误 6: useEffect 中初始对账遍历所有任务导致死循环
+
+**场景**: useEffect 内遍历任务列表执行对账，对账触发状态更新，依赖项变化导致 useEffect 重跑
+
+❌ **错误示例**:
+```typescript
+useEffect(() => {
+  // 初始对账：处理所有终态任务
+  const allTasks = taskQueueService.getAllTasks();
+  for (const task of allTasks) {
+    processTaskEvent(task); // 可能触发 workflowControl.updateStep → 状态更新 → 重渲染
+  }
+
+  const sub = taskQueueService.observe().subscribe(handleEvent);
+  return () => sub.unsubscribe();
+}, [workflowControl]); // workflowControl 每次渲染都是新引用 → 死循环！
+```
+
+✅ **正确示例**:
+```typescript
+const reconciliationDoneRef = useRef(false);
+
+useEffect(() => {
+  // 用 ref 确保初始对账只执行一次
+  if (!reconciliationDoneRef.current) {
+    reconciliationDoneRef.current = true;
+    const allTasks = taskQueueService.getAllTasks();
+    for (const task of allTasks) {
+      processTaskEvent(task);
+    }
+  }
+
+  const sub = taskQueueService.observe().subscribe(handleEvent);
+  return () => sub.unsubscribe();
+}, [workflowControl]);
+```
+
+**原因**: 初始对账中的 `processTaskEvent` 可能触发状态更新（如 `workflowControl.updateStep`），导致组件重渲染。如果 `workflowControl` 未被 useMemo 包裹，每次渲染都是新引用，useEffect 会重新执行，形成死循环。用 ref 守卫确保对账逻辑只跑一次。
 
 ---
 
@@ -7639,58 +7697,42 @@ function parseToolCalls(response: string): ToolCall[] {
 
 ---
 
-#### 工作流状态同步使用轮询机制
+#### 工作流状态同步使用事件驱动 + 初始对账
 
 **场景**: 在 UI 组件中同步工作流执行状态时。
 
 ❌ **错误示例**:
 ```typescript
-// 错误：完全依赖 SW 事件推送更新 UI
-useEffect(() => {
-  const subscription = workflowEvents.subscribe((event) => {
-    if (event.type === 'step_completed') {
-      setWorkflow(prev => updateStep(prev, event));
-    }
-  });
-  return () => subscription.unsubscribe();
-}, []);
-// 问题：SW 事件可能因连接断开、页面刷新等原因丢失
+// 错误：轮询 IndexedDB 同步状态（多条同步路径互相竞争导致状态闪烁）
+class WorkflowStatusSyncService {
+  subscribe(workflowId: string, callback: StatusChangeCallback): () => void {
+    // 每秒从 IndexedDB 读取 → 与事件驱动路径竞争 → 状态覆盖
+  }
+}
 ```
 
 ✅ **正确示例**:
 ```typescript
-// 正确：使用轮询 IndexedDB 作为可靠的同步机制
-// 1. 创建公共服务
-class WorkflowStatusSyncService {
-  subscribe(workflowId: string, callback: StatusChangeCallback): () => void {
-    // 定时从 IndexedDB 读取最新状态
-    // 检测变化后调用 callback
+// 正确：统一事件驱动路径 + 挂载时一次性对账
+// TaskQueueService → RxJS → useTaskWorkflowSync → WorkflowContext + WorkZone + ChatDrawer
+useEffect(() => {
+  // 初始对账：处理挂载前已完成的终态任务
+  const allTasks = taskQueueService.getAllTasks();
+  for (const task of allTasks) {
+    if (task.status === 'completed' || task.status === 'failed') {
+      processTaskEvent({ type: 'taskUpdated', task, timestamp: Date.now() });
+    }
   }
-}
-
-// 2. 提供 React Hook
-export function useWorkflowStatusSync(
-  workflowId: string | null,
-  onStatusChange: (change: WorkflowStatusChange) => void
-): void {
-  useEffect(() => {
-    if (!workflowId) return;
-    return workflowStatusSyncService.subscribe(workflowId, onStatusChange);
-  }, [workflowId]);
-}
-
-// 3. 多个组件共享同一服务（WorkZone、ChatDrawer 等）
-const runningWorkflowIds = useMemo(() => 
-  workflows.filter(w => w.status === 'running').map(w => w.id),
-[workflows]);
-
-useMultiWorkflowStatusSync(runningWorkflowIds, handleStatusChange);
+  // 订阅后续实时事件
+  const sub = taskQueueService.observeTaskUpdates().subscribe(processTaskEvent);
+  return () => sub.unsubscribe();
+}, []);
 ```
 
-**原因**: 
-1. SW 事件通道（postMessage）不可靠，页面刷新、SW 更新都可能导致事件丢失
-2. 轮询 IndexedDB 是"单一数据真相"原则的体现
-3. 多组件共享同一服务可避免重复轮询
+**原因**:
+1. 单一事件驱动路径消除多路径竞争导致的状态闪烁
+2. 初始对账替代轮询，只执行一次，覆盖挂载前错过的终态事件
+3. TaskQueueService 内存 Map 是唯一数据源，无需从 IndexedDB 拉取
 
 ---
 

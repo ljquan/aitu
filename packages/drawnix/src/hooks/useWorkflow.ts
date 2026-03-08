@@ -54,6 +54,8 @@ export interface UseWorkflowReturn {
   resetWorkflow: () => void;
   /** 中止工作流 */
   abortWorkflow: () => void;
+  /** 恢复工作流（重置 aborted 标志，允许后续 updateStep 生效） */
+  resumeWorkflow: () => void;
   /** 获取工作流 */
   getWorkflow: () => WorkflowDefinition | null;
 }
@@ -249,6 +251,15 @@ export function useWorkflow(): UseWorkflowReturn {
   }, []);
 
   /**
+   * 恢复工作流（重置 aborted 标志，允许后续 updateStep 生效）
+   * 用于任务队列重试时，重新激活已中止的工作流
+   */
+  const resumeWorkflow = useCallback(() => {
+    abortedRef.current = false;
+    setState(prev => ({ ...prev, status: 'running', error: null }));
+  }, []);
+
+  /**
    * 获取当前工作流
    */
   const getWorkflow = useCallback(() => {
@@ -264,6 +275,7 @@ export function useWorkflow(): UseWorkflowReturn {
     addStepsFromAIResponse,
     resetWorkflow,
     abortWorkflow,
+    resumeWorkflow,
     getWorkflow,
   };
 }

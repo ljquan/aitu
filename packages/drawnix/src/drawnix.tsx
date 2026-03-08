@@ -161,6 +161,9 @@ export const Drawnix: React.FC<DrawnixProps> = ({
     themeColors: MindThemeColors,
   };
 
+  // Initialize task storage synchronization
+  const isTaskStorageReady = useTaskStorage();
+
   const [appState, setAppState] = useState<DrawnixState>(() => {
     // TODO: need to consider how to maintenance the pointer state in future
     const md = new MobileDetect(window.navigator.userAgent);
@@ -328,10 +331,36 @@ export const Drawnix: React.FC<DrawnixProps> = ({
 
   // Initialize fallback media executor to resume pending tasks
   useEffect(() => {
-    const resumeTasks = () => {
-      import('./services/media-executor/fallback-executor').then(({ fallbackMediaExecutor }) => {
-        fallbackMediaExecutor.resumePendingTasks();
-      });
+    if (!isTaskStorageReady) return;
+
+    const resumeTasks = async () => {
+      console.warn('[drawnix] resumeTasks: waiting for workflow recovery...');
+      // Wait for workflow recovery to complete before resuming tasks,
+      // so useTaskWorkflowSync can find the step mappings
+      try {
+        const { workflowRecoveryPromise } = await import('./hooks/useWorkflowSubmission');
+        await Promise.race([
+          workflowRecoveryPromise,
+          new Promise<void>(resolve => setTimeout(resolve, 5000)),
+        ]);
+      } catch {
+        // Continue even if import fails
+      }
+      console.warn('[drawnix] resumeTasks: workflow recovery done, calling resumePendingTasks');
+
+      const [{ fallbackMediaExecutor }, { taskQueueService }] = await Promise.all([
+        import('./services/media-executor/fallback-executor'),
+        import('./services/task-queue')
+      ]);
+      const allTasks = taskQueueService.getAllTasks();
+      console.warn('[drawnix] Starting resumePendingTasks, in-memory tasks:', allTasks.length);
+      fallbackMediaExecutor.resumePendingTasks(
+        (taskId, status, updates) => {
+          console.warn(`[drawnix] resumePendingTasks callback: task=${taskId} status=${status}`);
+          taskQueueService.updateTaskStatus(taskId, status, updates);
+        },
+        allTasks
+      );
     };
 
     if ('requestIdleCallback' in window) {
@@ -339,7 +368,7 @@ export const Drawnix: React.FC<DrawnixProps> = ({
     } else {
       setTimeout(resumeTasks, 1000);
     }
-  }, []);
+  }, [isTaskStorageReady]);
 
   // 监听 API 认证错误事件，自动打开设置对话框
   useEffect(() => {
@@ -368,6 +397,8 @@ export const Drawnix: React.FC<DrawnixProps> = ({
   // Handle interrupted WorkZone elements after page refresh
   // Query task status from main-thread task queue and restore workflow state
   useEffect(() => {
+    if (!isTaskStorageReady) return;
+
     if (board && value && value.length > 0) {
       const restoreWorkZones = async () => {
         const { WorkZoneTransforms } = await import('./plugins/with-workzone');
@@ -492,7 +523,7 @@ export const Drawnix: React.FC<DrawnixProps> = ({
 
       scheduleRestore();
     }
-  }, [board]); // Only run once when board is initialized
+  }, [board, isTaskStorageReady]); // Only run once when board is initialized and task storage is ready
 
   // Subscribe to workflow status updates from SW and sync to WorkZone
   // This ensures WorkZone UI stays in sync even after page refresh
@@ -614,6 +645,95 @@ export const Drawnix: React.FC<DrawnixProps> = ({
     };
   }, [board]);
 
+  // Subscribe to task queue updates to sync WorkZone status
+  // This handles real-time updates for tasks running in the background (e.g. video generation)
+  useEffect(() => {
+    if (!isTaskStorageReady || !board) return;
+
+    let subscription: { unsubscribe: () => void } | null = null;
+
+    const setupTaskQueueSync = async () => {
+      const { taskQueueService } = await import('./services/task-queue');
+      const { WorkZoneTransforms } = await import('./plugins/with-workzone');
+      const { TaskStatus } = await import('./types/task.types');
+
+      subscription = taskQueueService.observeTaskUpdates().subscribe((event) => {
+        // Only care about task updates that might affect WorkZone steps
+        if (event.type !== 'taskUpdated' && event.type !== 'taskCompleted' && event.type !== 'taskFailed') {
+          return;
+        }
+        
+        const task = event.task;
+        if (!task) return;
+
+        // Find WorkZone steps that are waiting for this task
+        const workzones = WorkZoneTransforms.getAllWorkZones(board);
+        
+        for (const workzone of workzones) {
+          const currentWorkflow = { ...workzone.workflow, steps: [...workzone.workflow.steps] };
+          let hasChanges = false;
+          
+          const updatedSteps = currentWorkflow.steps.map(step => {
+            const stepResult = step.result as { taskId?: string } | undefined;
+            
+            // Only update steps that are linked to this task
+            if (stepResult?.taskId === task.id) {
+              let newStatus = step.status;
+              let newError = step.error;
+              let newResult = step.result;
+
+              // Map task status to step status
+              switch (task.status) {
+                case TaskStatus.COMPLETED:
+                  newStatus = 'completed';
+                  newResult = { taskId: task.id, result: task.result };
+                  break;
+                case TaskStatus.FAILED:
+                  newStatus = 'failed';
+                  newError = task.error?.message || '任务失败';
+                  break;
+                case TaskStatus.PROCESSING:
+                  newStatus = 'running';
+                  break;
+                case TaskStatus.PENDING:
+                  newStatus = 'pending';
+                  break;
+                case TaskStatus.CANCELLED:
+                  newStatus = 'skipped';
+                  break;
+              }
+
+              if (newStatus !== step.status || newError !== step.error) {
+                hasChanges = true;
+                return {
+                  ...step,
+                  status: newStatus as any,
+                  error: newError,
+                  result: newResult
+                };
+              }
+            }
+            return step;
+          });
+
+          if (hasChanges) {
+            WorkZoneTransforms.updateWorkflow(board, workzone.id, {
+              steps: updatedSteps,
+            });
+          }
+        }
+      });
+    };
+
+    setupTaskQueueSync().catch(console.error);
+
+    return () => {
+      if (subscription) {
+        subscription.unsubscribe();
+      }
+    };
+  }, [board, isTaskStorageReady]);
+
   const plugins: PlaitPlugin[] = [
     withDraw,
     withGroup,
@@ -646,9 +766,6 @@ export const Drawnix: React.FC<DrawnixProps> = ({
   ];
 
   const containerRef = useRef<HTMLDivElement>(null);
-
-  // Initialize task storage synchronization
-  useTaskStorage();
 
   // Initialize task executor for background processing
   useTaskExecutor();

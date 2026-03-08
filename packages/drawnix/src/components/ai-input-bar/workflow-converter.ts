@@ -832,9 +832,16 @@ export function updateStepStatus(
 ): WorkflowDefinition {
   return {
     ...workflow,
-    steps: workflow.steps.map(step => 
+    steps: workflow.steps.map(step =>
       step.id === stepId
-        ? { ...step, status, result, error, duration }
+        ? {
+            ...step,
+            status,
+            // Preserve existing result (e.g. taskId) when new result is undefined
+            result: result !== undefined ? result : step.result,
+            error,
+            duration,
+          }
         : step
     ),
   };

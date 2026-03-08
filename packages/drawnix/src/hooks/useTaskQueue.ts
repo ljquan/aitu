@@ -5,7 +5,9 @@
  * Subscribes to task updates and provides memoized selectors.
  */
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useEffect, useCallback } from 'react';
+import { atom, useAtomValue, useSetAtom } from 'jotai';
+import { getDefaultStore } from 'jotai/vanilla';
 import { taskQueueService } from '../services/task-queue';
 import { taskStorageReader } from '../services/task-storage-reader';
 import { Task, TaskStatus, TaskType, GenerationParams } from '../types/task.types';
@@ -58,6 +60,160 @@ export interface UseTaskQueueReturn {
   batchCancelTasks: (taskIds: string[]) => void;
 }
 
+const tasksAtom = atom<Task[]>([]);
+const isLoadingAtom = atom(true);
+const activeTasksAtom = atom((get) =>
+  get(tasksAtom).filter(
+    (task) => task.status === TaskStatus.PENDING || task.status === TaskStatus.PROCESSING
+  )
+);
+const completedTasksAtom = atom((get) =>
+  get(tasksAtom).filter((task) => task.status === TaskStatus.COMPLETED)
+);
+const failedTasksAtom = atom((get) =>
+  get(tasksAtom).filter((task) => task.status === TaskStatus.FAILED)
+);
+const cancelledTasksAtom = atom((get) =>
+  get(tasksAtom).filter((task) => task.status === TaskStatus.CANCELLED)
+);
+const totalCountAtom = atom((get) => get(tasksAtom).length);
+const loadedCountAtom = atom((get) => get(tasksAtom).length);
+const createTaskAtom = atom(
+  null,
+  (_get, set, payload: { params: GenerationParams; type: TaskType }): Task | null => {
+    try {
+      const task = taskQueueService.createTask(payload.params, payload.type);
+      set(tasksAtom, taskQueueService.getAllTasks());
+      set(isLoadingAtom, false);
+      return task;
+    } catch {
+      return null;
+    }
+  }
+);
+const cancelTaskAtom = atom(null, (_get, set, taskId: string) => {
+  taskQueueService.cancelTask(taskId);
+  set(tasksAtom, taskQueueService.getAllTasks());
+  set(isLoadingAtom, false);
+});
+const retryTaskAtom = atom(null, (_get, set, taskId: string) => {
+  taskQueueService.retryTask(taskId);
+  set(tasksAtom, taskQueueService.getAllTasks());
+  set(isLoadingAtom, false);
+});
+const deleteTaskAtom = atom(null, (_get, set, taskId: string) => {
+  taskQueueService.deleteTask(taskId);
+  set(tasksAtom, taskQueueService.getAllTasks());
+  set(isLoadingAtom, false);
+});
+const clearCompletedAtom = atom(null, (_get, set) => {
+  taskQueueService.clearCompletedTasks();
+  set(tasksAtom, taskQueueService.getAllTasks());
+  set(isLoadingAtom, false);
+});
+const clearFailedAtom = atom(null, (_get, set) => {
+  taskQueueService.clearFailedTasks();
+  set(tasksAtom, taskQueueService.getAllTasks());
+  set(isLoadingAtom, false);
+});
+
+let taskStateSyncStarted = false;
+let taskStateDbFallbackStarted = false;
+const taskStateStore = getDefaultStore();
+
+function syncTasksToAtomStore() {
+  const allTasks = taskQueueService.getAllTasks();
+  taskStateStore.set(tasksAtom, allTasks);
+  taskStateStore.set(isLoadingAtom, false);
+}
+
+async function loadTasksFromStorageFallback() {
+  await new Promise((resolve) => setTimeout(resolve, 500));
+
+  const memoryTasks = taskQueueService.getAllTasks();
+  if (memoryTasks.length > 0) {
+    syncTasksToAtomStore();
+    return;
+  }
+
+  const isAvailable = await taskStorageReader.isAvailable();
+  if (!isAvailable) {
+    taskStateStore.set(isLoadingAtom, false);
+    return;
+  }
+
+  const storedTasks = await taskStorageReader.getAllTasks();
+  if (storedTasks.length > 0) {
+    taskQueueService.restoreTasks(storedTasks);
+  }
+  syncTasksToAtomStore();
+}
+
+export function ensureTaskStateSyncStarted() {
+  if (taskStateSyncStarted) {
+    return;
+  }
+
+  taskStateSyncStarted = true;
+
+  const currentTasks = taskQueueService.getAllTasks();
+  taskStateStore.set(tasksAtom, currentTasks);
+  taskStateStore.set(isLoadingAtom, currentTasks.length === 0);
+
+  taskQueueService.observeTaskUpdates().subscribe(() => {
+    syncTasksToAtomStore();
+  });
+
+  if (currentTasks.length === 0 && !taskStateDbFallbackStarted) {
+    taskStateDbFallbackStarted = true;
+    loadTasksFromStorageFallback().catch(() => {
+      taskStateStore.set(isLoadingAtom, false);
+    });
+  }
+}
+
+export function useSharedTaskState() {
+  useEffect(() => {
+    ensureTaskStateSyncStarted();
+  }, []);
+
+  const tasks = useAtomValue(tasksAtom);
+  const isLoading = useAtomValue(isLoadingAtom);
+
+  return {
+    tasks,
+    isLoading,
+  };
+}
+
+export function useTaskActions() {
+  const create = useSetAtom(createTaskAtom);
+  const cancel = useSetAtom(cancelTaskAtom);
+  const retry = useSetAtom(retryTaskAtom);
+  const remove = useSetAtom(deleteTaskAtom);
+  const clearCompleted = useSetAtom(clearCompletedAtom);
+  const clearFailed = useSetAtom(clearFailedAtom);
+
+  const createTask = useCallback(
+    (params: GenerationParams, type: TaskType) => create({ params, type }),
+    [create]
+  );
+  const cancelTask = useCallback((taskId: string) => cancel(taskId), [cancel]);
+  const retryTask = useCallback((taskId: string) => retry(taskId), [retry]);
+  const deleteTask = useCallback((taskId: string) => remove(taskId), [remove]);
+  const clearCompletedTasks = useCallback(() => clearCompleted(), [clearCompleted]);
+  const clearFailedTasks = useCallback(() => clearFailed(), [clearFailed]);
+
+  return {
+    createTask,
+    cancelTask,
+    retryTask,
+    deleteTask,
+    clearCompletedTasks,
+    clearFailedTasks,
+  };
+}
+
 /**
  * Hook for managing task queue state and operations
  * 
@@ -80,94 +236,23 @@ export interface UseTaskQueueReturn {
  * }
  */
 export function useTaskQueue(): UseTaskQueueReturn {
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [updateCounter, setUpdateCounter] = useState(0);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isLoadingMore] = useState(false);
-  const [hasMore] = useState(false);
-  const [totalCount, setTotalCount] = useState(0);
-  const [loadedCount, setLoadedCount] = useState(0);
-
-  // Subscribe to task updates (useTaskStorage handles IndexedDB loading and restoreTasks)
-  useEffect(() => {
-    let cancelled = false;
-
-    // Initialize with current in-memory tasks
-    const currentTasks = taskQueueService.getAllTasks();
-    setTasks(currentTasks);
-    setTotalCount(currentTasks.length);
-    setLoadedCount(currentTasks.length);
-    if (currentTasks.length > 0) {
-      console.warn(`[useTaskQueue] Init: ${currentTasks.length} tasks from memory`);
-      setIsLoading(false);
-    } else {
-      console.warn('[useTaskQueue] Init: memory empty, waiting for restore or DB fallback');
-    }
-
-    // Subscribe to updates — catches tasks restored by useTaskStorage
-    const subscription = taskQueueService.observeTaskUpdates().subscribe(() => {
-      const allTasks = taskQueueService.getAllTasks();
-      setTasks(allTasks);
-      setUpdateCounter(prev => prev + 1);
-      setTotalCount(allTasks.length);
-      setLoadedCount(allTasks.length);
-      setIsLoading(false);
-    });
-
-    // 如果内存中没有数据（useTaskStorage 可能还没完成），
-    // 延迟从 IndexedDB 补充加载，避免面板打开时显示空数据
-    if (currentTasks.length === 0) {
-      const loadFromDB = async () => {
-        // 先等一小段时间，给 useTaskStorage 机会先完成
-        await new Promise(r => setTimeout(r, 500));
-        if (cancelled) return;
-
-        // 再次检查内存，useTaskStorage 可能已经完成了
-        const memTasks = taskQueueService.getAllTasks();
-        if (memTasks.length > 0) {
-          console.warn(`[useTaskQueue] Fallback: ${memTasks.length} tasks appeared in memory`);
-          setTasks(memTasks);
-          setTotalCount(memTasks.length);
-          setLoadedCount(memTasks.length);
-          setIsLoading(false);
-          return;
-        }
-
-        // 内存仍为空，直接从 IndexedDB 读取
-        console.warn('[useTaskQueue] Fallback: loading from IndexedDB');
-        try {
-          const isAvailable = await taskStorageReader.isAvailable();
-          if (!isAvailable || cancelled) {
-            console.warn('[useTaskQueue] Fallback: IndexedDB not available');
-            setIsLoading(false);
-            return;
-          }
-          const storedTasks = await taskStorageReader.getAllTasks();
-          if (cancelled) return;
-
-          console.warn(`[useTaskQueue] Fallback: loaded ${storedTasks.length} tasks from IndexedDB`);
-          if (storedTasks.length > 0) {
-            taskQueueService.restoreTasks(storedTasks);
-          }
-          const allTasks = taskQueueService.getAllTasks();
-          setTasks(allTasks);
-          setTotalCount(allTasks.length);
-          setLoadedCount(allTasks.length);
-        } catch (error) {
-          console.warn('[useTaskQueue] Fallback: IndexedDB load failed', error);
-        }
-        if (!cancelled) {
-          setIsLoading(false);
-        }
-      };
-      loadFromDB();
-    }
-
-    return () => {
-      cancelled = true;
-      subscription.unsubscribe();
-    };
-  }, []);
+  const { tasks, isLoading } = useSharedTaskState();
+  const activeTasks = useAtomValue(activeTasksAtom);
+  const completedTasks = useAtomValue(completedTasksAtom);
+  const failedTasks = useAtomValue(failedTasksAtom);
+  const cancelledTasks = useAtomValue(cancelledTasksAtom);
+  const totalCount = useAtomValue(totalCountAtom);
+  const loadedCount = useAtomValue(loadedCountAtom);
+  const isLoadingMore = false;
+  const hasMore = false;
+  const {
+    createTask,
+    cancelTask,
+    retryTask,
+    deleteTask,
+    clearCompletedTasks,
+    clearFailedTasks,
+  } = useTaskActions();
 
   // 加载更多任务（不再需要 SW 分页，直接返回）
   const loadMore = useCallback(async () => {
@@ -178,78 +263,27 @@ export function useTaskQueue(): UseTaskQueueReturn {
   // visibility 监听器会在页面变为可见时同步第一页
   // 不再使用轮询，避免重置分页状态和内存问题
 
-  // Memoized selectors
-  const activeTasks = useMemo(() => {
-    return tasks.filter(task => 
-      task.status === TaskStatus.PENDING ||
-      task.status === TaskStatus.PROCESSING
-    );
-  }, [tasks]);
-
-  const completedTasks = useMemo(() => {
-    return tasks.filter(task => task.status === TaskStatus.COMPLETED);
-  }, [tasks]);
-
-  const failedTasks = useMemo(() => {
-    return tasks.filter(task => task.status === TaskStatus.FAILED);
-  }, [tasks]);
-
-  const cancelledTasks = useMemo(() => {
-    return tasks.filter(task => task.status === TaskStatus.CANCELLED);
-  }, [tasks]);
-
-  // Task operations
-  const createTask = useCallback((params: GenerationParams, type: TaskType): Task | null => {
-    try {
-      const task = taskQueueService.createTask(params, type);
-      return task;
-    } catch {
-      return null;
-    }
-  }, []);
-
-  const cancelTask = useCallback((taskId: string) => {
-    taskQueueService.cancelTask(taskId);
-  }, []);
-
-  const retryTask = useCallback((taskId: string) => {
-    // taskQueueService 在 SW 模式下已经是 swTaskQueueService
-    taskQueueService.retryTask(taskId);
-  }, []);
-
-  const deleteTask = useCallback((taskId: string) => {
-    taskQueueService.deleteTask(taskId);
-  }, []);
-
-  const clearCompleted = useCallback(() => {
-    taskQueueService.clearCompletedTasks();
-  }, []);
-
-  const clearFailed = useCallback(() => {
-    taskQueueService.clearFailedTasks();
-  }, []);
-
   const getTask = useCallback((taskId: string) => {
     return taskQueueService.getTask(taskId);
-  }, [updateCounter]); // Re-create when tasks update
+  }, []);
 
   const batchDeleteTasks = useCallback((taskIds: string[]) => {
     taskIds.forEach(taskId => {
-      taskQueueService.deleteTask(taskId);
+      deleteTask(taskId);
     });
-  }, []);
+  }, [deleteTask]);
 
   const batchRetryTasks = useCallback((taskIds: string[]) => {
     taskIds.forEach(taskId => {
-      taskQueueService.retryTask(taskId);
+      retryTask(taskId);
     });
-  }, []);
+  }, [retryTask]);
 
   const batchCancelTasks = useCallback((taskIds: string[]) => {
     taskIds.forEach(taskId => {
-      taskQueueService.cancelTask(taskId);
+      cancelTask(taskId);
     });
-  }, []);
+  }, [cancelTask]);
 
   return {
     tasks,
@@ -267,8 +301,8 @@ export function useTaskQueue(): UseTaskQueueReturn {
     cancelTask,
     retryTask,
     deleteTask,
-    clearCompleted,
-    clearFailed,
+    clearCompleted: clearCompletedTasks,
+    clearFailed: clearFailedTasks,
     getTask,
     batchDeleteTasks,
     batchRetryTasks,

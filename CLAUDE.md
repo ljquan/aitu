@@ -221,6 +221,7 @@ aitu/
 14. **跨 React Root 状态共享**：Plait 文本组件通过 `createRoot` 渲染在独立 React 树中，Context 无法穿透；需用 `useSyncExternalStore` + 模块级 store 共享状态
 15. **列表索引引用须用 ID 追踪**：当 Viewer/弹窗通过 `currentIndex` 引用列表项时，若列表可能动态变化（新项插入/删除），必须通过 item ID 在列表变化后修正索引，否则会显示错误的内容
 16. **RxJS 事件/全局 Store 传递的对象必须是新引用**：原地修改对象再 emit 会导致 React.memo 失效，必须创建新对象后再存入 Map 并 emit
+17. **useEffect 初始对账须用 ref 守卫**：遍历任务列表执行对账可能触发状态更新 → 依赖变化 → useEffect 重跑形成死循环，用 `useRef(false)` 确保只执行一次
 
 ### 其他常见陷阱
 
@@ -291,8 +292,6 @@ aitu/
 当请求涉及计划/提案/破坏性变更/架构调整时，请先打开 `@/openspec/AGENTS.md`。
 
 ## 验证命令
-
-修改代码后执行：
 
 ```bash
 pnpm check              # 类型检查 + ESLint（推荐）

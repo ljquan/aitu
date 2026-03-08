@@ -302,10 +302,21 @@ class TaskQueueService {
     status: TaskStatus,
     updates?: Partial<Task>
   ): void {
-    const task = this.tasks.get(taskId);
+    let task = this.tasks.get(taskId);
     if (!task) {
-      console.warn(`[TaskQueueService] Task ${taskId} not found`);
-      return;
+      // Task not in memory — create a minimal entry so the event is still emitted.
+      // This can happen after page refresh if restoreTasks hasn't run yet.
+      console.warn(`[TaskQueueService] Task ${taskId} not in memory, creating stub for status update`);
+      const now = Date.now();
+      task = {
+        id: taskId,
+        type: (updates as any)?.type || TaskType.VIDEO,
+        status: TaskStatus.PROCESSING,
+        params: { prompt: '' },
+        createdAt: now,
+        updatedAt: now,
+      };
+      this.tasks.set(taskId, task);
     }
 
     const now = Date.now();
@@ -331,6 +342,9 @@ class TaskQueueService {
     this.emitEvent('taskUpdated', updatedTask);
 
     // console.log(`[TaskQueueService] Updated task ${taskId} to ${status}`);
+    if (status === TaskStatus.FAILED || status === TaskStatus.COMPLETED) {
+      console.debug(`[TaskQueueService] Task ${taskId} → ${status}, event emitted`);
+    }
   }
 
   /**
@@ -496,6 +510,34 @@ class TaskQueueService {
     const failedTasks = this.getTasksByStatus(TaskStatus.FAILED);
     failedTasks.forEach(task => this.deleteTask(task.id));
     // console.log(`[TaskQueueService] Cleared ${failedTasks.length} failed tasks`);
+  }
+
+  /**
+   * Tracks an externally-created task in the in-memory Map.
+   * Used by media generation services to register tasks so that
+   * retryTask() and observeTaskUpdates() work correctly.
+   * Idempotent: skips if task already exists in memory.
+   */
+  trackExternalTask(task: Task): void {
+    if (this.tasks.has(task.id)) return;
+    this.tasks.set(task.id, task);
+    this.persistTask(task);
+    this.emitEvent('taskCreated', task);
+  }
+
+  /**
+   * Sync task state from IndexedDB to in-memory Map without writing back.
+   * Used by media generation services to keep the in-memory state in sync
+   * when the executor updates IndexedDB directly.
+   */
+  syncTaskFromStorage(taskId: string, storageTask: Partial<Task>): void {
+    const task = this.tasks.get(taskId);
+    if (!task) return;
+    if (task.status === storageTask.status && task.progress === storageTask.progress) return;
+
+    const updatedTask: Task = { ...task, ...storageTask, updatedAt: Date.now() };
+    this.tasks.set(taskId, updatedTask);
+    this.emitEvent('taskUpdated', updatedTask);
   }
 
   /**

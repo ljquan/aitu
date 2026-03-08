@@ -348,6 +348,11 @@ export class WorkflowEngine {
             params: step.args.params as Record<string, unknown> | undefined,
             forceMainThread: this.options.forceFallbackExecutor,
             signal,
+            onTaskCreated: (taskId) => {
+              // 提前持久化 taskId，页面刷新后 useTaskWorkflowSync 可通过此映射匹配事件
+              step.result = { taskId };
+              workflowStorageWriter.saveWorkflow(workflow);
+            },
           }
         );
 
@@ -355,7 +360,7 @@ export class WorkflowEngine {
           throw new Error(result.task.error?.message || 'Image generation failed');
         }
 
-        step.result = result.task.result;
+        step.result = { ...result.task.result, taskId: result.task.id };
         break;
       }
 
@@ -374,6 +379,11 @@ export class WorkflowEngine {
             params: step.args.params as Record<string, unknown> | undefined,
             forceMainThread: this.options.forceFallbackExecutor,
             signal,
+            onTaskCreated: (taskId) => {
+              // 提前持久化 taskId，页面刷新后 useTaskWorkflowSync 可通过此映射匹配事件
+              step.result = { taskId };
+              workflowStorageWriter.saveWorkflow(workflow);
+            },
           }
         );
 
@@ -381,7 +391,7 @@ export class WorkflowEngine {
           throw new Error(result.task.error?.message || 'Video generation failed');
         }
 
-        step.result = result.task.result;
+        step.result = { ...result.task.result, taskId: result.task.id };
         break;
       }
 

@@ -15,6 +15,8 @@ import { executorFactory, waitForTaskCompletion } from '../media-executor';
 import { settingsManager, geminiSettings } from '../../utils/settings-manager';
 import { TaskType } from '../../types/shared/core.types';
 import type { ImageGenerationParams } from '../media-executor/types';
+import { taskQueueService } from '../task-queue-service';
+import { TaskStatus as QueueTaskStatus, TaskExecutionPhase } from '../../types/task.types';
 
 /**
  * 生成图片
@@ -44,11 +46,27 @@ export async function generateImage(
 
   // 创建任务记录
   const taskId = generateTaskId();
+  const now = Date.now();
   await taskStorageWriter.createTask(taskId, 'image', {
     prompt: sanitizedParams.prompt,
     model: options.model,
     size: options.size,
   });
+
+  // 注册到 TaskQueueService 内存 Map，确保任务队列 UI 和重试功能可用
+  taskQueueService.trackExternalTask({
+    id: taskId,
+    type: TaskType.IMAGE,
+    status: QueueTaskStatus.PROCESSING,
+    params: { prompt: sanitizedParams.prompt, model: options.model, size: options.size },
+    createdAt: now,
+    updatedAt: now,
+    startedAt: now,
+    executionPhase: TaskExecutionPhase.SUBMITTING,
+  });
+
+  // 通知调用方 taskId，以便提前持久化到工作流步骤
+  options.onTaskCreated?.(taskId);
 
   // 构建 executor 参数
   const executorParams: ImageGenerationParams = {
@@ -71,7 +89,12 @@ export async function generateImage(
   await executor.generateImage(executorParams, { signal: options.signal });
 
   // 等待任务完成（轮询 IndexedDB）
-  const result = await waitForTaskCompletion(taskId, { signal: options.signal });
+  const result = await waitForTaskCompletion(taskId, {
+    signal: options.signal,
+    onProgress: (updatedTask) => {
+      taskQueueService.syncTaskFromStorage(taskId, updatedTask);
+    },
+  });
 
   if (!result.success || !result.task) {
     const errorTask = result.task || {

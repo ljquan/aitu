@@ -64,6 +64,12 @@ function extractUrlsFromUploadedImages(uploadedImages: unknown): string[] | unde
  */
 export class FallbackMediaExecutor implements IMediaExecutor {
   readonly name = 'FallbackMediaExecutor';
+  
+  /**
+   * 正在轮询的任务 ID 集合
+   * 用于防止同一个任务被重复轮询（例如 resumePendingTasks 被多次调用时）
+   */
+  private pollingTasks = new Set<string>();
 
   /**
    * 降级执行器始终可用（只要浏览器支持 fetch）
@@ -441,41 +447,50 @@ export class FallbackMediaExecutor implements IMediaExecutor {
       options?.onProgress?.({ progress: 10, phase: 'polling' });
 
       // 轮询等待视频完成
-      const result = await pollVideoStatus(
-        videoId,
-        config.videoConfig,
-        (progress) => {
-          // progress 是 0-1 范围（来自 pollVideoStatus 的 progress/100）
-          // 映射到 10-90 范围：10 + (0~1) * 80 = 10~90
-          options?.onProgress?.({ progress: 10 + progress * 80, phase: 'polling' });
-        },
-        options?.signal
-      );
+      if (!this.pollingTasks.has(taskId)) {
+        this.pollingTasks.add(taskId);
+        try {
+          const result = await pollVideoStatus(
+            videoId,
+            config.videoConfig,
+            (progress) => {
+              // progress 是 0-1 范围（来自 pollVideoStatus 的 progress/100）
+              // 映射到 10-90 范围：10 + (0~1) * 80 = 10~90
+              options?.onProgress?.({ progress: 10 + progress * 80, phase: 'polling' });
+            },
+            options?.signal
+          );
 
-      const elapsedTime = Date.now() - startTime;
+          const elapsedTime = Date.now() - startTime;
 
-      // 记录成功
-      completeLLMApiLog(logId, {
-        httpStatus: 200,
-        duration: elapsedTime,
-        resultType: 'video',
-        resultCount: 1,
-        resultUrl: result.url,
-        remoteId: videoId,
-      });
+          // 记录成功
+          completeLLMApiLog(logId, {
+            httpStatus: 200,
+            duration: elapsedTime,
+            resultType: 'video',
+            resultCount: 1,
+            resultUrl: result.url,
+            remoteId: videoId,
+          });
 
-      options?.onProgress?.({ progress: 100 });
+          options?.onProgress?.({ progress: 100 });
 
-      // 缓存远程 URL 到本地
-      const cachedVidUrl = await cacheRemoteUrl(result.url, taskId, 'video', 'mp4');
+          // 缓存远程 URL 到本地
+          const cachedVidUrl = await cacheRemoteUrl(result.url, taskId, 'video', 'mp4');
 
-      // 完成任务
-      await taskStorageWriter.completeTask(taskId, {
-        url: cachedVidUrl,
-        format: 'mp4',
-        size: 0,
-        duration: duration ? parseInt(duration, 10) : undefined,
-      });
+          // 完成任务
+          await taskStorageWriter.completeTask(taskId, {
+            url: cachedVidUrl,
+            format: 'mp4',
+            size: 0,
+            duration: duration ? parseInt(duration, 10) : undefined,
+          });
+        } finally {
+          this.pollingTasks.delete(taskId);
+        }
+      } else {
+        console.log(`[FallbackMediaExecutor] Task ${taskId} is already being polled, skipping duplicate request.`);
+      }
     } catch (error: any) {
       const elapsedTime = Date.now() - startTime;
       const errorMessage = error.message || 'Video generation failed';
@@ -659,24 +674,50 @@ export class FallbackMediaExecutor implements IMediaExecutor {
   /**
    * 恢复未完成的任务（例如页面刷新导致中断的任务）
    * 仅恢复有 remoteId 且状态为 processing 的任务
+   *
+   * @param onTaskUpdate - 任务状态更新回调
+   * @param tasksFromMemory - 可选，从内存中传入的任务列表（避免 IndexedDB 读取竞态）
    */
-  async resumePendingTasks(): Promise<void> {
+  async resumePendingTasks(
+    onTaskUpdate?: (taskId: string, status: TaskStatus, updates?: Partial<Task>) => void,
+    tasksFromMemory?: Task[]
+  ): Promise<void> {
     try {
-      const pendingTasks = await taskStorageReader.getAllTasks({ status: TaskStatus.PROCESSING });
-      
+      // 优先使用内存中的任务列表，避免 useTaskStorage 的 fire-and-forget persistTask
+      // 尚未写入 IndexedDB 导致读取到旧状态的竞态问题
+      let pendingTasks: Task[];
+      if (tasksFromMemory) {
+        pendingTasks = tasksFromMemory.filter(t => t.status === TaskStatus.PROCESSING);
+        console.warn(`[FallbackMediaExecutor] resumePendingTasks: found ${pendingTasks.length} processing tasks from memory`);
+      } else {
+        pendingTasks = await taskStorageReader.getAllTasks({ status: TaskStatus.PROCESSING });
+        console.warn(`[FallbackMediaExecutor] resumePendingTasks: found ${pendingTasks.length} processing tasks from IndexedDB (fallback)`);
+      }
+
       // 筛选出有 remoteId 的视频任务
-      const videoTasks = pendingTasks.filter(t => 
+      const videoTasks = pendingTasks.filter(t =>
         t.type === 'video' && t.remoteId && t.status === TaskStatus.PROCESSING
       );
-      
+
+      // 日志：列出所有处理中的任务及其筛选结果
+      for (const t of pendingTasks) {
+        const isVideo = t.type === 'video';
+        const hasRemoteId = !!t.remoteId;
+        const willResume = isVideo && hasRemoteId;
+        console.warn(
+          `[FallbackMediaExecutor]   task=${t.id} type=${t.type} remoteId=${t.remoteId || 'none'} → ${willResume ? 'RESUME' : 'SKIP'}${!isVideo ? ' (not video)' : ''}${!hasRemoteId ? ' (no remoteId)' : ''}`
+        );
+      }
+
       if (videoTasks.length === 0) {
+        console.warn('[FallbackMediaExecutor] No video tasks to resume');
         return;
       }
       
       console.log(`[FallbackMediaExecutor] Resuming ${videoTasks.length} pending video tasks...`);
       
       // 并行恢复
-      await Promise.all(videoTasks.map(task => this.resumeVideoTask(task)));
+      await Promise.all(videoTasks.map(task => this.resumeVideoTask(task, onTaskUpdate)));
     } catch (error) {
       console.error('[FallbackMediaExecutor] Failed to resume pending tasks:', error);
     }
@@ -685,13 +726,25 @@ export class FallbackMediaExecutor implements IMediaExecutor {
   /**
    * 恢复单个视频任务的轮询
    */
-  private async resumeVideoTask(task: Task): Promise<void> {
+  private async resumeVideoTask(
+    task: Task,
+    onTaskUpdate?: (taskId: string, status: TaskStatus, updates?: Partial<Task>) => void
+  ): Promise<void> {
+    // 如果任务已经在轮询中，直接跳过
+    if (this.pollingTasks.has(task.id)) {
+      console.log(`[FallbackMediaExecutor] Task ${task.id} is already being polled, skipping resume.`);
+      return;
+    }
+
     const config = this.getConfig();
     const videoId = task.remoteId!;
     
+    // 标记为正在轮询
+    this.pollingTasks.add(task.id);
+
     try {
-      console.log(`[FallbackMediaExecutor] Resuming video task: ${task.id} (remoteId: ${videoId})`);
-      
+      console.log(`[FallbackMediaExecutor] Resuming video task: ${task.id} (remoteId: ${videoId}, model: ${task.params?.model || 'unknown'})`);
+
       // 重新开始轮询
       const result = await pollVideoStatus(
         videoId,
@@ -700,33 +753,63 @@ export class FallbackMediaExecutor implements IMediaExecutor {
           // 这里的 progress 是 0-1
           // 视频生成中，polling 阶段通常对应 10%-90%
           const mappedProgress = 10 + progress * 80;
-          // taskStorageWriter.updateStatus 会写入 storage，触发 observer
-          taskStorageWriter.updateStatus(task.id, TaskStatus.PROCESSING).catch(() => {});
-          taskStorageWriter.updateProgress(task.id, mappedProgress).catch(() => {});
+          
+          if (onTaskUpdate) {
+            onTaskUpdate(task.id, TaskStatus.PROCESSING, { progress: mappedProgress });
+          } else {
+            // taskStorageWriter.updateStatus 会写入 storage
+            taskStorageWriter.updateStatus(task.id, TaskStatus.PROCESSING).catch(() => {});
+            taskStorageWriter.updateProgress(task.id, mappedProgress).catch(() => {});
+          }
         }
       );
       
       // 缓存远程 URL
       const cachedVidUrl = await cacheRemoteUrl(result.url, task.id, 'video', 'mp4');
-      
+
       const duration = task.params.duration as string | undefined;
 
-      // 完成任务
-      await taskStorageWriter.completeTask(task.id, {
+      const completionResult = {
         url: cachedVidUrl,
         format: 'mp4',
         size: 0,
         duration: duration ? parseInt(duration, 10) : undefined,
-      });
-      
+      };
+
+      // 始终先写入 IndexedDB，确保持久化
+      await taskStorageWriter.completeTask(task.id, completionResult);
+
+      // 再通知内存状态同步
+      if (onTaskUpdate) {
+        onTaskUpdate(task.id, TaskStatus.COMPLETED, {
+          result: completionResult,
+          progress: 100,
+          completedAt: Date.now(),
+        });
+      }
+
       console.log(`[FallbackMediaExecutor] Resumed video task completed: ${task.id}`);
     } catch (error: any) {
       console.error(`[FallbackMediaExecutor] Failed to resume task ${task.id}:`, error);
-      
-      await taskStorageWriter.failTask(task.id, {
+
+      const errorInfo = {
         code: error.code || 'RESUME_FAILED',
         message: error.message || 'Failed to resume task'
-      });
+      };
+
+      // 始终先写入 IndexedDB，确保持久化
+      await taskStorageWriter.failTask(task.id, errorInfo).catch(() => {});
+
+      // 再通知内存状态同步
+      if (onTaskUpdate) {
+        console.debug(`[FallbackMediaExecutor] Calling onTaskUpdate for failed task ${task.id}`);
+        onTaskUpdate(task.id, TaskStatus.FAILED, { error: errorInfo });
+      } else {
+        console.warn(`[FallbackMediaExecutor] No onTaskUpdate callback for failed task ${task.id}, UI won't update`);
+      }
+    } finally {
+      // 无论成功还是失败，都移除标记
+      this.pollingTasks.delete(task.id);
     }
   }
 

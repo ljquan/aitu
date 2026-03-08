@@ -27,6 +27,16 @@ import { convertToWorkflow, type WorkflowDefinition as LegacyWorkflowDefinition 
 import { WorkZoneTransforms } from '../plugins/with-workzone';
 import { PlaitBoard } from '@plait/core';
 import { geminiSettings } from '../utils/settings-manager';
+import { useTaskWorkflowSync } from './useTaskWorkflowSync';
+
+// ============================================================================
+// Workflow Recovery Coordination
+// ============================================================================
+
+let workflowRecoveryResolve: (() => void) | null = null;
+export const workflowRecoveryPromise = new Promise<void>((resolve) => {
+  workflowRecoveryResolve = resolve;
+});
 
 // ============================================================================
 // Types
@@ -156,6 +166,14 @@ export function useWorkflowSubmission(
     updateWorkflowMessageRef.current = chatDrawerControl.updateWorkflowMessage;
   }, [chatDrawerControl.sendWorkflowMessage, chatDrawerControl.updateWorkflowMessage]);
 
+  // Sync task queue state changes to workflow steps (retry → Workzone/ChatDrawer)
+  useTaskWorkflowSync({
+    workflowControl,
+    updateWorkflowMessage: chatDrawerControl.updateWorkflowMessage,
+    boardRef,
+    workZoneIdRef,
+  });
+
   // Current retry context
   const currentRetryContextRef = useRef<WorkflowRetryContext | null>(null);
 
@@ -178,11 +196,13 @@ export function useWorkflowSubmission(
   const recoverWorkflowsOnMount = useCallback(async () => {
     if (hasRecoveredRef.current) return;
     hasRecoveredRef.current = true;
-    
+
     try {
       await workflowSubmissionService.recoverWorkflows();
     } catch (error) {
       console.warn('[useWorkflowSubmission] Failed to recover workflows:', error);
+    } finally {
+      workflowRecoveryResolve?.();
     }
   }, []);
 

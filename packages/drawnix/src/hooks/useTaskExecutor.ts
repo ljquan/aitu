@@ -206,87 +206,6 @@ export function useTaskExecutor(): void {
       tryExecuteNext();
     };
 
-    // Function to resume a video task that has a remoteId
-    const resumeVideoTask = async (task: Task) => {
-      const taskId = task.id;
-      const remoteId = task.remoteId!;
-
-      // Prevent duplicate execution
-      if (executingTasksRef.current.has(taskId)) {
-        return;
-      }
-
-      executingTasksRef.current.add(taskId);
-
-      try {
-        // Resume video polling
-        const result = await generationAPIService.resumeVideoGeneration(
-          taskId,
-          remoteId
-        );
-
-        if (!isActive) return;
-
-        // Mark as completed with result
-        legacyTaskQueueService.updateTaskStatus(taskId, TaskStatus.COMPLETED, {
-          result,
-        });
-
-
-        // Register image/video metadata in unified cache
-        if (result.url) {
-          try {
-            await unifiedCacheService.registerImageMetadata(result.url, {
-              taskId: task.id,
-              model: task.params.model,
-              prompt: task.params.prompt,
-              params: task.params,
-            });
-          } catch (error) {
-            console.error(
-              `[TaskExecutor] Failed to register metadata for resumed task ${taskId}:`,
-              error
-            );
-          }
-        }
-      } catch (error: any) {
-        if (!isActive) return;
-
-        console.error(`[TaskExecutor] Resumed task ${taskId} failed:`, error);
-
-        const updatedTask = legacyTaskQueueService.getTask(taskId);
-        if (!updatedTask) return;
-
-        // Extract error details
-        const errorCode = error.httpStatus
-          ? `HTTP_${error.httpStatus}`
-          : error.name || 'ERROR';
-        const errorMessage = getFriendlyErrorMessage(error);
-        // 如果有完整响应，使用它；否则使用 API 错误体或错误消息
-        const originalErrorInfo =
-          error.fullResponse ||
-          error.apiErrorBody ||
-          error.message ||
-          String(error);
-        const errorDetails = {
-          originalError: originalErrorInfo,
-          timestamp: Date.now(),
-        };
-
-        // Check if we should retry - disabled, mark as failed directly
-        legacyTaskQueueService.updateTaskStatus(taskId, TaskStatus.FAILED, {
-          error: {
-            code: errorCode,
-            message: errorMessage,
-            details: errorDetails,
-          },
-        });
-
-      } finally {
-        onTaskFinished(taskId);
-      }
-    };
-
     // Function to resume an async image task that has a remoteId
     const resumeAsyncImageTask = async (task: Task) => {
       const taskId = task.id;
@@ -475,13 +394,13 @@ export function useTaskExecutor(): void {
         return resumeAsyncImageTask(task);
       }
 
-      // Check if this is a resumable video task
+      // Skip resumable video tasks — handled by FallbackMediaExecutor.resumePendingTasks()
       if (
         task.type === TaskType.VIDEO &&
         task.remoteId &&
         task.status === TaskStatus.PROCESSING
       ) {
-        return resumeVideoTask(task);
+        return;
       }
 
       // Prevent duplicate execution
@@ -588,16 +507,13 @@ export function useTaskExecutor(): void {
         (task) => task.status === TaskStatus.PENDING
       );
 
-      // Process resumable tasks (processing with remoteId)
+      // Process resumable tasks (processing with remoteId) — video tasks excluded, handled by FallbackMediaExecutor
       const resumableTasks = tasks.filter(
         (task) =>
-          (task.type === TaskType.VIDEO &&
-            task.remoteId &&
-            task.status === TaskStatus.PROCESSING) ||
-          (task.type === TaskType.IMAGE &&
+          task.type === TaskType.IMAGE &&
             task.remoteId &&
             task.status === TaskStatus.PROCESSING &&
-            isAsyncImageModel(task.params.model))
+            isAsyncImageModel(task.params.model)
       );
 
       console.warn(
@@ -658,15 +574,13 @@ export function useTaskExecutor(): void {
           if (task.status === TaskStatus.PENDING) {
             enqueueTask(task);
           }
-          // Resume tasks that have remoteId and are in processing state (video or async image)
+          // Resume async image tasks that have remoteId and are in processing state (video tasks excluded, handled by FallbackMediaExecutor)
           else if (
             !executingTasksRef.current.has(task.id) &&
             task.remoteId &&
-            ((task.type === TaskType.VIDEO &&
-              task.status === TaskStatus.PROCESSING) ||
-              (task.type === TaskType.IMAGE &&
-                task.status === TaskStatus.PROCESSING &&
-                isAsyncImageModel(task.params.model)))
+            task.type === TaskType.IMAGE &&
+            task.status === TaskStatus.PROCESSING &&
+            isAsyncImageModel(task.params.model)
           ) {
             enqueueTask(task);
           }

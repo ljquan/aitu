@@ -75,28 +75,63 @@ export async function pollVideoStatus(
   onProgress: (progress: number) => void,
   signal?: AbortSignal
 ): Promise<{ url: string }> {
+  console.log(`[pollVideoStatus] Starting poll for videoId: ${videoId}`);
   const maxAttempts = 120; // 最多轮询 10 分钟
   const interval = 5000; // 5 秒轮询间隔
+  const maxConsecutiveErrors = 3; // 连续 HTTP 错误超过此数才放弃
+  let consecutiveErrors = 0;
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     if (signal?.aborted) {
+      console.log(`[pollVideoStatus] Polling cancelled for videoId: ${videoId}`);
       throw new Error('Video generation cancelled');
     }
 
-    const response = await fetch(`${config.baseUrl}/v1/videos/${videoId}`, {
-      headers: {
-        Authorization: `Bearer ${config.apiKey}`,
-      },
-      signal,
-    });
+    console.log(`[pollVideoStatus] Polling attempt ${attempt + 1}/${maxAttempts} for videoId: ${videoId}`);
 
-    if (!response.ok) {
-      throw new Error(`Failed to check video status: ${response.status}`);
+    let data: any;
+    try {
+      const response = await fetch(`${config.baseUrl}/v1/videos/${videoId}`, {
+        headers: {
+          Authorization: `Bearer ${config.apiKey}`,
+        },
+        signal,
+      });
+
+      if (!response.ok) {
+        consecutiveErrors++;
+        console.warn(
+          `[pollVideoStatus] HTTP ${response.status} for videoId: ${videoId} (${consecutiveErrors}/${maxConsecutiveErrors} consecutive errors)`
+        );
+        if (consecutiveErrors >= maxConsecutiveErrors) {
+          throw new Error(`Failed to check video status: ${response.status} (after ${maxConsecutiveErrors} retries)`);
+        }
+        await new Promise((resolve) => setTimeout(resolve, interval));
+        continue;
+      }
+
+      data = await response.json();
+    } catch (error: any) {
+      // 网络错误（fetch 本身失败）也计入连续错误
+      if (error?.name === 'AbortError') throw error;
+      consecutiveErrors++;
+      console.warn(
+        `[pollVideoStatus] Network error for videoId: ${videoId}: ${error.message} (${consecutiveErrors}/${maxConsecutiveErrors})`
+      );
+      if (consecutiveErrors >= maxConsecutiveErrors) {
+        throw error;
+      }
+      await new Promise((resolve) => setTimeout(resolve, interval));
+      continue;
     }
 
-    const data = await response.json();
+    // 请求成功，重置连续错误计数
+    consecutiveErrors = 0;
+
     const status = data.status || data.state;
     const progress = data.progress || 0;
+
+    console.log(`[pollVideoStatus] Status for videoId: ${videoId}: ${status}, progress: ${progress}`);
 
     onProgress(progress / 100);
 
