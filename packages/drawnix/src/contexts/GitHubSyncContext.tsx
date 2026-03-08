@@ -104,7 +104,7 @@ async function handleBoardSwitchAfterSync(result: SyncResult): Promise<void> {
     const workspaceState = workspaceService.getState();
     const currentBoardId = workspaceState.currentBoardId;
     const allBoards = workspaceService.getAllBoardMetadata();
-    
+
     logDebug('Current workspace state', {
       currentBoardId,
       totalBoards: allBoards.length,
@@ -149,7 +149,7 @@ async function handleBoardSwitchAfterSync(result: SyncResult): Promise<void> {
       logDebug('handleBoardSwitchAfterSync END (switched from null)');
       return;
     }
-    
+
     // 情况2：目标画板与当前画板相同
     // 虽然不需要切换，但需要刷新内存缓存中的画板数据（因为同步可能更新了存储中的数据）
     if (targetBoardId === currentBoardId) {

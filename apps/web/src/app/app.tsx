@@ -189,7 +189,7 @@ export function App() {
         // 优先使用 URL 参数中的画布 ID
         const urlBoardId = getBoardIdFromUrl();
         const stateBoardId = workspaceService.getState().currentBoardId;
-        
+
         // 确定要加载的画布 ID（优先级：URL 参数 > 上次状态）
         let targetBoardId: string | null = null;
         if (urlBoardId && workspaceService.getBoardMetadata(urlBoardId)) {
@@ -268,6 +268,15 @@ export function App() {
 
   // Handle board switching
   const handleBoardSwitch = useCallback(async (board: Board, skipUrlUpdate: boolean = false) => {
+    // 立即更新 URL 和 sessionStorage，确保刷新页面时能恢复到正确的画板
+    // 必须在任何异步操作之前执行，避免刷新时丢失画板选择
+    if (!skipUrlUpdate) {
+      updateBoardIdInUrl(board.id);
+      const workspaceService = WorkspaceService.getInstance();
+      workspaceService.persistCurrentBoardId(board.id);
+    }
+    setCurrentBoardId(board.id);
+
     // 切换画布时重置脏标志，新画布的初始数据不需要保存
     localDirtyRef.current = false;
 
@@ -279,22 +288,6 @@ export function App() {
       viewport: board.viewport,
       theme: board.theme,
     });
-
-    // 更新 URL 参数（popstate 事件触发时跳过，因为 URL 已被浏览器更新）
-    if (!skipUrlUpdate) {
-      updateBoardIdInUrl(board.id);
-    }
-
-    // 更新当前画板 ID（用于页面标题更新）
-    setCurrentBoardId(board.id);
-
-    // 只在用户主动切换画板时保存 state（不是浏览器前进后退）
-    // 这样可以避免影响其他标签页
-    if (!skipUrlUpdate) {
-      const workspaceService = WorkspaceService.getInstance();
-      // 持久化 currentBoardId 到 sessionStorage（标签页隔离）
-      workspaceService.persistCurrentBoardId(board.id);
-    }
 
     // 等待 React 更新完成后，手动触发画布边界更新
     // 使用 setTimeout 而不是 queueMicrotask，给 React 更多时间完成 DOM 更新

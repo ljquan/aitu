@@ -980,17 +980,18 @@ class WorkspaceService {
   getCurrentBoard(): Board | null {
     if (!this.state.currentBoardId) return null;
 
-    // 只从已加载的画板获取，避免返回 elements 为空数组的元数据
-    // 如果画板未加载，调用方应该先使用 switchBoard() 加载
+    // 优先返回已加载的完整画板
     const board = this.loadedBoards.get(this.state.currentBoardId);
+    if (board) return board;
 
-    if (!board) {
-      logDebug('[WorkspaceService] getCurrentBoard: board not fully loaded, use switchBoard() first', {
-        currentBoardId: this.state.currentBoardId
-      } as any);
+    // 画板未加载时，回退到元数据（保留 id 用于侧边栏激活态判断）
+    // reload() 会清空 loadedBoards，此时仍需保持 currentBoard 非 null
+    const metadata = this.boardMetadata.get(this.state.currentBoardId);
+    if (metadata) {
+      return { ...metadata, elements: [] } as Board;
     }
 
-    return board || null;
+    return null;
   }
 
   /**
@@ -1259,6 +1260,16 @@ class WorkspaceService {
    */
   async reload(): Promise<void> {
     try {
+      // 保存当前 currentBoardId（来自 sessionStorage，标签页隔离）
+      // reload 前必须保存，因为 IndexedDB 中 currentBoardId 始终为 null
+      const previousCurrentBoardId = this.state.currentBoardId;
+      let sessionBoardId: string | null = null;
+      try {
+        sessionBoardId = sessionStorage.getItem('workspace-current-board-id');
+      } catch {
+        // 静默处理
+      }
+
       // 重新加载元数据
       const [folders, boardMetadata, state] = await Promise.all([
         workspaceStorageService.loadAllFolders(),
@@ -1273,6 +1284,15 @@ class WorkspaceService {
       // 向后兼容
       this.boards = new Map(boardMetadata.map((b) => [b.id, { ...b, elements: [] } as Board]));
       this.state = state;
+
+      // 恢复 currentBoardId：优先使用之前的值（如果画板仍存在）
+      // IndexedDB 中 currentBoardId 为 null（设计如此，标签页隔离），
+      // 所以 reload 后必须从 sessionStorage 或之前的内存值恢复
+      if (previousCurrentBoardId && this.boardMetadata.has(previousCurrentBoardId)) {
+        this.state.currentBoardId = previousCurrentBoardId;
+      } else if (sessionBoardId && this.boardMetadata.has(sessionBoardId)) {
+        this.state.currentBoardId = sessionBoardId;
+      }
 
       // 触发更新事件
       this.emit('treeChanged');

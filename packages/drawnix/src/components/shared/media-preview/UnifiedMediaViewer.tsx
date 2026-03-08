@@ -362,18 +362,49 @@ export const UnifiedMediaViewer: React.FC<UnifiedMediaViewerProps> = ({
     }
   }, [items, currentIndex, onInsertToCanvas]);
 
-  // 处理下载当前媒体
-  const handleDownload = useCallback(() => {
+  // 处理下载当前媒体（复用 popup-toolbar 的下载逻辑）
+  const handleDownload = useCallback(async () => {
     const currentItem = items[currentIndex];
     if (!currentItem) return;
-    
-    const link = document.createElement('a');
-    link.href = currentItem.url;
-    link.download = currentItem.title || `media-${Date.now()}`;
-    link.target = '_blank';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+
+    const url = currentItem.url;
+
+    // 处理 blob: URL（可能是从 IndexedDB 缓存的视频）
+    if (url.startsWith('blob:')) {
+      const { unifiedCacheService } = await import('../../../services/unified-cache-service');
+      const { downloadFromBlob } = await import('@aitu/utils');
+
+      const hashIndex = url.indexOf('#');
+      const taskId = hashIndex > 0 ? url.substring(hashIndex + 1) : null;
+
+      if (taskId && taskId.startsWith('merged-video-')) {
+        const cachedBlob = await unifiedCacheService.getCachedBlob(taskId);
+        if (cachedBlob) {
+          const mimeType = cachedBlob.type || 'video/webm';
+          const ext = mimeType.startsWith('video/mp4') ? 'mp4' :
+                     mimeType.startsWith('video/webm') ? 'webm' : 'bin';
+          downloadFromBlob(cachedBlob, `merged-video-${Date.now()}.${ext}`);
+          return;
+        }
+      }
+
+      // 没有 taskId 或缓存不存在，尝试直接 fetch blob URL
+      try {
+        const response = await fetch(url);
+        const blob = await response.blob();
+        const ext = blob.type.startsWith('video/mp4') ? 'mp4' :
+                   blob.type.startsWith('video/webm') ? 'webm' :
+                   blob.type.startsWith('image/') ? 'png' : 'bin';
+        downloadFromBlob(blob, `${currentItem.type}_${Date.now()}.${ext}`);
+      } catch (fetchError) {
+        console.error('[UnifiedMediaViewer] Failed to fetch blob URL:', fetchError);
+      }
+      return;
+    }
+
+    // 普通 URL，使用 smartDownload
+    const { smartDownload } = await import('../../../utils/download-utils');
+    await smartDownload([{ url, type: currentItem.type }]);
   }, [items, currentIndex]);
 
   // 处理编辑当前媒体
