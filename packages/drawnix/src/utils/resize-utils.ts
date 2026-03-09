@@ -64,8 +64,8 @@ export function calculateResizedRect(
   handle: ResizeHandle | string,
   dx: number,
   dy: number,
-  lockAspectRatio: boolean = false,
-  minSize: number = 20
+  lockAspectRatio = false,
+  minSize = 20
 ): RectangleClient {
   let newX = startRectangle.x;
   let newY = startRectangle.y;
@@ -137,7 +137,6 @@ export function calculateResizedRect(
       if (widthChange > heightChange) {
         // 以宽度变化为主
         const targetHeight = newWidth / aspectRatio;
-        const heightDiff = targetHeight - startRectangle.height;
 
         switch (handle) {
           case ResizeHandle.NW:
@@ -155,7 +154,6 @@ export function calculateResizedRect(
       } else {
         // 以高度变化为主
         const targetWidth = newHeight * aspectRatio;
-        const widthDiff = targetWidth - startRectangle.width;
 
         switch (handle) {
           case ResizeHandle.NW:

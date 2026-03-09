@@ -55,6 +55,7 @@ export class CardGenerator {
     ) as HTMLElement;
     this.htmlContainer.style.cssText = `
       width: 100%;
+      height: 100%;
       pointer-events: none;
     `;
 

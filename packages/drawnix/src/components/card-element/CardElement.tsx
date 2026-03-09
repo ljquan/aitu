@@ -6,8 +6,31 @@
  */
 import React, { useCallback } from 'react';
 import { MarkdownEditor } from '../MarkdownEditor';
-import { getTitleColor, getBodyColor, CARD_BODY_MAX_HEIGHT } from '../../constants/card-colors';
+import { getTitleColor, getBodyColor } from '../../constants/card-colors';
 import type { PlaitCard } from '../../types/card.types';
+
+const cardBodyElements = new Map<string, HTMLElement>();
+
+export function getCardBodyElement(cardId: string): HTMLElement | null {
+  return cardBodyElements.get(cardId) ?? null;
+}
+
+/**
+ * 临时去掉 flex 约束，测量 body 内容的真实高度。
+ * 同步读取，读完立即恢复，不会触发重绘。
+ */
+export function measureCardBodyContentHeight(cardId: string): number | null {
+  const el = cardBodyElements.get(cardId);
+  if (!el) return null;
+  const prevFlex = el.style.flex;
+  const prevMinH = el.style.minHeight;
+  el.style.flex = 'none';
+  el.style.minHeight = '0';
+  const h = el.scrollHeight;
+  el.style.flex = prevFlex;
+  el.style.minHeight = prevMinH;
+  return h;
+}
 
 interface CardElementProps {
   element: PlaitCard;
@@ -35,6 +58,7 @@ export const CardElement: React.FC<CardElementProps> = ({ element }) => {
     <div
       style={{
         width: '100%',
+        height: '100%',
         display: 'flex',
         flexDirection: 'column',
         borderRadius: 8,
@@ -68,9 +92,14 @@ export const CardElement: React.FC<CardElementProps> = ({ element }) => {
         </div>
       )}
       <div
+        ref={(el) => {
+          if (el) cardBodyElements.set(element.id, el);
+          else cardBodyElements.delete(element.id);
+        }}
         style={{
           pointerEvents: 'auto',
-          maxHeight: CARD_BODY_MAX_HEIGHT,
+          flex: 1,
+          minHeight: 0,
           overflowY: 'auto',
         }}
         onMouseDown={(e) => e.stopPropagation()}

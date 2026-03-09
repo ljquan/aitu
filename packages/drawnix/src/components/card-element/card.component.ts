@@ -14,7 +14,9 @@ import {
   Transforms,
   Point,
 } from '@plait/core';
-import { CARD_TITLE_HEIGHT, CARD_BODY_MIN_HEIGHT, CARD_BODY_MAX_HEIGHT } from '../../constants/card-colors';
+import { CARD_TITLE_HEIGHT, CARD_BODY_MIN_HEIGHT } from '../../constants/card-colors';
+import { isCardManuallyResized } from '../../plugins/with-card-resize';
+import { measureCardBodyContentHeight } from './CardElement';
 import {
   CommonElementFlavour,
   createActiveGenerator,
@@ -55,8 +57,8 @@ export class CardComponent
     super.initialize();
     this.initializeGenerator();
 
-    this.cardGenerator.onHeightMeasured = (measuredHeight: number) => {
-      this.autoResizeIfNeeded(measuredHeight);
+    this.cardGenerator.onHeightMeasured = () => {
+      this.autoResizeIfNeeded();
     };
 
     const elementG = this.getElementG();
@@ -69,12 +71,16 @@ export class CardComponent
     );
   }
 
-  private autoResizeIfNeeded(measuredHeight: number): void {
+  private autoResizeIfNeeded(): void {
+    if (isCardManuallyResized(this.element.id)) return;
+
+    const bodyContentH = measureCardBodyContentHeight(this.element.id);
+    if (bodyContentH == null) return;
+
     const currentRect = RectangleClient.getRectangleByPoints(this.element.points);
     const titleHeight = this.element.title?.trim() ? CARD_TITLE_HEIGHT : 0;
     const minHeight = titleHeight + CARD_BODY_MIN_HEIGHT;
-    const maxHeight = titleHeight + CARD_BODY_MAX_HEIGHT;
-    const targetHeight = Math.min(Math.max(measuredHeight, minHeight), maxHeight);
+    const targetHeight = Math.max(titleHeight + bodyContentH, minHeight);
     const heightDiff = Math.abs(currentRect.height - targetHeight);
 
     if (heightDiff <= 5) return;
