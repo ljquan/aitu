@@ -45,6 +45,10 @@ import {
   isStoryboardPrompt,
   validateSceneDurations,
 } from '../../utils/storyboard-utils';
+import {
+  loadAIVideoToolPreferences,
+  saveAIVideoToolPreferences,
+} from '../../services/ai-generation-preferences-service';
 
 
 
@@ -71,6 +75,13 @@ const AIVideoGeneration = ({
   selectedModel,
   onModelChange
 }: AIVideoGenerationProps = {}) => {
+  const persistedPreferencesRef = useRef<ReturnType<typeof loadAIVideoToolPreferences> | null>(null);
+  if (!persistedPreferencesRef.current) {
+    const settings = geminiSettings.get();
+    const fallbackModel = normalizeVideoModel(initialModel || selectedModel || settings.videoModelName || 'veo3');
+    persistedPreferencesRef.current = loadAIVideoToolPreferences(fallbackModel);
+  }
+  const persistedPreferences = persistedPreferencesRef.current;
   const [prompt, setPrompt] = useState(initialPrompt);
   const [error, setError] = useState<string | null>(null);
 
@@ -81,9 +92,7 @@ const AIVideoGeneration = ({
 
   // Video model parameters - use state to support dynamic updates
   const [currentModel, setCurrentModel] = useState<VideoModel>(() => {
-    const settings = geminiSettings.get();
-    const preferred = initialModel || settings.videoModelName || 'veo3';
-    return normalizeVideoModel(preferred);
+    return normalizeVideoModel(initialModel || selectedModel || persistedPreferences.currentModel);
   });
 
   // Use useMemo to ensure modelConfig and defaultParams update when currentModel changes
@@ -91,11 +100,11 @@ const AIVideoGeneration = ({
   const defaultParams = React.useMemo(() => getDefaultModelParams(currentModel), [currentModel]);
 
   // Duration and size state
-  const [duration, setDuration] = useState(initialDuration?.toString() || defaultParams.duration);
-  const [size, setSize] = useState(initialSize || defaultParams.size);
+  const [duration, setDuration] = useState(initialDuration?.toString() || persistedPreferences.duration);
+  const [size, setSize] = useState(initialSize || persistedPreferences.size);
 
   // 额外参数（如 aspect_ratio）
-  const [videoSelectedParams, setVideoSelectedParams] = useState<Record<string, string>>({});
+  const [videoSelectedParams, setVideoSelectedParams] = useState<Record<string, string>>(persistedPreferences.extraParams);
   const hasCompatibleParams = React.useMemo(() => {
     // 排除 size 和 duration（已有专用 UI），只看是否有额外参数
     return getCompatibleParams(currentModel).some(p => p.id !== 'size' && p.id !== 'duration');
@@ -215,7 +224,13 @@ const AIVideoGeneration = ({
   
   // Reset parameters when model changes (智能过滤图片而不是清空)
   const [isEditMode, setIsEditMode] = useState(false);
+  const hasInitializedModelDefaultsRef = useRef(false);
   useEffect(() => {
+    if (!hasInitializedModelDefaultsRef.current) {
+      hasInitializedModelDefaultsRef.current = true;
+      return;
+    }
+
     if (isEditMode) {
       // In edit mode, don't reset parameters automatically
       setIsEditMode(false);
@@ -338,6 +353,15 @@ const AIVideoGeneration = ({
       setError(null);
     };
   }, []);
+
+  useEffect(() => {
+    saveAIVideoToolPreferences({
+      currentModel,
+      extraParams: videoSelectedParams,
+      duration,
+      size,
+    });
+  }, [currentModel, videoSelectedParams, duration, size]);
 
 
   const handleReset = () => {
@@ -489,7 +513,7 @@ const AIVideoGeneration = ({
     setError(null);
   };
 
-  const handleGenerate = async (count: number = 1) => {
+  const handleGenerate = async (count = 1) => {
     // 验证输入
     if (storyboardEnabled) {
       // 故事场景模式验证
