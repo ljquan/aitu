@@ -69,6 +69,7 @@ export const KBKnowledgeExtraction: React.FC<KBKnowledgeExtractionProps> = ({
   const [selectedModel, setSelectedModel] = useState(DEFAULT_MODEL);
   const [isLoading, setIsLoading] = useState(false);
   const [abortController, setAbortController] = useState<AbortController | null>(null);
+  const [streamingMsgId, setStreamingMsgId] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -199,12 +200,13 @@ export const KBKnowledgeExtraction: React.FC<KBKnowledgeExtractionProps> = ({
 
       // 添加一个临时的 AI 消息用于流式显示
       const aiMsgId = (Date.now() + 1).toString();
+      setStreamingMsgId(aiMsgId);
       setMessages((prev) => [
         ...prev,
         {
           id: aiMsgId,
           role: 'model',
-          content: '',
+          content: '正在思考...',
           type: 'text',
           timestamp: Date.now(),
         },
@@ -238,6 +240,7 @@ export const KBKnowledgeExtraction: React.FC<KBKnowledgeExtractionProps> = ({
     } finally {
       setIsLoading(false);
       setAbortController(null);
+      setStreamingMsgId(null);
     }
   }, [input, isLoading, messages, noteContent]);
 
@@ -373,10 +376,37 @@ export const KBKnowledgeExtraction: React.FC<KBKnowledgeExtractionProps> = ({
             </div>
             <div className="kb-message__body">
               <div className="kb-message__content">
-                {msg.type === 'text' ? (
-                  <div className="kb-message__text">{msg.content}</div>
+                {msg.role === 'model' ? (
+                  <div className="kb-message__content-scroll">
+                    {msg.type === 'text' ? (
+                      msg.id === streamingMsgId && (msg.content === '正在思考...' || msg.content === '正在分析笔记内容并提取知识点...') ? (
+                        <div className="kb-message__thinking" aria-label="思考中">
+                          <span className="kb-message__thinking-text">{msg.content.replace(/\.+$/, '')}</span>
+                          <span className="kb-message__thinking-dots">
+                            <span>.</span><span>.</span><span>.</span>
+                          </span>
+                        </div>
+                      ) : msg.content ? (
+                        <div className="kb-message__markdown-wrap">
+                          <MarkdownEditor
+                            markdown={msg.content}
+                            readOnly
+                            showModeSwitch={false}
+                            initialMode="wysiwyg"
+                            className="kb-extraction-markdown"
+                          />
+                        </div>
+                      ) : null
+                    ) : (
+                      <ExtractionResultView result={msg.data!} />
+                    )}
+                  </div>
                 ) : (
-                  <ExtractionResultView result={msg.data!} />
+                  msg.type === 'text' ? (
+                    <div className="kb-message__text">{msg.content}</div>
+                  ) : (
+                    <ExtractionResultView result={msg.data!} />
+                  )
                 )}
               </div>
               {msg.role === 'model' && (
