@@ -37,6 +37,10 @@ import { geminiSettings } from '../../utils/settings-manager';
 import { promptForApiKey } from '../../utils/gemini-api';
 import { buildMJPromptSuffix } from '../../utils/mj-params';
 import { getCompatibleParams, getSizeOptionsForModel } from '../../constants/model-config';
+import {
+  loadAIImageToolPreferences,
+  saveAIImageToolPreferences,
+} from '../../services/ai-generation-preferences-service';
 
 interface AIImageGenerationProps {
   initialPrompt?: string;
@@ -65,17 +69,23 @@ const AIImageGeneration = ({
   selectedModel,
   onModelChange,
 }: AIImageGenerationProps = {}) => {
+  const persistedPreferencesRef = useRef<ReturnType<typeof loadAIImageToolPreferences> | null>(null);
+  if (!persistedPreferencesRef.current) {
+    const settings = geminiSettings.get();
+    const fallbackModel = selectedModel || settings.imageModelName || 'gemini-2.5-flash-image-vip';
+    persistedPreferencesRef.current = loadAIImageToolPreferences(fallbackModel);
+  }
+  const persistedPreferences = persistedPreferencesRef.current;
   const [prompt, setPrompt] = useState(initialPrompt);
   const [mjSelectedParams, setMjSelectedParams] = useState<
     Record<string, string>
-  >({});
+  >(persistedPreferences.extraParams);
   const [currentModel, setCurrentModel] = useState(() => {
-    const settings = geminiSettings.get();
-    return settings.imageModelName || 'gemini-2.5-flash-image-vip';
+    return selectedModel || persistedPreferences.currentModel;
   });
   const [width, setWidth] = useState<number | string>(initialWidth || 1024);
   const [height, setHeight] = useState<number | string>(initialHeight || 1024);
-  const [aspectRatio, setAspectRatio] = useState<string>(initialAspectRatio || DEFAULT_ASPECT_RATIO);
+  const [aspectRatio, setAspectRatio] = useState<string>(initialAspectRatio || persistedPreferences.aspectRatio);
   const [error, setError] = useState<string | null>(null);
   const [uploadedImages, setUploadedImages] =
     useState<ReferenceImage[]>(initialImages);
@@ -124,7 +134,12 @@ const AIImageGeneration = ({
   }, [currentModel, isMJModel]);
 
   // 模型切换时清空已选参数，避免跨模型残留不兼容配置
+  const hasInitializedModelRef = useRef(false);
   useEffect(() => {
+    if (!hasInitializedModelRef.current) {
+      hasInitializedModelRef.current = true;
+      return;
+    }
     setMjSelectedParams({});
   }, [currentModel]);
 
@@ -239,6 +254,14 @@ const AIImageGeneration = ({
     }
   }, [aspectRatio, isMJModel, modelAspectRatioOptions]);
 
+  useEffect(() => {
+    saveAIImageToolPreferences({
+      currentModel,
+      extraParams: mjSelectedParams,
+      aspectRatio,
+    });
+  }, [currentModel, mjSelectedParams, aspectRatio]);
+
   // 清除错误状态当组件挂载时（对话框打开时）
   useEffect(() => {
     // 组件挂载时清除之前的错误状态
@@ -347,7 +370,7 @@ const AIImageGeneration = ({
     );
   };
 
-  const handleGenerate = async (count: number = 1) => {
+  const handleGenerate = async (count = 1) => {
     if (!prompt || !prompt.trim()) {
       setError(
         language === 'zh' ? '请输入图像描述' : 'Please enter image description'

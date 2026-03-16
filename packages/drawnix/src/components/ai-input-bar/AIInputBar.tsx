@@ -88,6 +88,10 @@ import { isFrameElement } from '../../types/frame.types';
 import { matchFrameSizeForModel } from '../../utils/frame-size-matcher';
 import { PlaitDrawElement } from '@plait/draw';
 import { isPlaitVideo } from '../../interfaces/video';
+import {
+  loadAIInputPreferences,
+  saveAIInputPreferences,
+} from '../../services/ai-generation-preferences-service';
 
 /**
  * 将 WorkflowDefinition 转换为 WorkflowMessageData
@@ -340,6 +344,8 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
   // console.log('[AIInputBar] Component rendering');
 
   const { language } = useI18n();
+  const persistedPreferencesRef = useRef(loadAIInputPreferences());
+  const persistedPreferences = persistedPreferencesRef.current;
 
   const chatDrawerControl = useChatDrawerControl();
   const workflowControl = useWorkflowControl();
@@ -374,23 +380,19 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
   const [isFocused, setIsFocused] = useState(false);
   const [isCanvasEmpty, setIsCanvasEmpty] = useState<boolean | null>(null); // null=加载中, true=空, false=有内容
   // 当前选中的生成类型（图片、视频、Agent）
-  const [generationType, setGenerationType] = useState<GenerationType>('image');
+  const [generationType, setGenerationType] = useState<GenerationType>(persistedPreferences.generationType);
   // 当前选中的 Skill ID（仅在 Agent/text 模式下有效）
   const [selectedSkillId, setSelectedSkillId] = useState<string>(SKILL_AUTO_ID);
   // 当前选中的图片/视频/文本模型
-  const [selectedModel, setSelectedModel] = useState(getDefaultImageModel);
+  const [selectedModel, setSelectedModel] = useState(persistedPreferences.selectedModel);
   // 当前选中的参数映射 (id -> value)
-  const [selectedParams, setSelectedParams] = useState<Record<string, string>>(() => ({
-    ...(getDefaultImageModel().startsWith('mj')
-      ? {}
-      : { size: getDefaultSizeForModel(getDefaultImageModel()) })
-  }));
+  const [selectedParams, setSelectedParams] = useState<Record<string, string>>(persistedPreferences.selectedParams);
   const selectedParamsRef = useRef<Record<string, string>>(selectedParams);
   useEffect(() => {
     selectedParamsRef.current = selectedParams;
   }, [selectedParams]);
   // 当前选中的生成数量
-  const [selectedCount, setSelectedCount] = useState(1);
+  const [selectedCount, setSelectedCount] = useState(persistedPreferences.selectedCount);
 
   // 下拉菜单的打开状态（用于特殊符号触发）
   const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
@@ -438,8 +440,14 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
     ),
   }), [language]);
 
-  // 监听生成类型变化，自动切换模型和尺寸
+  // 仅在生成类型真正变化时重置模型和参数，避免 StrictMode 首屏双调用覆盖持久化状态
+  const previousGenerationTypeRef = useRef(generationType);
   useEffect(() => {
+    if (previousGenerationTypeRef.current === generationType) {
+      return;
+    }
+    previousGenerationTypeRef.current = generationType;
+
     let defaultModelId: string;
     if (generationType === 'video') {
       defaultModelId = getDefaultVideoModel();
@@ -466,6 +474,15 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(({ className, is
       setSelectedCount(1);
     }
   }, [generationType]);
+
+  useEffect(() => {
+    saveAIInputPreferences({
+      generationType,
+      selectedModel,
+      selectedParams,
+      selectedCount,
+    });
+  }, [generationType, selectedModel, selectedParams, selectedCount]);
 
   // 根据当前生成类型获取模型列表
   const currentModels = useMemo(() => {

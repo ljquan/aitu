@@ -89,6 +89,7 @@
     "clipper-lib": "^6.4.2",
     "is-hotkey": "^0.2.0",
     "jszip": "^3.10.1",
+    "jotai": "^2.18.0",
     "localforage": "^1.10.0",
     "lucide-react": "^0.562.0",
     "mermaid": "^11.12.2",
