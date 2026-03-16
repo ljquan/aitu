@@ -149,11 +149,9 @@ function onResize(
   const contentMaxHeight =
     bodyContentH != null ? titleHeight + bodyContentH : newRect.height;
   if (newRect.height > contentMaxHeight) {
-    const isTopHandle = [
-      ResizeHandle.nw,
-      ResizeHandle.n,
-      ResizeHandle.ne,
-    ].includes(handle as ResizeHandle);
+    const isTopHandle = [ResizeHandle.nw, ResizeHandle.n, ResizeHandle.ne].includes(
+      handle as ResizeHandle
+    );
     if (isTopHandle) {
       newRect.y = newRect.y + newRect.height - contentMaxHeight;
     }

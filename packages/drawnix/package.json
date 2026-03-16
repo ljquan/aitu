@@ -26,6 +26,7 @@
     "open-color": "^1.9.1",
     "postmessage-duplex": "^1.2.0",
     "prismjs": "^1.30.0",
+    "pptxgenjs": "^4.0.1",
     "web-vitals": "^5.1.0"
   },
   "exports": {
