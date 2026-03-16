@@ -37,6 +37,8 @@ import {
 import { getImageRegion, type PPTFrameMeta } from '../../services/ppt';
 import { duplicateFrame, focusFrame } from '../../utils/frame-duplicate';
 import { useI18n } from '../../i18n';
+import { DownloadIcon } from '../icons';
+import { exportAllPPTFrames, exportFramesToPPT } from '../../services/ppt/ppt-export-service';
 
 interface FrameInfo {
   frame: PlaitFrame;
@@ -68,6 +70,8 @@ export const FramePanel: React.FC = () => {
     y: number;
     frameInfo: FrameInfo;
   } | null>(null);
+  const [isExportingAllPPT, setIsExportingAllPPT] = useState(false);
+  const [exportingFrameId, setExportingFrameId] = useState<string | null>(null);
 
   // 监听画布变化，强制刷新 Frame 列表
   // FramePanel 在 BoardContext（Wrapper）外部渲染，无法通过 BoardContext 的 v 版本号触发重渲染
@@ -584,6 +588,51 @@ export const FramePanel: React.FC = () => {
     }
   }, [board, frames, isGeneratingAll]);
 
+  // 导出所有 Frame 为一个 PPT 文件
+  const handleExportAllPPT = useCallback(async () => {
+    if (!board) return;
+    if (frames.length === 0) {
+      MessagePlugin.info('当前没有可导出的 Frame');
+      return;
+    }
+
+    if (isExportingAllPPT) return;
+    setIsExportingAllPPT(true);
+    try {
+      await exportAllPPTFrames(board, { fileName: 'aitu-ppt' });
+      MessagePlugin.success(`已导出 ${frames.length} 页 PPT`);
+    } catch (error) {
+      console.error('[FramePanel] Export all PPT failed:', error);
+      MessagePlugin.error('PPT 导出失败');
+    } finally {
+      setIsExportingAllPPT(false);
+    }
+  }, [board, isExportingAllPPT, frames]);
+
+  // 导出单个 Frame 为 PPT 文件
+  const handleExportSinglePPT = useCallback(
+    async (frameInfo: FrameInfo, e?: React.MouseEvent) => {
+      e?.stopPropagation();
+      if (!board) return;
+
+      if (exportingFrameId) return;
+      setExportingFrameId(frameInfo.frame.id);
+      try {
+        await exportFramesToPPT(board, [frameInfo.frame], {
+          fileName: frameInfo.frame.name || 'slide',
+        });
+        MessagePlugin.success(`已导出「${frameInfo.frame.name}」为 PPT`);
+      } catch (error) {
+        // eslint-disable-next-line no-console
+        console.error('[FramePanel] Export single PPT failed:', error);
+        MessagePlugin.error('PPT 导出失败');
+      } finally {
+        setExportingFrameId(null);
+      }
+    },
+    [board, exportingFrameId]
+  );
+
   if (!board) {
     return (
       <div className="frame-panel__empty">
@@ -638,6 +687,23 @@ export const FramePanel: React.FC = () => {
               icon={isGeneratingAll ? <Loading size="small" /> : <ImageIcon />}
               disabled={isGeneratingAll}
               onClick={handleGenerateAllImages}
+            />
+          </Tooltip>
+        )}
+        {frames.length > 0 && (
+          <Tooltip
+            content={isExportingAllPPT ? '正在导出 PPT...' : '导出所有 PPT 页面'}
+            theme="light"
+          >
+            <Button
+              variant="outline"
+              size="small"
+              shape="square"
+              icon={
+                isExportingAllPPT ? <Loading size="small" /> : <DownloadIcon size={16} />
+              }
+              disabled={isExportingAllPPT}
+              onClick={handleExportAllPPT}
             />
           </Tooltip>
         )}
@@ -748,6 +814,25 @@ export const FramePanel: React.FC = () => {
                 </div>
 
                 <div className="frame-panel__item-actions">
+                  <Tooltip
+                    content={exportingFrameId === info.frame.id ? '正在导出 PPT...' : '导出单页 PPT'}
+                    theme="light"
+                  >
+                    <Button
+                      variant="text"
+                      size="small"
+                      shape="square"
+                      icon={
+                        exportingFrameId === info.frame.id ? (
+                          <Loading size="small" />
+                        ) : (
+                          <DownloadIcon size={16} />
+                        )
+                      }
+                      onClick={(e) => handleExportSinglePPT(info, e as unknown as React.MouseEvent)}
+                      disabled={exportingFrameId === info.frame.id}
+                    />
+                  </Tooltip>
                   {info.pptMeta?.imagePrompt && (
                     <Tooltip content={generatingImageIds.has(info.frame.id) ? '生成中...' : '生成配图'} theme="light">
                       <Button
