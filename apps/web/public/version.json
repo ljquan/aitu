@@ -1,6 +1,6 @@
 {
   "version": "0.6.10",
-  "buildTime": "2026-03-16T07:27:38.605Z",
+  "buildTime": "2026-03-16T07:33:35.498Z",
   "gitCommit": "unknown",
   "changelog": [
     "优化知识库对话ai回答内容将其渲染为对应的markdown格式&优化skill生成的内容让外层文本框高度自适应内容高度",
