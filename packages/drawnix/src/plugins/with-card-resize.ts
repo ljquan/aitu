@@ -146,13 +146,14 @@ function onResize(
 
   const titleHeight = element.title?.trim() ? CARD_TITLE_HEIGHT : 0;
   const bodyContentH = measureCardBodyContentHeight(element.id);
-  const contentMaxHeight = bodyContentH != null
-    ? titleHeight + bodyContentH
-    : newRect.height;
+  const contentMaxHeight =
+    bodyContentH != null ? titleHeight + bodyContentH : newRect.height;
   if (newRect.height > contentMaxHeight) {
-    const isTopHandle = [ResizeHandle.NW, ResizeHandle.N, ResizeHandle.NE].includes(
-      handle as ResizeHandle
-    );
+    const isTopHandle = [
+      ResizeHandle.nw,
+      ResizeHandle.n,
+      ResizeHandle.ne,
+    ].includes(handle as ResizeHandle);
     if (isTopHandle) {
       newRect.y = newRect.y + newRect.height - contentMaxHeight;
     }

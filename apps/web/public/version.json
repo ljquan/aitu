@@ -1,6 +1,6 @@
 {
   "version": "0.6.9",
-  "buildTime": "2026-03-16T08:29:37.444Z",
+  "buildTime": "2026-03-16T09:20:54.955Z",
   "gitCommit": "unknown",
   "changelog": [
     "添加页面刷新后恢复视频任务轮询的功能"
