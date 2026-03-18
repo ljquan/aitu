@@ -1,6 +1,22 @@
 {
   "versions": [
     {
+      "version": "0.6.11",
+      "date": "2026-03-18",
+      "changes": {
+        "features": [],
+        "fixes": [],
+        "improvements": [
+          "fixed: 兼容base64图片返回",
+          "fixed:修复部署失败",
+          "fixed:修复素材库删除的bug",
+          "fixed:修复素材库删除的bug"
+        ]
+      },
+      "type": "patch",
+      "highlights": "构建修复与稳定性改进"
+    },
+    {
       "version": "0.6.10",
       "date": "2026-03-16",
       "changes": {

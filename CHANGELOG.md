@@ -1,3 +1,18 @@
+## 0.6.11 (2026-03-18)
+
+### 🔧 Chores
+
+- 更新应用版本至0.6.10并修正调整大小句柄常量 ([4bf18818](https://github.com/ljquan/aitu/commit/4bf18818))
+- fixed: 兼容base64图片返回 ([94d4a81c](https://github.com/ljquan/aitu/commit/94d4a81c))
+- fixed:修复部署失败 ([9ecdebcc](https://github.com/ljquan/aitu/commit/9ecdebcc))
+- fixed:修复素材库删除的bug ([6ac4bf95](https://github.com/ljquan/aitu/commit/6ac4bf95))
+- fixed:修复素材库删除的bug ([c93d449e](https://github.com/ljquan/aitu/commit/c93d449e))
+
+### ❤️  Thank You
+
+- liquid <ljquan@qq.com>
+- liangyufeng <l.yfeng@qq.com>
+
 ## 0.6.10 (2026-03-16)
 
 ### 🚀 Features
