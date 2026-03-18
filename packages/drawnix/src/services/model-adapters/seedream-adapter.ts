@@ -4,6 +4,7 @@ import type {
   ImageModelAdapter,
 } from './types';
 import { registerModelAdapter } from './registry';
+import { getFileExtension, normalizeImageDataUrl } from '@aitu/utils';
 
 const DEFAULT_SEEDREAM_MODEL = 'doubao-seedream-5-0-260128';
 const SEEDREAM_MODELS = [
@@ -182,15 +183,23 @@ export const seedreamImageAdapter: ImageModelAdapter = {
     if (result?.data && Array.isArray(result.data) && result.data.length > 0) {
       const urls = result.data
         .map((item: any) => {
-          if (item.url) return item.url;
-          if (item.b64_json) return `data:image/png;base64,${item.b64_json}`;
+          const rawValue = item.url || item.b64_json;
+          if (typeof rawValue === 'string') {
+            return normalizeImageDataUrl(rawValue);
+          }
           return undefined;
         })
         .filter(Boolean) as string[];
 
       const first = urls[0];
       if (first) {
-        return { url: first, urls, format: 'png', raw: result };
+        const format = getFileExtension(first);
+        return {
+          url: first,
+          urls,
+          format: format === 'bin' ? 'png' : format,
+          raw: result,
+        };
       }
     }
 

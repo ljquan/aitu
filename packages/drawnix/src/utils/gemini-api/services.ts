@@ -2,6 +2,7 @@
  * Gemini API 服务函数
  */
 
+import { normalizeImageDataUrl } from '@aitu/utils';
 import { ImageInput, GeminiMessage, VideoGenerationOptions, ProcessedContent, GeminiResponse } from './types';
 import { DEFAULT_CONFIG, VIDEO_DEFAULT_CONFIG, shouldUseNonStreamMode } from './config';
 import { prepareImageData, processMixedContent } from './utils';
@@ -137,7 +138,10 @@ async function generateImageDirect(
     const duration = Date.now() - startTime;
     
     // 提取结果 URL
-    const resultUrl = result.data?.[0]?.url || result.data?.[0]?.b64_json;
+    const rawResultUrl = result.data?.[0]?.url || result.data?.[0]?.b64_json;
+    const resultUrl = typeof rawResultUrl === 'string'
+      ? normalizeImageDataUrl(rawResultUrl)
+      : rawResultUrl;
     
     completeLLMApiLog(logId, {
       httpStatus: response.status,

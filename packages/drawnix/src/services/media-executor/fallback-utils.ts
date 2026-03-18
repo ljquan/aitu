@@ -6,7 +6,13 @@
  */
 
 import type { VideoAPIConfig, GeminiConfig } from './types';
-import { compressImageBlob } from '@aitu/utils';
+import {
+  calculateBlobChecksum,
+  compressImageBlob,
+  getFileExtension,
+  isDataURL,
+  normalizeImageDataUrl,
+} from '@aitu/utils';
 import { getDataURL } from '../../data/blob';
 import { unifiedCacheService } from '../unified-cache-service';
 
@@ -216,8 +222,8 @@ export async function generateAsyncImage(
 
 /**
  * 将远程 URL 下载并缓存到本地 Cache Storage，返回虚拟路径。
- * 用于签名 URL（如 TOS）在浏览器中因 Referer 校验导致 403 的场景。
- * 已经是虚拟路径或 data URL 的直接返回。
+ * 用于签名 URL（如 TOS）在浏览器中因 Referer 校验导致 403 的场景，
+ * 也用于把模型直接返回的 base64/data URL 图片落到本地缓存，避免把超长 data URL 挂在任务结果里。
  */
 export async function cacheRemoteUrl(
   remoteUrl: string,
@@ -226,44 +232,68 @@ export async function cacheRemoteUrl(
   format: string,
   index?: number
 ): Promise<string> {
-  // 已经是本地路径或 data URL，无需缓存
+  const normalizedUrl =
+    mediaType === 'image' ? normalizeImageDataUrl(remoteUrl) : remoteUrl;
+
+  // 已经是本地路径，无需缓存
   if (
-    remoteUrl.startsWith('/__aitu_cache__/') ||
-    remoteUrl.startsWith('/asset-library/') ||
-    remoteUrl.startsWith('data:')
+    normalizedUrl.startsWith('/__aitu_cache__/') ||
+    normalizedUrl.startsWith('/asset-library/')
   ) {
-    return remoteUrl;
+    return normalizedUrl;
   }
 
   const suffix = index !== undefined ? `_${index}` : '';
-  const localUrl = `/__aitu_cache__/${mediaType}/${taskId}${suffix}.${format}`;
+  const inferredFormat = getFileExtension(normalizedUrl);
+  const finalFormat = inferredFormat !== 'bin' ? inferredFormat : format;
+  const localUrl = `/__aitu_cache__/${mediaType}/${taskId}${suffix}.${finalFormat}`;
 
   try {
+    // data URL / 原始 base64：直接转 Blob 再缓存，避免把大串 base64 存进任务结果
+    if (isDataURL(normalizedUrl)) {
+      const response = await fetch(normalizedUrl);
+      const blob = await response.blob();
+      if (blob.size === 0) {
+        console.warn('[cacheRemoteUrl] Empty data URL blob, using original URL');
+        return normalizedUrl;
+      }
+      const contentHash = await calculateBlobChecksum(blob);
+      const hashedFormat = getFileExtension('', blob.type);
+      const contentAddressedUrl = `/__aitu_cache__/${mediaType}/content-${contentHash}.${hashedFormat !== 'bin' ? hashedFormat : finalFormat}`;
+
+      if (await unifiedCacheService.isCached(contentAddressedUrl)) {
+        return contentAddressedUrl;
+      }
+
+      await unifiedCacheService.cacheMediaFromBlob(contentAddressedUrl, blob, mediaType, { taskId });
+      return contentAddressedUrl;
+    }
+
     // 先尝试 cors 模式
     let response: Response;
     try {
-      response = await fetch(remoteUrl, { referrerPolicy: 'no-referrer' });
+      response = await fetch(normalizedUrl, { referrerPolicy: 'no-referrer' });
     } catch {
       // CORS 失败，降级到 no-cors（opaque response，无法读取状态码但 blob 可用）
-      response = await fetch(remoteUrl, { mode: 'no-cors', referrerPolicy: 'no-referrer' });
+      response = await fetch(normalizedUrl, { mode: 'no-cors', referrerPolicy: 'no-referrer' });
     }
 
     // cors 模式下检查状态码；no-cors 模式下 response.type === 'opaque'，status 为 0
     if (response.type !== 'opaque' && !response.ok) {
-      console.warn(`[cacheRemoteUrl] Failed to fetch ${remoteUrl}: ${response.status}, using original URL`);
-      return remoteUrl;
+      console.warn(`[cacheRemoteUrl] Failed to fetch ${normalizedUrl}: ${response.status}, using original URL`);
+      return normalizedUrl;
     }
 
     const blob = await response.blob();
     if (blob.size === 0) {
       console.warn('[cacheRemoteUrl] Empty blob, using original URL');
-      return remoteUrl;
+      return normalizedUrl;
     }
     await unifiedCacheService.cacheMediaFromBlob(localUrl, blob, mediaType, { taskId });
     return localUrl;
   } catch (error) {
     console.warn('[cacheRemoteUrl] Cache failed, using original URL:', error);
-    return remoteUrl;
+    return normalizedUrl;
   }
 }
 

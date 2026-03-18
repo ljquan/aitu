@@ -1,6 +1,7 @@
 import { defaultGeminiClient } from '../../utils/gemini-api';
 import { asyncImageAPIService } from '../async-image-api-service';
 import { videoAPIService } from '../video-api-service';
+import { getFileExtension, normalizeImageDataUrl } from '@aitu/utils';
 import {
   DEFAULT_IMAGE_MODEL_ID,
   DEFAULT_VIDEO_MODEL_ID,
@@ -49,16 +50,28 @@ const extractImageUrl = (
   ) {
     const imageData = response.data[0];
     const urls = response.data
-      .map((item: any) => item?.url || (item?.b64_json ? `data:image/png;base64,${item.b64_json}` : undefined))
+      .map((item: any) => {
+        const rawValue = item?.url || item?.b64_json;
+        return typeof rawValue === 'string'
+          ? normalizeImageDataUrl(rawValue)
+          : undefined;
+      })
       .filter(Boolean) as string[];
+    const format = getFileExtension(urls[0]) || 'png';
     if (imageData.url) {
-      return { url: imageData.url, urls, format: 'png', raw: response };
+      return {
+        url: normalizeImageDataUrl(imageData.url),
+        urls,
+        format: format === 'bin' ? 'png' : format,
+        raw: response,
+      };
     }
     if (imageData.b64_json) {
+      const normalizedUrl = normalizeImageDataUrl(imageData.b64_json);
       return {
-        url: `data:image/png;base64,${imageData.b64_json}`,
+        url: normalizedUrl,
         urls,
-        format: 'png',
+        format: format === 'bin' ? 'png' : format,
         raw: response,
       };
     }

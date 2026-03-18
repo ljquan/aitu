@@ -11,6 +11,7 @@ import type {
   AsyncImageOptions,
   AsyncTaskSubmitResponse,
 } from './types';
+import { getFileExtension, normalizeImageDataUrl } from '@aitu/utils';
 import {
   isAsyncImageModel,
   normalizeApiBase,
@@ -63,7 +64,12 @@ export function parseImageResponse(data: Record<string, unknown>): ImageGenerati
   // 支持多种响应格式
   if (data.data && Array.isArray(data.data)) {
     const urls = data.data
-      .map((item: Record<string, unknown>) => item.url || item.b64_json)
+      .map((item: Record<string, unknown>) => {
+        const rawValue = item.url || item.b64_json;
+        return typeof rawValue === 'string'
+          ? normalizeImageDataUrl(rawValue)
+          : undefined;
+      })
       .filter(Boolean) as string[];
 
     if (urls.length === 0) {
@@ -81,15 +87,21 @@ export function parseImageResponse(data: Record<string, unknown>): ImageGenerati
       throw new Error('No image URL in response');
     }
 
+    const format = getFileExtension(urls[0]) || 'png';
     return {
       url: urls[0],
       urls: urls.length > 1 ? urls : undefined,
-      format: 'png',
+      format: format === 'bin' ? 'png' : format,
     };
   }
 
   if (data.url && typeof data.url === 'string') {
-    return { url: data.url, format: 'png' };
+    const normalizedUrl = normalizeImageDataUrl(data.url);
+    const format = getFileExtension(normalizedUrl);
+    return {
+      url: normalizedUrl,
+      format: format === 'bin' ? 'png' : format,
+    };
   }
 
   throw new Error('Invalid image generation response');

@@ -8,6 +8,7 @@
  */
 
 import type { MCPTool, MCPResult, MCPExecuteOptions, MCPTaskResult } from '../types';
+import { getFileExtension, normalizeImageDataUrl } from '@aitu/utils';
 import { defaultGeminiClient } from '../../utils/gemini-api';
 import { taskQueueService } from '../../services/task-queue';
 import { TaskType } from '../../types/task.types';
@@ -88,13 +89,9 @@ async function executeAsync(params: ImageGenerationParams): Promise<MCPResult> {
     // 解析响应
     if (result.data && Array.isArray(result.data) && result.data.length > 0) {
       const imageData = result.data[0];
-      let imageUrl: string;
+      const rawValue = imageData.url || imageData.b64_json;
 
-      if (imageData.url) {
-        imageUrl = imageData.url;
-      } else if (imageData.b64_json) {
-        imageUrl = `data:image/png;base64,${imageData.b64_json}`;
-      } else {
+      if (typeof rawValue !== 'string') {
         return {
           success: false,
           error: 'API 未返回有效的图片数据',
@@ -102,11 +99,14 @@ async function executeAsync(params: ImageGenerationParams): Promise<MCPResult> {
         };
       }
 
+      const imageUrl = normalizeImageDataUrl(rawValue);
+      const format = getFileExtension(imageUrl) || 'png';
+
       return {
         success: true,
         data: {
           url: imageUrl,
-          format: 'png',
+          format: format === 'bin' ? 'png' : format,
           prompt,
           size: size || '1x1',
         },
