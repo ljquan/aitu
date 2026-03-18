@@ -1,6 +1,6 @@
 {
   "version": "0.6.11",
-  "buildTime": "2026-03-18T01:49:46.294Z",
+  "buildTime": "2026-03-18T01:49:47.000Z",
   "gitCommit": "unknown",
   "changelog": [
     "fixed: 兼容base64图片返回",
