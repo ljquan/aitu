@@ -109,14 +109,13 @@ export function MediaLibraryInspector({
     setDeleteDialogVisible(true);
   }, []);
 
-  // 确认删除
+  // 确认删除（成功提示由 AssetContext 统一展示，此处不再重复）
   const handleConfirmDelete = useCallback(async () => {
     if (!asset) return;
 
     try {
       await onDelete(asset.id);
       setDeleteDialogVisible(false);
-      MessagePlugin.success('删除成功');
     } catch (error) {
       // 错误已在Context中处理
     }
