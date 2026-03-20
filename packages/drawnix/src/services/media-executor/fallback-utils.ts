@@ -15,6 +15,12 @@ import {
 } from '@aitu/utils';
 import { getDataURL } from '../../data/blob';
 import { unifiedCacheService } from '../unified-cache-service';
+import { providerTransport } from '../provider-routing/provider-transport';
+import {
+  downloadVideoContentToLocalUrl,
+  extractInlineVideoUrl,
+  shouldDownloadVideoContent,
+} from '../video-binding-utils';
 
 /** 参考图转 base64 时最大体积（1MB），避免请求体过大 */
 export const MAX_REFERENCE_IMAGE_BYTES = 1 * 1024 * 1024;
@@ -97,12 +103,23 @@ export async function pollVideoStatus(
 
     let data: any;
     try {
-      const response = await fetch(`${config.baseUrl}/v1/videos/${videoId}`, {
-        headers: {
-          Authorization: `Bearer ${config.apiKey}`,
+      const response = await providerTransport.send(
+        config.provider || {
+          profileId: 'runtime',
+          profileName: 'Runtime',
+          providerType: config.providerType || 'custom',
+          baseUrl: config.baseUrl,
+          apiKey: config.apiKey,
+          authType: config.authType || 'bearer',
+          extraHeaders: config.extraHeaders,
         },
-        signal,
-      });
+        {
+          path: '/videos/' + videoId,
+          baseUrlStrategy: config.binding?.baseUrlStrategy,
+          method: 'GET',
+          signal,
+        }
+      );
 
       if (!response.ok) {
         consecutiveErrors++;
@@ -142,7 +159,27 @@ export async function pollVideoStatus(
     onProgress(progress / 100);
 
     if (status === 'completed' || status === 'succeeded') {
-      const url = data.video_url || data.url || data.output?.url;
+      const inlineUrl = extractInlineVideoUrl(data);
+      const url =
+        inlineUrl ||
+        (shouldDownloadVideoContent(data.model || config.model, config.binding, data)
+          ? await downloadVideoContentToLocalUrl({
+              videoId,
+              provider:
+                config.provider || {
+                  profileId: 'runtime',
+                  profileName: 'Runtime',
+                  providerType: config.providerType || 'custom',
+                  baseUrl: config.baseUrl,
+                  apiKey: config.apiKey,
+                  authType: config.authType || 'bearer',
+                  extraHeaders: config.extraHeaders,
+                },
+              binding: config.binding,
+              modelId: data.model || config.model,
+              cacheKey: videoId,
+            })
+          : undefined);
       if (!url) {
         throw new Error('No video URL in completed response');
       }
@@ -206,6 +243,10 @@ export async function generateAsyncImage(
       apiKey: config.apiKey,
       baseUrl: config.baseUrl,
       defaultModel: params.model,
+      authType: config.authType,
+      providerType: config.providerType,
+      extraHeaders: config.extraHeaders,
+      provider: config.provider,
     },
     {
       onProgress: options.onProgress,
