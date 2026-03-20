@@ -64,7 +64,6 @@ function getThumbnailUrl(originalUrl: string, size: 'small' | 'large' = 'small')
   if (shouldBypassThumbnailForUrl(normalizedUrl)) {
     return normalizedUrl;
   }
-  }
   try {
     const url = new URL(normalizedUrl, window.location.origin);
     url.searchParams.set('thumbnail', size);
@@ -230,7 +229,6 @@ export function useThumbnailUrl(
     // 如果提供了类型，排队检查/生成预览图（非阻塞）
     if (type && !shouldBypassThumbnailForUrl(normalizedUrl)) {
       ensureThumbnail(normalizedUrl, type);
-    }
     }
   }, [originalUrl, type, size]);
 
