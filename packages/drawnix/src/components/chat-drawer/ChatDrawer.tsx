@@ -26,6 +26,7 @@ import { chatStorageService } from '../../services/chat-storage-service';
 import { useChatHandler } from '../../hooks/useChatHandler';
 import {
   createModelRef,
+  geminiSettings,
   resolveInvocationRoute,
   type ModelRef,
 } from '../../utils/settings-manager';

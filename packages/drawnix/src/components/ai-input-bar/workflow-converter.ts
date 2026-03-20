@@ -105,6 +105,8 @@ export interface WorkflowDefinition {
     rawInput: string;
     /** 模型 ID */
     modelId: string;
+    /** 模型来源引用 */
+    modelRef?: ModelRef | null;
     /** 是否为用户显式选择的模型 */
     isModelExplicit: boolean;
     /** 生成数量 */
@@ -498,6 +500,7 @@ export async function convertSkillFlowToWorkflow(
   const {
     generationType,
     modelId,
+    modelRef,
     isModelExplicit,
     prompt,
     userInstruction,

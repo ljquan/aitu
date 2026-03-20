@@ -8,6 +8,7 @@
 import {
   providerTransport,
   resolveInvocationPlanFromRoute,
+  type ProviderModelBinding,
   type ProviderAuthStrategy,
   type ResolvedProviderContext,
 } from './provider-routing';
@@ -53,7 +54,13 @@ export interface VideoSubmitResponse {
   id: string;
   object: string;
   model: string;
-  status: 'queued' | 'in_progress' | 'completed' | 'failed';
+  status:
+    | 'queued'
+    | 'in_progress'
+    | 'completed'
+    | 'failed'
+    | 'succeeded'
+    | 'error';
   progress: number;
   created_at: number;
   seconds: string;
@@ -67,7 +74,13 @@ export interface VideoQueryResponse {
   size: string;
   model: string;
   object: string;
-  status: 'queued' | 'in_progress' | 'completed' | 'failed';
+  status:
+    | 'queued'
+    | 'in_progress'
+    | 'completed'
+    | 'failed'
+    | 'succeeded'
+    | 'error';
   seconds: string;
   progress?: number; // Optional - API may not return progress when status is 'queued'
   video_url?: string;
@@ -85,7 +98,9 @@ interface PollingOptions {
   routeModel?: string | ModelRef | null;
 }
 
-function inferAuthType(route: ReturnType<typeof resolveInvocationRoute>): ProviderAuthStrategy {
+function inferAuthType(
+  route: ReturnType<typeof resolveInvocationRoute>
+): ProviderAuthStrategy {
   return 'bearer';
 }
 
@@ -110,7 +125,7 @@ function resolveProviderContext(
 
 function resolveVideoPlanContext(routeModel?: string | ModelRef | null): {
   providerContext: ResolvedProviderContext;
-  binding: ReturnType<typeof resolveInvocationPlanFromRoute>['binding'] | null;
+  binding: ProviderModelBinding | null;
 } {
   const plan = resolveInvocationPlanFromRoute('video', routeModel);
   return {
@@ -592,7 +607,13 @@ class VideoAPIService {
     );
     const inlineUrl = extractInlineVideoUrl(status as Record<string, any>);
 
-    if (!shouldDownloadVideoContent(status.model, binding, status as Record<string, any>)) {
+    if (
+      !shouldDownloadVideoContent(
+        status.model,
+        binding,
+        status as Record<string, any>
+      )
+    ) {
       return inlineUrl ? { ...status, url: inlineUrl } : status;
     }
 
