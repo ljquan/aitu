@@ -20,10 +20,33 @@ import {
   aspectRatioToSize,
   parseErrorMessage,
   sleep,
+  buildProviderContextFromApiConfig,
 } from './utils';
+import { providerTransport } from '../provider-routing/provider-transport';
 
 // 重新导出工具函数，方便外部使用
 export { isAsyncImageModel, aspectRatioToSize };
+
+function normalizeImageResultUrl(item: Record<string, unknown>): string | undefined {
+  if (typeof item.url === 'string' && item.url) {
+    return item.url;
+  }
+
+  const b64 = typeof item.b64_json === 'string' ? item.b64_json : '';
+  if (!b64) {
+    return undefined;
+  }
+
+  if (b64.startsWith('data:')) {
+    return b64;
+  }
+
+  const mimeType =
+    typeof item.mime_type === 'string' && item.mime_type
+      ? item.mime_type
+      : 'image/png';
+  return `data:${mimeType};base64,${b64}`;
+}
 
 /**
  * 构建图片生成请求体
@@ -64,12 +87,7 @@ export function parseImageResponse(data: Record<string, unknown>): ImageGenerati
   // 支持多种响应格式
   if (data.data && Array.isArray(data.data)) {
     const urls = data.data
-      .map((item: Record<string, unknown>) => {
-        const rawValue = item.url || item.b64_json;
-        return typeof rawValue === 'string'
-          ? normalizeImageDataUrl(rawValue)
-          : undefined;
-      })
+      .map((item: Record<string, unknown>) => normalizeImageResultUrl(item))
       .filter(Boolean) as string[];
 
     if (urls.length === 0) {
@@ -128,15 +146,19 @@ export async function generateImageSync(
     model,
   });
 
-  const response = await fetchFn(`${config.baseUrl}/images/generations`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${config.apiKey}`,
-    },
-    body: JSON.stringify(requestBody),
-    signal,
-  });
+  const response = await providerTransport.send(
+    buildProviderContextFromApiConfig(config),
+    {
+      path: '/images/generations',
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(requestBody),
+      signal,
+      fetcher: fetchFn,
+    }
+  );
 
   if (!response.ok) {
     const errorText = await response.text();
@@ -164,6 +186,7 @@ export async function generateImageAsync(
   const { onProgress, onSubmitted, signal, interval = 5000, maxAttempts = 1080 } = options;
   const fetchFn = config.fetchImpl || fetch;
   const baseUrl = normalizeApiBase(config.baseUrl);
+  const providerContext = buildProviderContextFromApiConfig(config, baseUrl);
   const model = params.model || config.defaultModel || 'gemini-3-pro-image-preview-async';
 
   console.log(
@@ -203,13 +226,12 @@ export async function generateImageAsync(
   console.log(`[ImageAPI] 📤 提交异步图片任务到: ${baseUrl}/v1/videos`);
 
   // 提交异步任务
-  const submitResponse = await fetchFn(`${baseUrl}/v1/videos`, {
+  const submitResponse = await providerTransport.send(providerContext, {
+    path: '/v1/videos',
     method: 'POST',
-    headers: {
-      Authorization: `Bearer ${config.apiKey}`,
-    },
     body: formData,
     signal,
+    fetcher: fetchFn,
   });
 
   console.log(`[ImageAPI] 📥 提交响应状态: ${submitResponse.status}`);
@@ -253,12 +275,11 @@ export async function generateImageAsync(
 
     await sleep(interval, signal);
 
-    const queryResponse = await fetchFn(`${baseUrl}/v1/videos/${taskRemoteId}`, {
+    const queryResponse = await providerTransport.send(providerContext, {
+      path: `/v1/videos/${taskRemoteId}`,
       method: 'GET',
-      headers: {
-        Authorization: `Bearer ${config.apiKey}`,
-      },
       signal,
+      fetcher: fetchFn,
     });
 
     if (!queryResponse.ok) {
@@ -319,18 +340,18 @@ export async function resumeAsyncImagePolling(
   const { onProgress, signal, interval = 5000, maxAttempts = 1080 } = options;
   const fetchFn = config.fetchImpl || fetch;
   const baseUrl = normalizeApiBase(config.baseUrl);
+  const providerContext = buildProviderContextFromApiConfig(config, baseUrl);
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     if (signal?.aborted) {
       throw new Error('Async image generation cancelled');
     }
 
-    const queryResponse = await fetchFn(`${baseUrl}/v1/videos/${remoteId}`, {
+    const queryResponse = await providerTransport.send(providerContext, {
+      path: `/v1/videos/${remoteId}`,
       method: 'GET',
-      headers: {
-        Authorization: `Bearer ${config.apiKey}`,
-      },
       signal,
+      fetcher: fetchFn,
     });
 
     if (!queryResponse.ok) {

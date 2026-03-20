@@ -55,7 +55,7 @@ const extractImageUrl = (
         return typeof rawValue === 'string'
           ? normalizeImageDataUrl(rawValue)
           : undefined;
-      })
+        })
       .filter(Boolean) as string[];
     const format = getFileExtension(urls[0]) || 'png';
     if (imageData.url) {
@@ -106,6 +106,16 @@ export const geminiImageAdapter: ImageModelAdapter = {
   label: 'Gemini Image',
   kind: 'image',
   docsUrl: 'https://tuzi-api.apifox.cn',
+  matchProtocols: [
+    'openai.images.generations',
+    'openai.async.media',
+    'google.generateContent',
+  ],
+  matchRequestSchemas: [
+    'openai.image.basic-json',
+    'openai.async.image.form',
+    'google.generate-content.image-inline',
+  ],
   matchVendors: [ModelVendor.GEMINI],
   supportedModels: imageModelIds,
   defaultModel: DEFAULT_IMAGE_MODEL_ID,
@@ -116,6 +126,7 @@ export const geminiImageAdapter: ImageModelAdapter = {
       const result = await asyncImageAPIService.generateWithPolling(
         {
           model,
+          modelRef: request.modelRef || null,
           prompt: request.prompt,
           size: request.size,
         },
@@ -144,7 +155,12 @@ export const geminiImageAdapter: ImageModelAdapter = {
       image: request.referenceImages,
       response_format: responseFormat || 'url',
       quality,
+      count:
+        typeof request.params?.n === 'number'
+          ? request.params.n
+          : undefined,
       model,
+      modelRef: request.modelRef || null,
     });
 
     return extractImageUrl(result, request.prompt);
@@ -156,29 +172,47 @@ export const geminiVideoAdapter: VideoModelAdapter = {
   label: 'Gemini Video',
   kind: 'video',
   docsUrl: 'https://tuzi-api.apifox.cn',
+  matchProtocols: ['openai.async.video'],
+  matchRequestSchemas: ['openai.video.form-input-reference'],
+  matchPredicate(modelConfig) {
+    if (modelConfig.type !== 'video') {
+      return false;
+    }
+    const lowerId = modelConfig.id.toLowerCase();
+    return !lowerId.includes('kling') && !lowerId.includes('seedance');
+  },
   supportedModels: videoModelIds,
   defaultModel: DEFAULT_VIDEO_MODEL_ID,
   async generateVideo(_context, request: VideoGenerationRequest) {
     const model = (request.model || DEFAULT_VIDEO_MODEL_ID) as any;
     const durationEncoded =
       model && model.startsWith('sora-2-') && /\d+s$/.test(model);
+    const adapterParams = request.params
+      ? Object.fromEntries(
+          Object.entries(request.params).filter(
+            ([key]) => key !== 'onProgress' && key !== 'onSubmitted'
+          )
+        )
+      : undefined;
     const seconds = durationEncoded
       ? undefined
       : request.duration
-        ? String(request.duration)
-        : model?.toString().startsWith('sora')
-          ? '10'
-          : '8';
+      ? String(request.duration)
+      : model?.toString().startsWith('sora')
+      ? undefined
+      : '8';
     const size = request.size || '1280x720';
     const inputReferences = toUploadedVideoImages(request.referenceImages);
 
     const result = await videoAPIService.generateVideoWithPolling(
       {
         model,
+        modelRef: request.modelRef || null,
         prompt: request.prompt,
         seconds,
         size,
         inputReferences,
+        params: adapterParams,
       },
       {
         interval: 5000,

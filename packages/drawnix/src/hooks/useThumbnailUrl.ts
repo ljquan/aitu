@@ -6,7 +6,7 @@
  */
 
 import { useState, useEffect } from 'react';
-import { isDataURL, normalizeImageDataUrl } from '@aitu/utils';
+import { normalizeImageDataUrl } from '@aitu/utils';
 import { swChannelClient } from '../services/sw-channel/client';
 
 // 内存缓存：记录已检查过的缩略图 URL
@@ -40,10 +40,19 @@ function getImageCache(): Promise<Cache> {
   return imageCachePromise;
 }
 
+function shouldBypassThumbnailForUrl(originalUrl: string): boolean {
+  return (
+    originalUrl.startsWith('http://') ||
+    originalUrl.startsWith('https://') ||
+    originalUrl.startsWith('data:') ||
+    originalUrl.startsWith('blob:')
+  );
+}
+
 /**
  * 获取预览图 URL（通过添加查询参数）
  * 仅对虚拟路径（/__aitu_cache__/、/asset-library/）追加 thumbnail 参数，
- * 外部 URL（如 TOS 签名 URL）追加参数会破坏签名导致 403，直接返回原 URL。
+ * 外部 URL（如 TOS 签名 URL）或 data/blob URL 追加参数会破坏资源，直接返回原 URL。
  * @param originalUrl 原始 URL
  * @param size 预览图尺寸（默认 small）
  * @returns 预览图 URL（带 ?thumbnail={size} 参数）
@@ -51,13 +60,8 @@ function getImageCache(): Promise<Cache> {
 function getThumbnailUrl(originalUrl: string, size: 'small' | 'large' = 'small'): string {
   const normalizedUrl = normalizeImageDataUrl(originalUrl);
 
-  // 外部 URL 不追加参数，避免破坏签名
-  if (
-    normalizedUrl.startsWith('http://') ||
-    normalizedUrl.startsWith('https://') ||
-    normalizedUrl.startsWith('blob:') ||
-    isDataURL(normalizedUrl)
-  ) {
+  // 外部 URL / data URL / blob URL 不追加参数，避免破坏资源或签名
+  if (shouldBypassThumbnailForUrl(normalizedUrl)) {
     return normalizedUrl;
   }
   try {
@@ -120,7 +124,7 @@ async function ensureThumbnailImpl(
   type: 'image' | 'video'
 ): Promise<void> {
   const normalizedUrl = normalizeImageDataUrl(originalUrl);
-  if (isDataURL(normalizedUrl) || normalizedUrl.startsWith('blob:')) {
+  if (shouldBypassThumbnailForUrl(normalizedUrl)) {
     return;
   }
 
@@ -172,7 +176,7 @@ async function ensureThumbnailImpl(
  */
 function ensureThumbnail(originalUrl: string, type: 'image' | 'video'): void {
   const normalizedUrl = normalizeImageDataUrl(originalUrl);
-  if (isDataURL(normalizedUrl) || normalizedUrl.startsWith('blob:')) {
+  if (shouldBypassThumbnailForUrl(normalizedUrl)) {
     return;
   }
 
@@ -223,7 +227,7 @@ export function useThumbnailUrl(
     setThumbnailUrl(url);
 
     // 如果提供了类型，排队检查/生成预览图（非阻塞）
-    if (type) {
+    if (type && !shouldBypassThumbnailForUrl(normalizedUrl)) {
       ensureThumbnail(normalizedUrl, type);
     }
   }, [originalUrl, type, size]);
