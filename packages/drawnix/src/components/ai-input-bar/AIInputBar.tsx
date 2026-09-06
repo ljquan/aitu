@@ -186,6 +186,7 @@ import { AIInputComposerShell } from './AIInputComposerShell';
 import { GenerationTypeDropdown } from './GenerationTypeDropdown';
 import { CountDropdown } from './CountDropdown';
 import './ai-input-bar.scss';
+import { useLocalFileDrop } from '../shared/local-image-drag-drop';
 
 import type {
   WorkflowRetryContext,
@@ -4044,6 +4045,18 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(
       [addAsset, fileToBase64WithDimensions, localImageMessages]
     );
 
+    const handleDroppedInputFiles = useCallback(
+      (files: File[]) => importLocalImages(files),
+      [importLocalImages]
+    );
+    const {
+      isDraggingFiles: isDraggingInputFiles,
+      dropTargetProps: inputFileDropTargetProps,
+    } = useLocalFileDrop({
+      disabled: isSubmitting,
+      onFiles: handleDroppedInputFiles,
+    });
+
     // 处理文件选择
     const handleFileChange = useCallback(
       async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -7849,6 +7862,11 @@ export const AIInputBar: React.FC<AIInputBarProps> = React.memo(
             expanded={shouldKeepExpanded}
             longText={isPromptManuallyExpanded}
             disabled={isSubmitting}
+            className={classNames({
+              'ai-input-composer-shell--image-drag-active':
+                isDraggingInputFiles,
+            })}
+            {...inputFileDropTargetProps}
             leftTools={
               <>
                 <input

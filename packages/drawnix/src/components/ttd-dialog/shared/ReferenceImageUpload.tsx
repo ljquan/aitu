@@ -9,7 +9,14 @@
  * - Drag and drop
  */
 
-import React, { useCallback, useState, useRef, useEffect } from 'react';
+import React, {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+} from 'react';
 import ReactDOM from 'react-dom';
 import { Button, MessagePlugin } from 'tdesign-react';
 import { X } from 'lucide-react';
@@ -36,6 +43,10 @@ export interface ReferenceImage {
   slot?: number;
 }
 
+export interface ReferenceImageUploadHandle {
+  importFiles: (files: FileList | File[], targetSlot?: number) => Promise<void>;
+}
+
 interface ReferenceImageUploadProps {
   /** Current images */
   images: ReferenceImage[];
@@ -59,18 +70,24 @@ interface ReferenceImageUploadProps {
   pasteScopeRef?: React.RefObject<HTMLElement>;
 }
 
-export const ReferenceImageUpload: React.FC<ReferenceImageUploadProps> = ({
-  images,
-  onImagesChange,
-  language = 'zh',
-  disabled = false,
-  multiple = true,
-  maxCount = 10,
-  label,
-  slotLabels,
-  onError,
-  pasteScopeRef,
-}) => {
+export const ReferenceImageUpload = forwardRef<
+  ReferenceImageUploadHandle,
+  ReferenceImageUploadProps
+>(function ReferenceImageUpload(
+  {
+    images,
+    onImagesChange,
+    language = 'zh',
+    disabled = false,
+    multiple = true,
+    maxCount = 10,
+    label,
+    slotLabels,
+    onError,
+    pasteScopeRef,
+  },
+  ref
+) {
   const [showMediaLibrary, setShowMediaLibrary] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [currentSlot, setCurrentSlot] = useState<number>(0);
@@ -412,6 +429,14 @@ export const ReferenceImageUpload: React.FC<ReferenceImageUploadProps> = ({
       t,
       validateFile,
     ]
+  );
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      importFiles: handleFiles,
+    }),
+    [handleFiles]
   );
 
   // Handle file input change
@@ -902,6 +927,6 @@ export const ReferenceImageUpload: React.FC<ReferenceImageUploadProps> = ({
       </div>
     </>
   );
-};
+});
 
 export default ReferenceImageUpload;

@@ -14,6 +14,10 @@ export interface AIInputComposerShellProps {
   leftTools?: React.ReactNode;
   controls?: React.ReactNode;
   sendButton: React.ReactNode;
+  onDragEnter?: React.DragEventHandler<HTMLDivElement>;
+  onDragOver?: React.DragEventHandler<HTMLDivElement>;
+  onDragLeave?: React.DragEventHandler<HTMLDivElement>;
+  onDrop?: React.DragEventHandler<HTMLDivElement>;
 }
 
 export const AIInputComposerShell: React.FC<AIInputComposerShellProps> = ({
@@ -27,6 +31,10 @@ export const AIInputComposerShell: React.FC<AIInputComposerShellProps> = ({
   leftTools,
   controls,
   sendButton,
+  onDragEnter,
+  onDragOver,
+  onDragLeave,
+  onDrop,
 }) => {
   return (
     <div
@@ -43,6 +51,10 @@ export const AIInputComposerShell: React.FC<AIInputComposerShellProps> = ({
       )}
       aria-disabled={disabled || undefined}
       data-testid={`ai-input-composer-shell-${variant}`}
+      onDragEnter={onDragEnter}
+      onDragOver={onDragOver}
+      onDragLeave={onDragLeave}
+      onDrop={onDrop}
     >
       <div className="ai-input-bar__bottom-bar ai-input-composer-shell__bottom-bar">
         {leftTools ? (
