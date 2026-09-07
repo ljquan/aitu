@@ -19,6 +19,18 @@
   height: 80vh;
   overflow: hidden;
   position: relative;
+
+  &--image-drag-active::after {
+    content: '';
+    position: absolute;
+    inset: 4px;
+    z-index: 100;
+    pointer-events: none;
+    border: 2px dashed var(--td-brand-color, #0052d9);
+    border-radius: 6px;
+    background: rgba(0, 82, 217, 0.06);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.72);
+  }
 }
 
 .ai-generation-mobile-switcher {

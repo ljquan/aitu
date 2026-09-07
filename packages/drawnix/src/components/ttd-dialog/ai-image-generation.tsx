@@ -27,6 +27,7 @@ import {
   ErrorDisplay,
   ReferenceImageUpload,
   type ReferenceImage,
+  type ReferenceImageUploadHandle,
   PromptInput,
   getMergedPresetPrompts,
   savePromptToHistory as savePromptToHistoryUtil,
@@ -35,6 +36,7 @@ import {
   AutoInsertCheckbox,
   getAutoInsertValue,
 } from './shared';
+import { useLocalFileDrop } from '../shared/local-image-drag-drop';
 import {
   DEFAULT_ASPECT_RATIO,
   ASPECT_RATIO_OPTIONS,
@@ -279,6 +281,7 @@ const AIImageGeneration = ({
   const [mobilePanel, setMobilePanel] = useState<'config' | 'tasks'>('config');
   const containerRef = useRef<HTMLDivElement>(null);
   const promptPasteScopeRef = useRef<HTMLDivElement>(null);
+  const referenceImageUploadRef = useRef<ReferenceImageUploadHandle>(null);
   const { viewportWidth } = useDeviceType();
   const isCompactLayout = viewportWidth <= 768;
 
@@ -1003,8 +1006,29 @@ const AIImageGeneration = ({
 
   useKeyboardShortcuts(isGenerating, prompt, () => handleGenerate(1));
 
+  const handleDroppedReferenceFiles = useCallback((files: File[]) => {
+    return referenceImageUploadRef.current?.importFiles(files);
+  }, []);
+  const {
+    isDraggingFiles: isDraggingReferenceFiles,
+    dropTargetProps: referenceFileDropTargetProps,
+  } = useLocalFileDrop({
+    disabled: isGenerating,
+    onFiles: handleDroppedReferenceFiles,
+  });
+
   return (
-    <div className="ai-image-generation-container">
+    <div
+      className={`ai-image-generation-container ${
+        isDraggingReferenceFiles
+          ? 'ai-image-generation-container--image-drag-active'
+          : ''
+      }`}
+      onDragEnterCapture={referenceFileDropTargetProps.onDragEnter}
+      onDragOverCapture={referenceFileDropTargetProps.onDragOver}
+      onDragLeaveCapture={referenceFileDropTargetProps.onDragLeave}
+      onDropCapture={referenceFileDropTargetProps.onDrop}
+    >
       {isCompactLayout ? (
         <div className="ai-generation-mobile-switcher" role="tablist">
           <button
@@ -1089,6 +1113,7 @@ const AIImageGeneration = ({
 
             {/* 参考图片区域 */}
             <ReferenceImageUpload
+              ref={referenceImageUploadRef}
               images={uploadedImages}
               onImagesChange={setUploadedImages}
               language={language}

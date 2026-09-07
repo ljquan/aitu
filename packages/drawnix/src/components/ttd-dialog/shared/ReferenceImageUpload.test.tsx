@@ -1,18 +1,34 @@
 // @vitest-environment jsdom
 import {
+  act,
   cleanup,
   fireEvent,
   render,
   screen,
   waitFor,
 } from '@testing-library/react';
-import React from 'react';
+import React, { useRef } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AssetSource, AssetType, type Asset } from '../../../types/asset.types';
-import { ReferenceImageUpload } from './ReferenceImageUpload';
+import { useLocalFileDrop } from '../../shared/local-image-drag-drop';
+import {
+  ReferenceImageUpload,
+  type ReferenceImage,
+  type ReferenceImageUploadHandle,
+} from './ReferenceImageUpload';
 
 const cacheMocks = vi.hoisted(() => ({
   getCachedBlob: vi.fn(),
+}));
+const assetMocks = vi.hoisted(() => ({
+  addAsset: vi.fn().mockResolvedValue(undefined),
+}));
+const messageMocks = vi.hoisted(() => ({
+  close: vi.fn(),
+  error: vi.fn(),
+  loading: vi.fn(),
+  success: vi.fn(),
+  warning: vi.fn(),
 }));
 
 vi.mock('../../../services/unified-cache-service', () => ({
@@ -20,7 +36,7 @@ vi.mock('../../../services/unified-cache-service', () => ({
 }));
 
 vi.mock('../../../contexts/AssetContext', () => ({
-  useAssets: () => ({ addAsset: vi.fn() }),
+  useAssets: () => assetMocks,
 }));
 
 vi.mock('tdesign-react', () => ({
@@ -33,13 +49,7 @@ vi.mock('tdesign-react', () => ({
       {children}
     </button>
   ),
-  MessagePlugin: {
-    close: vi.fn(),
-    error: vi.fn(),
-    loading: vi.fn(),
-    success: vi.fn(),
-    warning: vi.fn(),
-  },
+  MessagePlugin: messageMocks,
 }));
 
 vi.mock('lucide-react', () => ({
@@ -59,6 +69,42 @@ const generatedAsset: Asset = {
 
 let selectedAsset = generatedAsset;
 let selectedAssets = [generatedAsset];
+
+function DialogDropHarness({
+  images = [],
+  disabled = false,
+  maxCount = 10,
+  onImagesChange,
+}: {
+  images?: ReferenceImage[];
+  disabled?: boolean;
+  maxCount?: number;
+  onImagesChange: (images: ReferenceImage[]) => void;
+}) {
+  const uploadRef = useRef<ReferenceImageUploadHandle>(null);
+  const { dropTargetProps } = useLocalFileDrop({
+    disabled,
+    onFiles: (files) => uploadRef.current?.importFiles(files),
+  });
+
+  return (
+    <div
+      data-testid="dialog-drop-target"
+      onDragEnterCapture={dropTargetProps.onDragEnter}
+      onDragOverCapture={dropTargetProps.onDragOver}
+      onDragLeaveCapture={dropTargetProps.onDragLeave}
+      onDropCapture={dropTargetProps.onDrop}
+    >
+      <ReferenceImageUpload
+        ref={uploadRef}
+        images={images}
+        disabled={disabled}
+        maxCount={maxCount}
+        onImagesChange={onImagesChange}
+      />
+    </div>
+  );
+}
 
 vi.mock('../../media-library/MediaLibraryModal', () => ({
   MediaLibraryModal: ({
@@ -84,6 +130,7 @@ vi.mock('../../media-library/MediaLibraryModal', () => ({
 describe('ReferenceImageUpload media library selection', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    assetMocks.addAsset.mockResolvedValue(undefined);
     selectedAsset = generatedAsset;
     selectedAssets = [generatedAsset];
   });
@@ -92,6 +139,115 @@ describe('ReferenceImageUpload media library selection', () => {
     cleanup();
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
+  });
+
+  it('imports a nested dialog drop exactly once through the existing file pipeline', async () => {
+    const onImagesChange = vi.fn();
+    const image = new File(['image'], 'reference.png', { type: 'image/png' });
+    const dataTransfer = {
+      files: [image] as unknown as FileList,
+      types: ['Files'],
+      dropEffect: 'none',
+    };
+    const { container } = render(
+      <DialogDropHarness onImagesChange={onImagesChange} />
+    );
+    const nestedTarget = container.querySelector(
+      '.reference-image-upload__placeholder'
+    );
+    expect(nestedTarget).not.toBeNull();
+
+    await act(async () => {
+      fireEvent.drop(nestedTarget as Element, { dataTransfer });
+    });
+
+    await waitFor(() => expect(onImagesChange).toHaveBeenCalledTimes(1));
+    expect(onImagesChange).toHaveBeenCalledWith([
+      expect.objectContaining({
+        name: image.name,
+        url: 'data:image/png;base64,aW1hZ2U=',
+      }),
+    ]);
+    expect(assetMocks.addAsset).toHaveBeenCalledTimes(1);
+  });
+
+  it('imports multiple dropped images in their original order', async () => {
+    const onImagesChange = vi.fn();
+    const first = new File(['first'], 'first.png', { type: 'image/png' });
+    const second = new File(['second'], 'second.webp', {
+      type: 'image/webp',
+    });
+    render(<DialogDropHarness onImagesChange={onImagesChange} />);
+
+    fireEvent.drop(screen.getByTestId('dialog-drop-target'), {
+      dataTransfer: {
+        files: [first, second] as unknown as FileList,
+        types: ['Files'],
+      },
+    });
+
+    await waitFor(() => expect(onImagesChange).toHaveBeenCalledTimes(1));
+    expect(onImagesChange.mock.calls[0][0].map((image) => image.name)).toEqual([
+      'first.png',
+      'second.webp',
+    ]);
+    expect(assetMocks.addAsset).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps non-image drops in the existing validation path', () => {
+    const onImagesChange = vi.fn();
+    const text = new File(['notes'], 'notes.txt', { type: 'text/plain' });
+    render(<DialogDropHarness onImagesChange={onImagesChange} />);
+
+    fireEvent.drop(screen.getByTestId('dialog-drop-target'), {
+      dataTransfer: {
+        files: [text] as unknown as FileList,
+        types: ['Files'],
+      },
+    });
+
+    expect(messageMocks.error).toHaveBeenCalledWith('请上传图片文件');
+    expect(onImagesChange).not.toHaveBeenCalled();
+    expect(assetMocks.addAsset).not.toHaveBeenCalled();
+  });
+
+  it('enforces the existing image count limit for dialog drops', () => {
+    const onImagesChange = vi.fn();
+    const image = new File(['image'], 'second.png', { type: 'image/png' });
+    render(
+      <DialogDropHarness
+        images={[{ url: 'data:image/png;base64,Zmlyc3Q=', name: 'first.png' }]}
+        maxCount={1}
+        onImagesChange={onImagesChange}
+      />
+    );
+
+    fireEvent.drop(screen.getByTestId('dialog-drop-target'), {
+      dataTransfer: {
+        files: [image] as unknown as FileList,
+        types: ['Files'],
+      },
+    });
+
+    expect(messageMocks.warning).toHaveBeenCalledWith('最多上传 1 张图片');
+    expect(onImagesChange).not.toHaveBeenCalled();
+    expect(assetMocks.addAsset).not.toHaveBeenCalled();
+  });
+
+  it('ignores dialog drops while reference input is disabled', () => {
+    const onImagesChange = vi.fn();
+    const image = new File(['image'], 'reference.png', { type: 'image/png' });
+    render(<DialogDropHarness disabled onImagesChange={onImagesChange} />);
+
+    fireEvent.drop(screen.getByTestId('dialog-drop-target'), {
+      dataTransfer: {
+        files: [image] as unknown as FileList,
+        types: ['Files'],
+      },
+    });
+
+    expect(onImagesChange).not.toHaveBeenCalled();
+    expect(assetMocks.addAsset).not.toHaveBeenCalled();
   });
 
   it('loads a newly generated virtual asset from the unified cache when fetch is unavailable', async () => {

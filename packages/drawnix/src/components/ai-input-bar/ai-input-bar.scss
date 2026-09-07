@@ -933,6 +933,13 @@ $ai-input-small-expanded-max-height: $ai-input-small-line-height * 6 +
     opacity: 0.72;
   }
 
+  .ai-input-composer-shell--image-drag-active {
+    outline: 2px solid var(--td-brand-color, #0052d9);
+    outline-offset: 2px;
+    background: var(--td-brand-color-light, #e6f4ff);
+    box-shadow: 0 4px 18px rgba(0, 82, 217, 0.2);
+  }
+
   // Left tools area
   &__tools {
     display: flex;
