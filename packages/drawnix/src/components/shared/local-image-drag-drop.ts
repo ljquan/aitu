@@ -35,6 +35,14 @@ interface LocalFileDropOptions {
   onFiles: (files: File[]) => void | Promise<void>;
 }
 
+function isLocalFileDragWithinTarget(event: DragEvent<HTMLElement>): boolean {
+  // React portals propagate through the component tree outside this DOM area.
+  return (
+    event.currentTarget.contains(event.target as Node) &&
+    hasLocalFileDrag(event.dataTransfer)
+  );
+}
+
 export function useLocalFileDrop({
   disabled = false,
   onFiles,
@@ -53,7 +61,7 @@ export function useLocalFileDrop({
 
   const onDragEnter = useCallback(
     (event: DragEvent<HTMLElement>) => {
-      if (!hasLocalFileDrag(event.dataTransfer)) return;
+      if (!isLocalFileDragWithinTarget(event)) return;
       event.preventDefault();
       event.stopPropagation();
       if (disabled) return;
@@ -65,7 +73,7 @@ export function useLocalFileDrop({
 
   const onDragOver = useCallback(
     (event: DragEvent<HTMLElement>) => {
-      if (!hasLocalFileDrag(event.dataTransfer)) return;
+      if (!isLocalFileDragWithinTarget(event)) return;
       event.preventDefault();
       event.stopPropagation();
       if (!disabled) event.dataTransfer.dropEffect = 'copy';
@@ -75,7 +83,7 @@ export function useLocalFileDrop({
 
   const onDragLeave = useCallback(
     (event: DragEvent<HTMLElement>) => {
-      if (!hasLocalFileDrag(event.dataTransfer)) return;
+      if (!isLocalFileDragWithinTarget(event)) return;
       event.preventDefault();
       event.stopPropagation();
       if (disabled) return;
@@ -87,7 +95,7 @@ export function useLocalFileDrop({
 
   const onDrop = useCallback(
     (event: DragEvent<HTMLElement>) => {
-      if (!hasLocalFileDrag(event.dataTransfer)) return;
+      if (!isLocalFileDragWithinTarget(event)) return;
       event.preventDefault();
       event.stopPropagation();
       resetDragState();
