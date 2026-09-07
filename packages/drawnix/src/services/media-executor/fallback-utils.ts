@@ -298,6 +298,9 @@ function notifyCacheWarning(
       ? 'storage_error'
       : normalized.includes('http') || normalized.includes('failed to fetch')
       ? 'http_error'
+      : normalized.includes('media signature') ||
+        normalized.includes('content-type')
+      ? 'response_unreadable'
       : normalized.includes('missing') || normalized.includes('not found')
       ? 'cache_missing'
       : normalized.includes('body') || normalized.includes('blob')
@@ -319,6 +322,110 @@ function notifyCacheWarning(
     console.warn(
       '[cacheRemoteUrl] Failed to report cache warning:',
       callbackError
+    );
+  }
+}
+
+const MEDIA_SIGNATURE_BYTES = 64;
+
+function hasAsciiPrefix(bytes: Uint8Array, value: string, offset = 0): boolean {
+  if (bytes.length < offset + value.length) return false;
+  for (let index = 0; index < value.length; index += 1) {
+    if (bytes[offset + index] !== value.charCodeAt(index)) return false;
+  }
+  return true;
+}
+
+function hasBytesAt(
+  bytes: Uint8Array,
+  expected: readonly number[],
+  offset = 0
+): boolean {
+  if (bytes.length < offset + expected.length) return false;
+  return expected.every((value, index) => bytes[offset + index] === value);
+}
+
+function hasImageSignature(bytes: Uint8Array): boolean {
+  return (
+    hasBytesAt(bytes, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]) ||
+    hasBytesAt(bytes, [0xff, 0xd8, 0xff]) ||
+    hasAsciiPrefix(bytes, 'GIF87a') ||
+    hasAsciiPrefix(bytes, 'GIF89a') ||
+    (hasAsciiPrefix(bytes, 'RIFF') && hasAsciiPrefix(bytes, 'WEBP', 8)) ||
+    hasAsciiPrefix(bytes, 'BM') ||
+    hasBytesAt(bytes, [0x49, 0x49, 0x2a, 0x00]) ||
+    hasBytesAt(bytes, [0x4d, 0x4d, 0x00, 0x2a]) ||
+    (hasAsciiPrefix(bytes, 'ftyp', 4) &&
+      /^(avif|avis|heic|heix|hevc|hevx|mif1|msf1)$/.test(
+        String.fromCharCode(...bytes.slice(8, 12))
+      )) ||
+    hasAsciiPrefix(bytes, '<svg') ||
+    (hasAsciiPrefix(bytes, '<?xml') &&
+      new TextDecoder().decode(bytes).includes('<svg'))
+  );
+}
+
+function hasVideoSignature(bytes: Uint8Array): boolean {
+  const ftypBrand = String.fromCharCode(...bytes.slice(8, 12));
+  return (
+    (hasAsciiPrefix(bytes, 'ftyp', 4) &&
+      /^(avc1|av01|dash|hvc1|hev1|isom|iso2|iso5|iso6|mmp4|mp41|mp42|msnv|qt  |3gp4|3g2a)$/.test(
+        ftypBrand
+      )) ||
+    hasBytesAt(bytes, [0x1a, 0x45, 0xdf, 0xa3]) ||
+    (hasAsciiPrefix(bytes, 'RIFF') && hasAsciiPrefix(bytes, 'AVI ', 8)) ||
+    hasAsciiPrefix(bytes, 'OggS') ||
+    hasBytesAt(bytes, [0x00, 0x00, 0x01, 0xba])
+  );
+}
+
+/**
+ * Validate only a bounded prefix so a bad HTTP 200 body cannot be persisted as media.
+ * The complete Blob is already produced by the Fetch API, but no additional full-size
+ * copy is made here.
+ */
+async function assertCacheableMediaBlob(
+  blob: Blob,
+  mediaType: 'image' | 'video' | 'audio'
+): Promise<void> {
+  if (!blob || blob.size === 0) {
+    throw new Error(`empty ${mediaType} blob response`);
+  }
+
+  const declaredType = blob.type.split(';', 1)[0].trim().toLowerCase();
+  const isGenericType =
+    !declaredType ||
+    declaredType === 'application/octet-stream' ||
+    declaredType === 'binary/octet-stream';
+  const expectedCategory = `${mediaType}/`;
+  if (!isGenericType && !declaredType.startsWith(expectedCategory)) {
+    throw new Error(
+      `invalid ${mediaType} blob content-type: ${declaredType || 'missing'}`
+    );
+  }
+
+  // Audio caching remains intentionally permissive: this helper is primarily
+  // guarding image/video render failures, and audio codecs do not share a
+  // small reliable signature set across browser implementations.
+  if (mediaType === 'audio') return;
+
+  const prefixBlob = blob.slice(0, MEDIA_SIGNATURE_BYTES);
+  let prefixBuffer: ArrayBuffer;
+  if (typeof prefixBlob.arrayBuffer === 'function') {
+    prefixBuffer = await prefixBlob.arrayBuffer();
+  } else if (typeof blob.arrayBuffer === 'function') {
+    prefixBuffer = (await blob.arrayBuffer()).slice(0, MEDIA_SIGNATURE_BYTES);
+  } else {
+    prefixBuffer = await new Response(prefixBlob).arrayBuffer();
+  }
+  const prefix = new Uint8Array(prefixBuffer);
+  const validSignature =
+    mediaType === 'image'
+      ? hasImageSignature(prefix)
+      : hasVideoSignature(prefix);
+  if (!validSignature) {
+    throw new Error(
+      `invalid ${mediaType} blob content: media signature missing`
     );
   }
 }
@@ -415,6 +522,7 @@ export async function cacheRemoteUrl(
             )
           : await unifiedCacheService.getCachedBlob(normalizedUrl);
       if (blob && blob.size > 0) {
+        await assertCacheableMediaBlob(blob, mediaType);
         const cached = await unifiedCacheService.cacheLocalMediaByContent(
           blob,
           mediaType,
@@ -456,7 +564,22 @@ export async function cacheRemoteUrl(
         : normalizedUrl;
 
       if (await unifiedCacheService.isCached(cacheTargetUrl)) {
-        return cacheTargetUrl;
+        const existingBlob = await unifiedCacheService.getCachedBlob(
+          cacheTargetUrl,
+          { allowNetwork: false }
+        );
+        options?.signal?.throwIfAborted();
+        if (existingBlob) {
+          try {
+            await assertCacheableMediaBlob(existingBlob, mediaType);
+            return cacheTargetUrl;
+          } catch (error) {
+            console.warn(
+              '[cacheRemoteUrl] Existing media cache is invalid, refreshing from source:',
+              error
+            );
+          }
+        }
       }
       options?.signal?.throwIfAborted();
 
@@ -469,33 +592,45 @@ export async function cacheRemoteUrl(
         );
         options?.signal?.throwIfAborted();
         if (cachedBlob && cachedBlob.size > 0) {
-          const migratedUrl = await unifiedCacheService.cacheMediaFromBlob(
-            cacheTargetUrl,
-            cachedBlob,
-            mediaType,
-            {
-              taskId,
-              source: cacheSource,
-              ...options?.extraMetadata,
-              ...(options?.resultVisibility
-                ? { resultVisibility: options.resultVisibility }
-                : {}),
-            }
-          );
-          options?.signal?.throwIfAborted();
-          if (
-            migratedUrl &&
-            (await unifiedCacheService.isCached(cacheTargetUrl))
-          ) {
-            return migratedUrl;
+          let validCachedBlob = true;
+          try {
+            await assertCacheableMediaBlob(cachedBlob, mediaType);
+          } catch (error) {
+            validCachedBlob = false;
+            console.warn(
+              '[cacheRemoteUrl] Existing source media cache is invalid, fetching source again:',
+              error
+            );
           }
-          notifyCacheWarning(
-            options,
-            new Error('cache missing'),
-            'cache_missing',
-            '资源未能写入浏览器缓存，原始链接可能会过期，请尽快下载保存。'
-          );
-          return normalizedUrl;
+          if (validCachedBlob) {
+            const migratedUrl = await unifiedCacheService.cacheMediaFromBlob(
+              cacheTargetUrl,
+              cachedBlob,
+              mediaType,
+              {
+                taskId,
+                source: cacheSource,
+                ...options?.extraMetadata,
+                ...(options?.resultVisibility
+                  ? { resultVisibility: options.resultVisibility }
+                  : {}),
+              }
+            );
+            options?.signal?.throwIfAborted();
+            if (
+              migratedUrl &&
+              (await unifiedCacheService.isCached(cacheTargetUrl))
+            ) {
+              return migratedUrl;
+            }
+            notifyCacheWarning(
+              options,
+              new Error('cache missing'),
+              'cache_missing',
+              '资源未能写入浏览器缓存，原始链接可能会过期，请尽快下载保存。'
+            );
+            return normalizedUrl;
+          }
         }
       }
 
@@ -527,6 +662,7 @@ export async function cacheRemoteUrl(
         );
         return normalizedUrl;
       }
+      await assertCacheableMediaBlob(blob, mediaType);
 
       const cacheUrl = await unifiedCacheService.cacheMediaFromBlob(
         cacheTargetUrl,
@@ -595,6 +731,7 @@ export async function cacheRemoteUrl(
         );
         return normalizedUrl;
       }
+      await assertCacheableMediaBlob(blob, mediaType);
       const contentHash = await calculateBlobChecksum(blob);
       options?.signal?.throwIfAborted();
       const hashedFormat = getFileExtension('', blob.type);
