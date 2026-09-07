@@ -1578,7 +1578,7 @@ describe('Media Executor Module', () => {
         'video',
         'mp4',
         undefined,
-        { resultVisibility: 'internal' }
+        expect.objectContaining({ resultVisibility: 'internal' })
       );
       expect(onTaskUpdate).toHaveBeenCalledWith(
         task.id,

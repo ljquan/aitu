@@ -96,10 +96,19 @@ interface TaskRow {
 
 function getCompletedImageResults(
   tasks: Task[]
-): Array<{ task: Task; url: string }> {
+): Array<{ task: Task; url: string; resultIndex: number }> {
   return tasks.flatMap((task) => {
-    const url = task.result?.url;
-    return task.status === TaskStatus.COMPLETED && url ? [{ task, url }] : [];
+    if (task.status !== TaskStatus.COMPLETED || !task.result) return [];
+
+    const urls = task.result.urls?.length
+      ? task.result.urls
+      : task.result.url
+      ? [task.result.url]
+      : [];
+
+    return urls
+      .filter((url): url is string => Boolean(url))
+      .map((url, resultIndex) => ({ task, url, resultIndex }));
   });
 }
 
@@ -1923,9 +1932,9 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({
       const exportData = tasks.map((task) => {
         const rowInfo = getRowTasksInfo(task);
         // 获取已完成任务的预览图URL
-        const previewUrls = rowInfo.tasks
-          .filter((t) => t.status === TaskStatus.COMPLETED && t.result?.url)
-          .map((t) => t.result!.url);
+        const previewUrls = getCompletedImageResults(rowInfo.tasks).map(
+          ({ url }) => url
+        );
 
         return {
           提示词: task.prompt,
@@ -2100,19 +2109,19 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({
       if (!taskRow) return;
 
       // 找到该行关联的已完成任务
-      taskRow.taskIds.forEach((taskId, taskIdx) => {
+      taskRow.taskIds.forEach((taskId) => {
         const queueTask = queueTasks.find((t) => t.id === taskId);
-        if (
-          queueTask?.status === TaskStatus.COMPLETED &&
-          queueTask.result?.url
-        ) {
+        if (!queueTask) return;
+
+        getCompletedImageResults([queueTask]).forEach(({ url }) => {
+          const imageIndex = imageUrls.length + 1;
           imageUrls.push({
-            url: queueTask.result.url,
-            filename: `row${rowIndex + 1}_${taskIdx + 1}_${taskRow.prompt
+            url,
+            filename: `row${rowIndex + 1}_${imageIndex}_${taskRow.prompt
               .slice(0, 20)
               .replace(/[^\w\u4e00-\u9fa5]/g, '_')}.png`,
           });
-        }
+        });
       });
     });
 
@@ -3104,9 +3113,9 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({
                   <div className="preview-images">
                     {completedResults
                       .slice(0, isGenerating ? 2 : 3)
-                      .map(({ task: completedTask, url }, idx) => (
+                      .map(({ task: completedTask, url, resultIndex }, idx) => (
                         <HoverTip
-                          key={completedTask.id}
+                          key={`${completedTask.id}:${resultIndex}`}
                           content={
                             language === 'zh'
                               ? '点击放大，左右切换'
@@ -3150,7 +3159,7 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({
                       </HoverTip>
                     )}
                     {/* 完成状态：超过3张显示更多 */}
-                    {!isGenerating && rowInfo.completedCount > 3 && (
+                    {!isGenerating && completedResults.length > 3 && (
                       <HoverTip
                         content={
                           language === 'zh' ? '查看全部图片' : 'View all images'
@@ -3164,7 +3173,7 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({
                             setGalleryRowIndex(rowIndex);
                           }}
                         >
-                          +{rowInfo.completedCount - 3}
+                          +{completedResults.length - 3}
                         </span>
                       </HoverTip>
                     )}
@@ -3206,36 +3215,38 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({
                     <div className="preview-images">
                       {completedResults
                         .slice(0, 2)
-                        .map(({ task: completedTask, url }, idx) => (
-                          <HoverTip
-                            key={completedTask.id}
-                            content={
-                              language === 'zh'
-                                ? '点击放大，左右切换'
-                                : 'Click to enlarge, swipe to navigate'
-                            }
-                            showArrow={false}
-                          >
-                            <div
-                              className="preview-thumb clickable"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                openImagePreview(partialUrls, idx);
-                              }}
+                        .map(
+                          ({ task: completedTask, url, resultIndex }, idx) => (
+                            <HoverTip
+                              key={`${completedTask.id}:${resultIndex}`}
+                              content={
+                                language === 'zh'
+                                  ? '点击放大，左右切换'
+                                  : 'Click to enlarge, swipe to navigate'
+                              }
+                              showArrow={false}
                             >
-                              <RetryImage
-                                src={url}
-                                alt={`Result ${idx + 1}`}
-                                showSkeleton={false}
-                                eager
-                              />
-                              {renderGeneratedImageDeleteButton(
-                                task.id,
-                                completedTask
-                              )}
-                            </div>
-                          </HoverTip>
-                        ))}
+                              <div
+                                className="preview-thumb clickable"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openImagePreview(partialUrls, idx);
+                                }}
+                              >
+                                <RetryImage
+                                  src={url}
+                                  alt={`Result ${idx + 1}`}
+                                  showSkeleton={false}
+                                  eager
+                                />
+                                {renderGeneratedImageDeleteButton(
+                                  task.id,
+                                  completedTask
+                                )}
+                              </div>
+                            </HoverTip>
+                          )
+                        )}
                     </div>
                     <span className="preview-partial-info">
                       ⚠️ {rowInfo.completedCount}/{rowInfo.tasks.length}
@@ -3945,26 +3956,28 @@ const BatchImageGeneration: React.FC<BatchImageGenerationProps> = ({
             return (
               <div className="row-gallery-content">
                 <div className="gallery-grid">
-                  {completedResults.map(({ task: completedTask, url }, idx) => (
-                    <div
-                      key={completedTask.id}
-                      className="gallery-item"
-                      onClick={() => openImagePreview(galleryUrls, idx)}
-                    >
-                      <RetryImage
-                        src={url}
-                        alt={`Result ${idx + 1}`}
-                        showSkeleton={false}
-                        eager
-                      />
-                      <span className="gallery-item-index">{idx + 1}</span>
-                      {renderGeneratedImageDeleteButton(
-                        taskRow.id,
-                        completedTask,
-                        'gallery-delete-button'
-                      )}
-                    </div>
-                  ))}
+                  {completedResults.map(
+                    ({ task: completedTask, url, resultIndex }, idx) => (
+                      <div
+                        key={`${completedTask.id}:${resultIndex}`}
+                        className="gallery-item"
+                        onClick={() => openImagePreview(galleryUrls, idx)}
+                      >
+                        <RetryImage
+                          src={url}
+                          alt={`Result ${idx + 1}`}
+                          showSkeleton={false}
+                          eager
+                        />
+                        <span className="gallery-item-index">{idx + 1}</span>
+                        {renderGeneratedImageDeleteButton(
+                          taskRow.id,
+                          completedTask,
+                          'gallery-delete-button'
+                        )}
+                      </div>
+                    )
+                  )}
                 </div>
                 {completedResults.length === 0 && (
                   <div className="gallery-empty">

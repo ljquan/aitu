@@ -42,6 +42,11 @@ import {
 } from './task-invocation-route';
 import { getImageSubmissionRequestId } from './image-generation-recovery-service';
 import { isImageSubmissionOutcomeUnknownError } from './provider-routing';
+import {
+  cacheRemoteUrl,
+  cacheRemoteUrls,
+} from './media-executor/fallback-utils';
+import type { CacheWarning } from '../types/cache-warning.types';
 
 type ImageGenerationMode = 'text_to_image' | 'image_to_image' | 'image_edit';
 type ImageOutputFormat = 'png' | 'jpeg' | 'webp';
@@ -551,13 +556,38 @@ class GenerationAPIService {
         },
       });
 
+      const originalUrls = result.urls?.length
+        ? result.urls
+        : [result.url];
+      let cacheWarning: CacheWarning | undefined;
+      const cachedUrls = await cacheRemoteUrls(
+        originalUrls,
+        taskId,
+        'image',
+        result.format || 'png',
+        {
+          signal,
+          forceRemoteCache: true,
+          returnLocalCacheUrl: true,
+          cacheKey: submissionRequestId,
+          extraMetadata: params.assetMetadata
+            ? { ...params.assetMetadata }
+            : undefined,
+          resultVisibility: params.resultVisibility,
+          onCacheWarning: (warning) => {
+            cacheWarning ||= warning;
+          },
+        }
+      );
+
       return {
-        url: result.url,
-        urls: result.urls,
+        url: cachedUrls[0] || result.url,
+        urls: cachedUrls.length > 1 ? cachedUrls : undefined,
         format: result.format || 'png',
         size: 0,
         width: result.width,
         height: result.height,
+        ...(cacheWarning ? { cacheWarning } : {}),
       };
     } catch (error: any) {
       console.error('[GenerationAPI] Image generation error:', error);
@@ -724,11 +754,30 @@ class GenerationAPIService {
         }
       );
 
+      let cacheWarning: CacheWarning | undefined;
+      const cachedUrl = await cacheRemoteUrl(
+        result.url,
+        taskId,
+        'video',
+        result.format || 'mp4',
+        undefined,
+        {
+          signal,
+          forceRemoteCache: true,
+          returnLocalCacheUrl: true,
+          resultVisibility: params.resultVisibility,
+          onCacheWarning: (warning) => {
+            cacheWarning ||= warning;
+          },
+        }
+      );
+
       return {
-        url: result.url,
+        url: cachedUrl,
         format: result.format || 'mp4',
         size: 0,
         duration: result.duration || 0,
+        ...(cacheWarning ? { cacheWarning } : {}),
       };
     } catch (error: any) {
       console.error('[GenerationAPI] Video generation error:', error);

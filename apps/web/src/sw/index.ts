@@ -5363,7 +5363,8 @@ async function handleVideoRequest(request: Request): Promise<Response> {
         };
 
         // 获取视频响应（不带Range header，获取完整视频）
-        const fetchUrl = new URL(dedupeUrl);
+        // 规范化 URL 只用于去重和缓存键，实际请求必须保留签名参数。
+        const fetchUrl = new URL(url);
         const response = await fetch(fetchUrl, fetchOptions);
 
         if (!response.ok) {
