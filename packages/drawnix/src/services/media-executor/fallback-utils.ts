@@ -409,9 +409,16 @@ async function assertCacheableMediaBlob(
   // small reliable signature set across browser implementations.
   if (mediaType === 'audio') return;
 
-  const prefix = new Uint8Array(
-    await blob.slice(0, MEDIA_SIGNATURE_BYTES).arrayBuffer()
-  );
+  const prefixBlob = blob.slice(0, MEDIA_SIGNATURE_BYTES);
+  let prefixBuffer: ArrayBuffer;
+  if (typeof prefixBlob.arrayBuffer === 'function') {
+    prefixBuffer = await prefixBlob.arrayBuffer();
+  } else if (typeof blob.arrayBuffer === 'function') {
+    prefixBuffer = (await blob.arrayBuffer()).slice(0, MEDIA_SIGNATURE_BYTES);
+  } else {
+    prefixBuffer = await new Response(prefixBlob).arrayBuffer();
+  }
+  const prefix = new Uint8Array(prefixBuffer);
   const validSignature =
     mediaType === 'image'
       ? hasImageSignature(prefix)

@@ -28,6 +28,17 @@ function mediaBlob(signature: Uint8Array, type: string): Blob {
   return new Blob([signature], { type });
 }
 
+function mediaResponse(
+  signature: Uint8Array,
+  type: string,
+  init: ResponseInit = {}
+): Response {
+  return new Response(signature, {
+    ...init,
+    headers: { 'Content-Type': type, ...init.headers },
+  });
+}
+
 vi.mock('@aitu/utils', async () => {
   const actual = await vi.importActual<typeof import('@aitu/utils')>(
     '@aitu/utils'
@@ -183,7 +194,7 @@ describe('cacheRemoteUrl', () => {
 
   it('caches raw base64 image payloads as content-addressed local URLs', async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
-      new Response(mediaBlob(PNG_SIGNATURE, 'image/png'), {
+      mediaResponse(PNG_SIGNATURE, 'image/png', {
         status: 200,
       })
     );
@@ -214,7 +225,7 @@ describe('cacheRemoteUrl', () => {
 
   it('persists explicit internal visibility in cached image metadata', async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
-      new Response(mediaBlob(PNG_SIGNATURE, 'image/png'), {
+      mediaResponse(PNG_SIGNATURE, 'image/png', {
         status: 200,
       })
     );
@@ -244,11 +255,10 @@ describe('cacheRemoteUrl', () => {
   });
 
   it('reuses the same cached file for identical base64 payloads across tasks', async () => {
-    const fetchMock = vi.fn<typeof fetch>().mockImplementation(
-      async () =>
-        new Response(mediaBlob(PNG_SIGNATURE, 'image/png'), {
-          status: 200,
-        })
+    const fetchMock = vi.fn<typeof fetch>().mockImplementation(async () =>
+      mediaResponse(PNG_SIGNATURE, 'image/png', {
+        status: 200,
+      })
     );
 
     vi.stubGlobal('fetch', fetchMock);
@@ -302,7 +312,7 @@ describe('cacheRemoteUrl', () => {
 
   it('materializes a preview Blob URL before it is inserted into the canvas', async () => {
     const blobUrl = 'blob:http://localhost/preview-image';
-    const blob = mediaBlob(WEBP_SIGNATURE, 'image/webp');
+    const blob = await mediaResponse(WEBP_SIGNATURE, 'image/webp').blob();
     getCachedImageBlobWithThumbnailFallback.mockResolvedValueOnce(blob);
     cacheLocalMediaByContent.mockResolvedValueOnce({
       url: '/__aitu_cache__/image/content-preview.webp',
@@ -332,7 +342,10 @@ describe('cacheRemoteUrl', () => {
 
   it('recovers a missing virtual image from its cached thumbnail', async () => {
     const virtualUrl = '/__aitu_cache__/image/expired-task.png';
-    const thumbnailBlob = mediaBlob(WEBP_SIGNATURE, 'image/webp');
+    const thumbnailBlob = await mediaResponse(
+      WEBP_SIGNATURE,
+      'image/webp'
+    ).blob();
     getCachedImageBlobWithThumbnailFallback.mockResolvedValueOnce(
       thumbnailBlob
     );
@@ -402,7 +415,7 @@ describe('cacheRemoteUrl', () => {
 
   it('caches remote https audio urls while keeping original URLs', async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
-      new Response(new Blob(['audio-binary'], { type: 'audio/mpeg' }), {
+      mediaResponse(new Uint8Array([1, 2, 3]), 'audio/mpeg', {
         status: 200,
       })
     );
@@ -439,7 +452,7 @@ describe('cacheRemoteUrl', () => {
 
   it('caches playback-only remote audio urls while keeping original URLs', async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
-      new Response(new Blob(['audio-binary'], { type: 'audio/mpeg' }), {
+      mediaResponse(new Uint8Array([1, 2, 3]), 'audio/mpeg', {
         status: 200,
       })
     );
@@ -473,7 +486,7 @@ describe('cacheRemoteUrl', () => {
 
   it('caches force-remote cover images while keeping original URLs', async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
-      new Response(mediaBlob(JPEG_SIGNATURE, 'image/jpeg'), {
+      mediaResponse(JPEG_SIGNATURE, 'image/jpeg', {
         status: 200,
       })
     );
@@ -511,7 +524,7 @@ describe('cacheRemoteUrl', () => {
     );
 
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
-      new Response(mediaBlob(JPEG_SIGNATURE, 'image/jpeg'), {
+      mediaResponse(JPEG_SIGNATURE, 'image/jpeg', {
         status: 200,
       })
     );
@@ -654,7 +667,7 @@ describe('cacheRemoteUrl', () => {
 
   it('accepts a generic binary MIME response with a valid image signature', async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
-      new Response(mediaBlob(PNG_SIGNATURE, 'application/octet-stream'), {
+      mediaResponse(PNG_SIGNATURE, 'application/octet-stream', {
         status: 200,
       })
     );
@@ -680,7 +693,7 @@ describe('cacheRemoteUrl', () => {
     const fetchMock = vi
       .fn<typeof fetch>()
       .mockResolvedValue(
-        new Response(mediaBlob(MP4_SIGNATURE, 'video/mp4'), { status: 200 })
+        mediaResponse(MP4_SIGNATURE, 'video/mp4', { status: 200 })
       );
     vi.stubGlobal('fetch', fetchMock);
 
@@ -708,7 +721,7 @@ describe('cacheRemoteUrl', () => {
 
   it('reports a cache warning when the local cache write is not persisted', async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
-      new Response(mediaBlob(PNG_SIGNATURE, 'image/png'), {
+      mediaResponse(PNG_SIGNATURE, 'image/png', {
         status: 200,
       })
     );
@@ -746,8 +759,9 @@ describe('cacheRemoteUrl', () => {
 
   it('returns a stable local URL only when explicitly requested', async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
-      new Response(mediaBlob(PNG_SIGNATURE, 'image/png'), {
+      mediaResponse(PNG_SIGNATURE, 'image/png', {
         status: 200,
+        headers: { 'Content-Type': 'image/png' },
       })
     );
     vi.stubGlobal('fetch', fetchMock);
@@ -779,15 +793,18 @@ describe('cacheRemoteUrl', () => {
   });
 
   it('重试使用新提交 ID 作为缓存键，不复用上次图片', async () => {
-    const fetchMock = vi.fn<typeof fetch>().mockImplementation(
-      async (url) =>
-        new Response(
-          new Blob([PNG_SIGNATURE, String(url)], { type: 'image/png' }),
-          {
-            status: 200,
-          }
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockImplementation(async (url) =>
+        mediaResponse(
+          new Uint8Array([
+            ...PNG_SIGNATURE,
+            ...new TextEncoder().encode(String(url)),
+          ]),
+          'image/png',
+          { status: 200 }
         )
-    );
+      );
     vi.stubGlobal('fetch', fetchMock);
 
     const { cacheRemoteUrl } = await import('./fallback-utils');
@@ -827,7 +844,9 @@ describe('cacheRemoteUrl', () => {
     const remoteUrl = 'https://cdn.example.com/generated/cached-image.png';
     const localUrl = '/__aitu_cache__/image/task-cached.png';
     cachedUrls.add(remoteUrl);
-    getCachedBlob.mockResolvedValueOnce(mediaBlob(PNG_SIGNATURE, 'image/png'));
+    getCachedBlob.mockResolvedValueOnce(
+      await mediaResponse(PNG_SIGNATURE, 'image/png').blob()
+    );
     const fetchMock = vi.fn<typeof fetch>();
     vi.stubGlobal('fetch', fetchMock);
 
@@ -845,7 +864,7 @@ describe('cacheRemoteUrl', () => {
     expect(getCachedBlob).toHaveBeenCalledWith(remoteUrl);
     expect(cacheMediaFromBlob).toHaveBeenCalledWith(
       localUrl,
-      expect.any(Blob),
+      blobLike,
       'image',
       {
         taskId: 'task-cached',
@@ -865,7 +884,7 @@ describe('cacheRemoteUrl', () => {
       maxActiveFetches = Math.max(maxActiveFetches, activeFetches);
       await Promise.resolve();
       activeFetches -= 1;
-      return new Response(mediaBlob(PNG_SIGNATURE, 'image/png'), {
+      return mediaResponse(PNG_SIGNATURE, 'image/png', {
         status: 200,
       });
     });
@@ -895,7 +914,7 @@ describe('cacheRemoteUrl', () => {
   it('passes the recovery abort signal to a remote cache fetch', async () => {
     const controller = new AbortController();
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
-      new Response(mediaBlob(PNG_SIGNATURE, 'image/png'), {
+      mediaResponse(PNG_SIGNATURE, 'image/png', {
         status: 200,
       })
     );

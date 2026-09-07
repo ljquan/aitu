@@ -1729,9 +1729,9 @@ export class FallbackMediaExecutor implements IMediaExecutor {
           resultVisibility:
             task.params.resultVisibility === 'internal'
               ? 'internal'
-            : task.params.resultVisibility === 'user'
-            ? 'user'
-            : undefined,
+              : task.params.resultVisibility === 'user'
+              ? 'user'
+              : undefined,
           onCacheWarning: (warning) => {
             cacheWarning ||= warning;
           },
@@ -1750,8 +1750,8 @@ export class FallbackMediaExecutor implements IMediaExecutor {
           task.params.resultVisibility === 'internal'
             ? 'internal'
             : task.params.resultVisibility === 'user'
-          ? 'user'
-          : undefined,
+            ? 'user'
+            : undefined,
         ...(cacheWarning ? { cacheWarning } : {}),
       };
 

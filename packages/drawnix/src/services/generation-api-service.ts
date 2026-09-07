@@ -556,9 +556,7 @@ class GenerationAPIService {
         },
       });
 
-      const originalUrls = result.urls?.length
-        ? result.urls
-        : [result.url];
+      const originalUrls = result.urls?.length ? result.urls : [result.url];
       let cacheWarning: CacheWarning | undefined;
       const cachedUrls = await cacheRemoteUrls(
         originalUrls,
