@@ -1,6 +1,20 @@
 {
   "versions": [
     {
+      "version": "1.1.6",
+      "date": "2026-09-07",
+      "changes": {
+        "features": [
+          "support dragging images into reference inputs (#251)",
+          "融合 AI 语义分层与图片生成增强 (#250)"
+        ],
+        "fixes": [],
+        "improvements": []
+      },
+      "type": "patch",
+      "highlights": "support dragging images into reference inputs (#251)"
+    },
+    {
       "version": "1.1.5",
       "date": "2026-09-03",
       "changes": {
@@ -983,22 +997,6 @@
       },
       "type": "patch",
       "highlights": "构建修复与稳定性改进"
-    },
-    {
-      "version": "0.6.85",
-      "date": "2026-04-28",
-      "changes": {
-        "features": [
-          "增强懒加载资源恢复与SEO优化"
-        ],
-        "fixes": [
-          "修复 default 分组迁移类型检查",
-          "调整 default 分组 GPT Image 默认路由"
-        ],
-        "improvements": []
-      },
-      "type": "patch",
-      "highlights": "增强懒加载资源恢复与SEO优化"
     }
   ]
 }

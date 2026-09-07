@@ -1,3 +1,15 @@
+## 1.1.6 (2026-09-07)
+
+### 🚀 Features
+
+- support dragging images into reference inputs (#251) ([fa4d6dea](https://github.com/ljquan/opentu/commit/fa4d6dea))
+- 融合 AI 语义分层与图片生成增强 (#250) ([7650976c](https://github.com/ljquan/opentu/commit/7650976c))
+
+### ❤️  Thank You
+
+- 李泓震 <3029956183@qq.com>
+- selwen-0102 <2548530499@qq.com>
+
 ## 1.1.5 (2026-09-03)
 
 ### 🚀 Features
