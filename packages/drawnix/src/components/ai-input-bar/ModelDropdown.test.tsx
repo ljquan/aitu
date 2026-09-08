@@ -46,6 +46,12 @@ vi.mock('../../utils/settings-manager', () => ({
   TUZI_ORIGINAL_PROVIDER_PROFILE_ID: 'tuzi-original',
   TUZI_DEFAULT_PROVIDER_NAME: 'Tuzi',
   TUZI_PROVIDER_ICON_URL: 'https://tuzi.example/icon.png',
+  providerCatalogsSettings: {
+    get: () => [],
+    addListener: () => {},
+    removeListener: () => {},
+    update: async () => {},
+  },
   createModelRef: (profileId: string | null, modelId: string) => ({
     profileId,
     modelId,
