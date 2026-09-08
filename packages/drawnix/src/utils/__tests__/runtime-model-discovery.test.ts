@@ -859,6 +859,67 @@ describe('runtime-model-discovery', () => {
     });
   });
 
+  it('外部取消模型发现时保留 AbortError', async () => {
+    let requestSignal: AbortSignal | undefined;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((_url: string, init?: RequestInit) => {
+        requestSignal = init?.signal || undefined;
+        return new Promise((_resolve, reject) => {
+          requestSignal?.addEventListener(
+            'abort',
+            () => {
+              const error = new Error('aborted');
+              error.name = 'AbortError';
+              reject(error);
+            },
+            { once: true }
+          );
+        });
+      })
+    );
+    vi.doMock('../settings-manager', () => ({
+      LEGACY_DEFAULT_PROVIDER_PROFILE_ID: 'legacy-default',
+      providerCatalogsSettings: {
+        get: () => [],
+        addListener: () => {},
+        removeListener: () => {},
+        update: async () => {},
+      },
+      providerProfilesSettings: {
+        get: () => [],
+        addListener: () => {},
+        removeListener: () => {},
+      },
+      invocationPresetsSettings: {
+        addListener: () => {},
+        removeListener: () => {},
+      },
+      settingsManager: {
+        getSetting: () => ({}),
+        addListener: () => {},
+        removeListener: () => {},
+      },
+    }));
+
+    const { runtimeModelDiscovery } = await import(
+      '../runtime-model-discovery'
+    );
+    const controller = new AbortController();
+    const discovery = runtimeModelDiscovery.discover(
+      'provider-abort',
+      'https://api.example.com/v1',
+      'test-key',
+      [],
+      controller.signal
+    );
+
+    controller.abort();
+
+    await expect(discovery).rejects.toMatchObject({ name: 'AbortError' });
+    expect(requestSignal?.aborted).toBe(true);
+  });
+
   it('优先按接口 category 分类模型', async () => {
     vi.stubGlobal(
       'fetch',

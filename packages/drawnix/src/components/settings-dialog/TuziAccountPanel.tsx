@@ -9,11 +9,13 @@ import {
 } from 'react';
 import {
   AlertCircle,
+  Activity,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
   KeyRound,
   Loader2,
+  RefreshCw,
   Settings2,
 } from 'lucide-react';
 import {
@@ -24,6 +26,7 @@ import {
   type TuziLogPage,
   type TuziUsageLog,
   type TuziManagedProvider,
+  type TuziProviderGroup,
 } from '../../services/tuzi-session-api';
 import { synchronizeTuziManagedProviders } from '../../services/tuzi-managed-providers';
 import { discoverAndUseAllTuziProviderModels } from '../../services/tuzi-managed-provider-models';
@@ -31,6 +34,11 @@ import { tuziEmbeddedConfig } from '../../services/tuzi-embedded-config';
 import { providerProfilesSettings } from '../../utils/settings-manager';
 import type { ProviderProfile } from '../../utils/settings-types';
 import { resetTuziSessionProviderSyncCache } from '../../services/tuzi-session-provider-sync';
+import {
+  clearTuziProviderGroupSelection,
+  getTuziProviderGroupSelection,
+  saveTuziProviderGroupSelection,
+} from '../../services/tuzi-provider-selection';
 import {
   clearTuziSystemUserId,
   clearTuziSystemToken,
@@ -81,17 +89,17 @@ interface TuziLogColumn {
   align?: 'right';
 }
 
-const LOG_COLUMN_STORAGE_KEY = 'opentu.tuziAccount.visibleLogColumns.v1';
+const LOG_COLUMN_STORAGE_KEY = 'opentu.tuziAccount.visibleLogColumns.v2';
 const LOG_COLUMNS: TuziLogColumn[] = [
-  { id: 'time', label: '时间', width: 'minmax(136px, 1.05fr)' },
-  { id: 'channel', label: '渠道', width: 'minmax(92px, 0.75fr)' },
-  { id: 'user', label: '用户', width: 'minmax(72px, 0.6fr)' },
+  { id: 'time', label: '时间', width: 'minmax(136px, 0.9fr)' },
+  { id: 'channel', label: '渠道', width: 'minmax(64px, 0.45fr)' },
+  { id: 'user', label: '用户', width: 'minmax(132px, 0.85fr)' },
   { id: 'token', label: '令牌', width: 'minmax(132px, 1fr)' },
-  { id: 'group', label: '分组', width: 'minmax(84px, 0.7fr)' },
+  { id: 'group', label: '分组', width: 'minmax(72px, 0.5fr)' },
   { id: 'type', label: '类型', width: 'minmax(64px, 0.55fr)' },
   { id: 'callStatus', label: '调用状态', width: 'minmax(92px, 0.75fr)' },
-  { id: 'model', label: '模型', width: 'minmax(140px, 1.15fr)' },
-  { id: 'useTime', label: '用时', width: 'minmax(72px, 0.6fr)' },
+  { id: 'model', label: '模型', width: 'minmax(150px, 1.05fr)' },
+  { id: 'useTime', label: '用时', width: 'minmax(72px, 0.5fr)' },
   { id: 'input', label: '输入', width: 'minmax(64px, 0.55fr)', align: 'right' },
   {
     id: 'output',
@@ -101,11 +109,11 @@ const LOG_COLUMNS: TuziLogColumn[] = [
   },
   { id: 'ip', label: 'IP', width: 'minmax(104px, 0.8fr)' },
   { id: 'retry', label: '重试', width: 'minmax(64px, 0.55fr)', align: 'right' },
-  { id: 'details', label: '详情', width: 'minmax(104px, 0.8fr)' },
+  { id: 'details', label: '详情', width: 'minmax(220px, 1.35fr)' },
   {
     id: 'amount',
     label: '金额',
-    width: 'minmax(96px, 0.75fr)',
+    width: 'minmax(82px, 0.6fr)',
     align: 'right',
   },
   { id: 'requestId', label: 'Request ID', width: 'minmax(128px, 1fr)' },
@@ -119,8 +127,9 @@ const DEFAULT_LOG_COLUMN_IDS: TuziLogColumnId[] = [
   'time',
   'channel',
   'user',
+  'group',
   'model',
-  'output',
+  'useTime',
   'details',
   'amount',
 ];
@@ -187,6 +196,13 @@ function formatLogTime(timestamp: number): string {
   }).format(new Date(timestamp * 1000));
 }
 
+function formatLogTimeParts(timestamp: number): { date: string; time: string } {
+  if (!timestamp) return { date: '-', time: '' };
+  const value = formatLogTime(timestamp);
+  const [date = value, time = ''] = value.replace(/\//g, '-').split(' ');
+  return { date, time };
+}
+
 function formatOutputTokens(log: TuziUsageLog): string {
   return formatInteger(log.completionTokens || 0);
 }
@@ -199,7 +215,22 @@ function formatLogType(log: TuziUsageLog): string {
 }
 
 function formatUseTime(log: TuziUsageLog): string {
-  return log.useTime ? `${log.useTime} ms` : '-';
+  return log.useTime ? `${log.useTime} s` : '-';
+}
+
+function logBadgeTone(value: string): number {
+  let hash = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    hash = (hash * 31 + value.charCodeAt(index)) >>> 0;
+  }
+  return hash % 6;
+}
+
+function logSummary(log: TuziUsageLog): string {
+  const detail = log.other.log_detail;
+  if (typeof detail === 'string' && detail.trim()) return detail.trim();
+  if (log.content.trim()) return log.content.trim();
+  return log.callStatus || formatLogType(log);
 }
 
 function logChannelLabel(log: TuziUsageLog): string {
@@ -343,7 +374,7 @@ function buildLogDetailItems(log: TuziUsageLog): LogDetailItem[] {
   add('其他详情', log.content, true);
   add('Prompt Tokens', formatInteger(log.promptTokens || 0));
   add('Completion Tokens', formatInteger(log.completionTokens || 0));
-  add('耗时', log.useTime ? `${log.useTime} ms` : '-');
+  add('耗时', log.useTime ? `${log.useTime} s` : '-');
 
   const remainingOther = Object.fromEntries(
     Object.entries(log.other).filter(([key]) => !consumedOtherKeys.has(key))
@@ -451,7 +482,13 @@ function clearTuziDataCache(): void {
   }
 }
 
-function localManagedProviders(): TuziManagedProvider[] {
+function localManagedProviders(
+  allowedGroups?: readonly string[] | null
+): TuziManagedProvider[] {
+  const allowed =
+    allowedGroups === null || allowedGroups === undefined
+      ? null
+      : new Set(allowedGroups.map((group) => group.trim()).filter(Boolean));
   return providerProfilesSettings
     .get()
     .filter(
@@ -461,12 +498,17 @@ function localManagedProviders(): TuziManagedProvider[] {
     )
     .map((profile: ProviderProfile) => ({
       id: profile.id,
-      group: profile.pricingGroup || profile.name,
+      group: (profile.pricingGroup || profile.name).trim(),
       displayName: profile.name,
       apiKey: profile.apiKey,
       status: profile.enabled === false ? 0 : 1,
       rotatedAt: 0,
-    }));
+    }))
+    .filter(
+      (provider) =>
+        provider.group.length > 0 &&
+        (allowed === null || allowed.has(provider.group))
+    );
 }
 
 interface TuziAccountPanelProps {
@@ -477,11 +519,20 @@ export function TuziAccountPanel({
   onProvidersChanged,
 }: TuziAccountPanelProps) {
   const accountRequestVersion = useRef(0);
+  const modelsRequestVersion = useRef(0);
   const logsRequestVersion = useRef(0);
   const refreshProvidersOnNextLoad = useRef(false);
+  const initialStoredSelection = getTuziProviderGroupSelection(
+    getTuziSystemUserId()
+  );
+  const providerSelectionRequired = useRef(
+    localManagedProviders(initialStoredSelection).length === 0 &&
+      initialStoredSelection === null
+  );
   const onProvidersChangedRef = useRef(onProvidersChanged);
   const [systemToken, setSystemToken] = useState(getTuziSystemToken);
   const [systemUserId, setSystemUserId] = useState(getTuziSystemUserId);
+  const [connectionRevision, setConnectionRevision] = useState(0);
   const [tokenDraft, setTokenDraft] = useState('');
   const createClient = useCallback(
     (token = systemToken, userId = getTuziSystemUserId()) =>
@@ -490,9 +541,18 @@ export function TuziAccountPanel({
   );
   const [activeView, setActiveView] = useState<TuziAccountView>('balance');
   const [account, setAccount] = useState<TuziAccount | null>(null);
-  const [providers, setProviders] = useState<TuziManagedProvider[]>(
-    localManagedProviders
+  const [providers, setProviders] = useState<TuziManagedProvider[]>(() =>
+    localManagedProviders(initialStoredSelection)
   );
+  const [availableGroups, setAvailableGroups] = useState<TuziProviderGroup[]>(
+    []
+  );
+  const [selectedGroups, setSelectedGroups] = useState<string[]>([]);
+  const [providerSelectionPending, setProviderSelectionPending] =
+    useState(false);
+  const [providerSelectionLoading, setProviderSelectionLoading] =
+    useState(false);
+  const [providerSelectionFailed, setProviderSelectionFailed] = useState(false);
   const [displayConfig, setDisplayConfig] = useState<TuziDisplayConfig>(
     DEFAULT_DISPLAY_CONFIG
   );
@@ -504,6 +564,8 @@ export function TuziAccountPanel({
   >(readVisibleLogColumns);
   const [columnSettingsOpen, setColumnSettingsOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [providersLoading, setProvidersLoading] = useState(false);
+  const [modelsLoading, setModelsLoading] = useState(false);
   const [logsLoading, setLogsLoading] = useState(false);
   const [rotatingGroup, setRotatingGroup] = useState<string | null>(null);
   const [error, setError] = useState<{ code: string; message: string } | null>(
@@ -524,6 +586,10 @@ export function TuziAccountPanel({
       setError({ code: 'NOT_CONFIGURED', message: '请输入系统访问令牌' });
       return;
     }
+    const credentialsChanged =
+      nextToken !== systemToken ||
+      systemUserId.trim() !== getTuziSystemUserId();
+    clearTuziProviderGroupSelection(systemUserId);
     if (!saveTuziSystemToken(nextToken)) {
       setError({ code: 'REQUEST_FAILED', message: '系统访问令牌保存失败' });
       return;
@@ -533,16 +599,38 @@ export function TuziAccountPanel({
     logsRequestVersion.current += 1;
     refreshProvidersOnNextLoad.current = true;
     setSystemToken(nextToken);
+    setConnectionRevision((current) => current + 1);
     resetTuziSessionProviderSyncCache();
     setTokenDraft('');
-    clearTuziDataCache();
-    setAccount(null);
-    setProviders([]);
-    setDisplayConfigReady(false);
-    setLogs(EMPTY_LOG_PAGE);
+    if (credentialsChanged) {
+      clearTuziDataCache();
+      setAccount(null);
+      setProviders([]);
+      setDisplayConfigReady(false);
+      setLogs(EMPTY_LOG_PAGE);
+    }
+    setAvailableGroups([]);
+    setSelectedGroups([]);
+    setProviderSelectionPending(false);
+    setProviderSelectionLoading(false);
+    setProviderSelectionFailed(false);
+    providerSelectionRequired.current = true;
     setLoading(true);
+    setProvidersLoading(false);
+    modelsRequestVersion.current += 1;
+    setModelsLoading(false);
     setError(null);
-  }, [systemUserId, tokenDraft]);
+    if (!credentialsChanged) return;
+    try {
+      await synchronizeTuziManagedProviders([]);
+      onProvidersChangedRef.current?.();
+    } catch (syncError) {
+      console.warn(
+        '[Tuzi] Failed to clear previous managed providers:',
+        syncError
+      );
+    }
+  }, [systemToken, systemUserId, tokenDraft]);
 
   const clearToken = useCallback(async () => {
     accountRequestVersion.current += 1;
@@ -556,6 +644,15 @@ export function TuziAccountPanel({
     setTokenDraft('');
     setAccount(null);
     setProviders([]);
+    setAvailableGroups([]);
+    setSelectedGroups([]);
+    setProviderSelectionPending(false);
+    setProviderSelectionLoading(false);
+    setProviderSelectionFailed(false);
+    providerSelectionRequired.current = true;
+    setProvidersLoading(false);
+    modelsRequestVersion.current += 1;
+    setModelsLoading(false);
     setDisplayConfigReady(false);
     setLogs(EMPTY_LOG_PAGE);
     setError(null);
@@ -599,7 +696,13 @@ export function TuziAccountPanel({
   );
 
   const load = useCallback(
-    async (refreshProviders = false) => {
+    async (
+      refreshProviders = false,
+      discoverModels = false,
+      groups?: readonly string[],
+      prepareProviderSelection = false,
+      resetProviderSelection = false
+    ) => {
       const requestVersion = ++accountRequestVersion.current;
       const requestToken = systemToken;
       const isCurrentRequest = () =>
@@ -608,8 +711,40 @@ export function TuziAccountPanel({
       setLoading(true);
       setError(null);
       setDisplayConfigReady(false);
+      if (prepareProviderSelection) {
+        // Reveal the selection step immediately. Account and provider work is
+        // the second phase and must not hide this first, actionable screen.
+        setProviderSelectionPending(true);
+        setProviderSelectionLoading(true);
+        setProviderSelectionFailed(false);
+      }
       let hasCachedAccount = false;
       try {
+        if (prepareProviderSelection) {
+          const nextGroups = await createClient().getProviderGroups();
+          if (!isCurrentRequest()) return;
+          const selectionUserId = getTuziSystemUserId();
+          const persistedSelection = resetProviderSelection
+            ? null
+            : getTuziProviderGroupSelection(selectionUserId);
+          const existingSelection = resetProviderSelection
+            ? []
+            : providerSelectionRequired.current
+            ? localManagedProviders().map((provider) => provider.group)
+            : [];
+          const allowedGroups = new Set(nextGroups.map((group) => group.group));
+          setAvailableGroups(nextGroups);
+          setSelectedGroups(
+            (persistedSelection || existingSelection).filter((group) =>
+              allowedGroups.has(group)
+            )
+          );
+          setProviderSelectionLoading(false);
+          setProviderSelectionFailed(false);
+          providerSelectionRequired.current = false;
+          refreshProvidersOnNextLoad.current = false;
+          return;
+        }
         const cached = readStoredCache<{
           account: TuziAccount;
           displayConfig: TuziDisplayConfig;
@@ -619,47 +754,104 @@ export function TuziAccountPanel({
           setAccount(cached.account);
           setDisplayConfig(cached.displayConfig);
           setDisplayConfigReady(true);
-          setProviders(localManagedProviders());
-          setLoading(false);
+          const cachedSelection = getTuziProviderGroupSelection(
+            cached.account.id
+          );
+          setProviders(localManagedProviders(cachedSelection));
+          if (!refreshProviders && !prepareProviderSelection) {
+            setLoading(false);
+          }
         }
         const client = createClient();
-        const [accountResult, displayConfigResult] = await Promise.allSettled([
-          client.getAccount(),
-          client.getDisplayConfig(),
-        ]);
+        // Account data is critical for the first paint. Display configuration
+        // only affects formatting, so let it resolve in the background instead
+        // of making a slow /api/status response hold the whole panel hostage.
+        const displayConfigPromise = client
+          .getDisplayConfig()
+          .catch(() => DEFAULT_DISPLAY_CONFIG);
+        const nextAccount = await client.getAccount();
         if (!isCurrentRequest()) return;
-        if (accountResult.status === 'rejected') {
-          throw accountResult.reason;
-        }
-        const nextAccount = accountResult.value;
-        const nextDisplayConfig =
-          displayConfigResult.status === 'fulfilled'
-            ? displayConfigResult.value
-            : DEFAULT_DISPLAY_CONFIG;
+        // Publish the critical account data before optional provider/model work.
+        // This also lets the cached layout become interactive while the
+        // formatting request is still in flight.
+        setAccount(nextAccount);
+        hasCachedAccount = true;
+        setLoading(false);
         if (saveTuziSystemUserId(nextAccount.id)) {
           setSystemUserId(String(nextAccount.id));
         }
-        let nextProviders = localManagedProviders();
+        void displayConfigPromise.then((nextDisplayConfig) => {
+          if (!isCurrentRequest()) return;
+          setDisplayConfig(nextDisplayConfig);
+          setDisplayConfigReady(true);
+          writeCache(ACCOUNT_CACHE_KEY, {
+            account: nextAccount,
+            displayConfig: nextDisplayConfig,
+          });
+        });
+        const persistedGroups =
+          getTuziProviderGroupSelection(nextAccount.id) ||
+          getTuziProviderGroupSelection(getTuziSystemUserId());
+        let nextProviders = prepareProviderSelection
+          ? []
+          : localManagedProviders(persistedGroups);
         if (refreshProviders) {
+          // Account data is already usable. Provider persistence and runtime
+          // model updates are a separate phase and must not keep the central
+          // account loader visible.
+          setProvidersLoading(true);
+          await new Promise<void>((resolve) => setTimeout(resolve, 0));
+          if (!isCurrentRequest()) return;
           nextProviders = await createClient(
             requestToken,
             String(nextAccount.id)
-          ).ensureManagedProviders();
+          ).ensureManagedProviders(groups);
+          if (!isCurrentRequest()) return;
+          setProviders(nextProviders);
+          await new Promise<void>((resolve) => setTimeout(resolve, 0));
           if (!isCurrentRequest()) return;
           await synchronizeTuziManagedProviders(nextProviders);
           if (!isCurrentRequest()) return;
           onProvidersChangedRef.current?.();
+          if (discoverModels && nextProviders.length > 0) {
+            // Model discovery is intentionally non-blocking. The account and
+            // selected Keys are usable before a slow provider /models endpoint
+            // responds, and a discovery timeout must not trap the whole panel
+            // in its global loading state.
+            const modelsRequest = ++modelsRequestVersion.current;
+            setModelsLoading(true);
+            void Promise.allSettled(
+              nextProviders.map((provider) =>
+                discoverAndUseAllTuziProviderModels(provider)
+              )
+            ).then((discoveryResults) => {
+              discoveryResults.forEach((result, index) => {
+                if (result.status === 'rejected') {
+                  console.warn(
+                    `[Tuzi] Failed to synchronize models for ${nextProviders[index].group}:`,
+                    result.reason
+                  );
+                }
+              });
+              if (
+                modelsRequest === modelsRequestVersion.current &&
+                getTuziSystemToken() === requestToken
+              ) {
+                setModelsLoading(false);
+              }
+            });
+          }
         }
         setAccount(nextAccount);
-        setDisplayConfig(nextDisplayConfig);
-        setDisplayConfigReady(true);
         setProviders(nextProviders);
-        writeCache(ACCOUNT_CACHE_KEY, {
-          account: nextAccount,
-          displayConfig: nextDisplayConfig,
-        });
       } catch (loadError) {
         if (!isCurrentRequest()) return;
+        if (prepareProviderSelection) {
+          providerSelectionRequired.current = true;
+          refreshProvidersOnNextLoad.current = true;
+          setProviderSelectionLoading(false);
+          setProviderSelectionFailed(true);
+        }
         if (!hasCachedAccount) {
           setAccount(null);
           setProviders([]);
@@ -667,12 +859,60 @@ export function TuziAccountPanel({
         setError(errorState(loadError));
       } finally {
         if (isCurrentRequest()) {
+          if (prepareProviderSelection) {
+            setProviderSelectionLoading(false);
+          }
+          setProvidersLoading(false);
           setLoading(false);
         }
       }
     },
     [createClient, systemToken]
   );
+
+  const handleManualRefresh = useCallback(() => {
+    if (
+      loading ||
+      providersLoading ||
+      modelsLoading ||
+      providerSelectionPending ||
+      !systemToken
+    ) {
+      return;
+    }
+    const groups = account
+      ? getTuziProviderGroupSelection(account.id) ||
+        providers.map((item) => item.group)
+      : providers.map((item) => item.group);
+    void load(true, true, groups);
+  }, [
+    account,
+    load,
+    loading,
+    modelsLoading,
+    providerSelectionPending,
+    providers,
+    providersLoading,
+    systemToken,
+  ]);
+
+  const applyProviderSelection = useCallback(() => {
+    if (loading || providerSelectionLoading || providerSelectionFailed) return;
+    const selectionUserId = account?.id || systemUserId;
+    if (!selectionUserId) return;
+    saveTuziProviderGroupSelection(selectionUserId, selectedGroups);
+    setProviderSelectionPending(false);
+    resetTuziSessionProviderSyncCache();
+    void load(true, true, selectedGroups);
+  }, [
+    account,
+    load,
+    loading,
+    providerSelectionFailed,
+    providerSelectionLoading,
+    selectedGroups,
+    systemUserId,
+  ]);
 
   const rotateProvider = useCallback(
     async (group: string) => {
@@ -709,9 +949,15 @@ export function TuziAccountPanel({
 
   useEffect(() => {
     if (systemToken) {
-      const refreshProviders = refreshProvidersOnNextLoad.current;
-      refreshProvidersOnNextLoad.current = false;
-      void load(refreshProviders);
+      const prepareProviderSelection =
+        refreshProvidersOnNextLoad.current || providerSelectionRequired.current;
+      void load(
+        false,
+        false,
+        undefined,
+        prepareProviderSelection,
+        refreshProvidersOnNextLoad.current
+      );
     } else {
       setLoading(false);
       setAccount(null);
@@ -719,7 +965,7 @@ export function TuziAccountPanel({
       setLogs(EMPTY_LOG_PAGE);
       setDisplayConfigReady(false);
     }
-  }, [load, systemToken]);
+  }, [connectionRevision, load, systemToken]);
 
   useEffect(() => {
     if (
@@ -829,6 +1075,10 @@ export function TuziAccountPanel({
     ? '等待令牌'
     : loading
     ? '同步中'
+    : providersLoading
+    ? 'Provider 同步中'
+    : modelsLoading
+    ? '模型同步中'
     : error
     ? '同步失败'
     : '已同步';
@@ -860,106 +1110,205 @@ export function TuziAccountPanel({
         </aside>
 
         <main className="tuzi-account-panel__main">
-          <header className="tuzi-account-panel__account">
-            <div>
-              <h2>Tuzi 账户</h2>
-              <p>{account?.displayName || account?.username || '当前账户'}</p>
-            </div>
-            <div
-              className="tuzi-account-panel__status-list"
-              aria-label="账户状态"
-            >
-              <span
-                className={
-                  error
-                    ? 'tuzi-account-panel__status tuzi-account-panel__status--danger'
-                    : 'tuzi-account-panel__status tuzi-account-panel__status--ok'
-                }
-              >
-                {loginStatusText}
-              </span>
-              <span
-                className={
-                  loading
-                    ? 'tuzi-account-panel__status tuzi-account-panel__status--pending'
-                    : error
-                    ? 'tuzi-account-panel__status tuzi-account-panel__status--danger'
-                    : 'tuzi-account-panel__status'
-                }
-              >
-                {syncStatusText}
-              </span>
-            </div>
-          </header>
-
-          <div className="tuzi-account-panel__content">
-            <section
-              className="tuzi-account-panel__token"
-              aria-labelledby="tuzi-system-token-title"
-            >
-              <div className="tuzi-account-panel__token-heading">
-                <div>
-                  <h3 id="tuzi-system-token-title">
-                    <KeyRound size={16} aria-hidden="true" />
-                    系统访问令牌
-                  </h3>
-                  <p>
-                    使用系统令牌读取账户数据并同步托管 Provider。
-                    <a
-                      href="https://api.tu-zi.com/console/personal"
-                      target="_blank"
-                      rel="noreferrer"
-                      className="tuzi-account-panel__token-link"
-                    >
-                      前往个人设置复制令牌
-                    </a>
-                  </p>
-                </div>
+          {activeView === 'balance' || providerSelectionPending ? (
+            <header className="tuzi-account-panel__account">
+              <div>
+                <h2>Tuzi 账户</h2>
+                <p>{account?.displayName || account?.username || '当前账户'}</p>
               </div>
-              <div className="tuzi-account-panel__token-actions">
-                <input
-                  id="tuzi-system-user-id"
-                  type="text"
-                  inputMode="numeric"
-                  value={systemUserId}
-                  onChange={(event) =>
-                    setSystemUserId(event.target.value.replace(/\D/g, ''))
+              <div
+                className="tuzi-account-panel__status-list"
+                aria-label="账户状态"
+              >
+                <span
+                  className={
+                    error
+                      ? 'tuzi-account-panel__status tuzi-account-panel__status--danger'
+                      : 'tuzi-account-panel__status tuzi-account-panel__status--ok'
                   }
-                  onBlur={() => saveTuziSystemUserId(systemUserId)}
-                  placeholder="用户 ID"
-                  aria-label="Tuzi 用户 ID"
-                  autoComplete="off"
-                />
-                <input
-                  id="tuzi-system-token"
-                  type="password"
-                  value={tokenDraft}
-                  onChange={(event) => setTokenDraft(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter') void saveToken();
-                  }}
-                  placeholder={
-                    systemToken
-                      ? maskTuziSystemToken(systemToken)
-                      : '粘贴系统访问令牌'
+                >
+                  {loginStatusText}
+                </span>
+                <span
+                  className={
+                    loading || providersLoading || modelsLoading
+                      ? 'tuzi-account-panel__status tuzi-account-panel__status--pending'
+                      : error
+                      ? 'tuzi-account-panel__status tuzi-account-panel__status--danger'
+                      : 'tuzi-account-panel__status'
                   }
-                  aria-label="系统访问令牌"
-                  autoComplete="off"
-                />
-                <button type="button" onClick={() => void saveToken()}>
-                  {systemToken ? '替换令牌' : '连接'}
-                </button>
-                {systemToken ? (
+                >
+                  {syncStatusText}
+                </span>
+                <HoverTip content="刷新账户、分组和模型" showArrow={false}>
                   <button
                     type="button"
-                    className="is-subtle"
-                    onClick={() => void clearToken()}
+                    className="tuzi-account-panel__refresh"
+                    aria-label="刷新账户数据"
+                    disabled={
+                      loading ||
+                      providersLoading ||
+                      modelsLoading ||
+                      providerSelectionPending ||
+                      !systemToken
+                    }
+                    onClick={handleManualRefresh}
                   >
-                    清除
+                    <RefreshCw
+                      size={16}
+                      className={
+                        loading || providersLoading || modelsLoading
+                          ? 'is-spinning'
+                          : undefined
+                      }
+                      aria-hidden="true"
+                    />
                   </button>
-                ) : null}
+                </HoverTip>
               </div>
-            </section>
+            </header>
+          ) : null}
+
+          <div className="tuzi-account-panel__content">
+            {activeView === 'balance' || providerSelectionPending ? (
+              <section
+                className="tuzi-account-panel__token"
+                aria-labelledby="tuzi-system-token-title"
+              >
+                <div className="tuzi-account-panel__token-heading">
+                  <div>
+                    <h3 id="tuzi-system-token-title">
+                      <KeyRound size={16} aria-hidden="true" />
+                      系统访问令牌
+                    </h3>
+                    <p>
+                      使用系统令牌读取账户数据并同步托管 Provider。
+                      <a
+                        href="https://api.tu-zi.com/console/personal"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="tuzi-account-panel__token-link"
+                      >
+                        前往个人设置复制令牌
+                      </a>
+                    </p>
+                  </div>
+                </div>
+                <div className="tuzi-account-panel__token-actions">
+                  <input
+                    id="tuzi-system-user-id"
+                    type="text"
+                    inputMode="numeric"
+                    value={systemUserId}
+                    onChange={(event) =>
+                      setSystemUserId(event.target.value.replace(/\D/g, ''))
+                    }
+                    onBlur={() => saveTuziSystemUserId(systemUserId)}
+                    placeholder="用户 ID"
+                    aria-label="Tuzi 用户 ID"
+                    autoComplete="off"
+                  />
+                  <input
+                    id="tuzi-system-token"
+                    type="password"
+                    value={tokenDraft}
+                    onChange={(event) => setTokenDraft(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') void saveToken();
+                    }}
+                    placeholder={
+                      systemToken
+                        ? maskTuziSystemToken(systemToken)
+                        : '粘贴系统访问令牌'
+                    }
+                    aria-label="系统访问令牌"
+                    autoComplete="off"
+                  />
+                  <button type="button" onClick={() => void saveToken()}>
+                    {systemToken ? '替换令牌' : '连接'}
+                  </button>
+                  {systemToken ? (
+                    <button
+                      type="button"
+                      className="is-subtle"
+                      onClick={() => void clearToken()}
+                    >
+                      清除
+                    </button>
+                  ) : null}
+                </div>
+              </section>
+            ) : null}
+            {providerSelectionPending ? (
+              <section
+                className="tuzi-account-panel__provider-selection"
+                aria-labelledby="tuzi-provider-selection-title"
+              >
+                <div className="tuzi-account-panel__section-heading">
+                  <div>
+                    <h3 id="tuzi-provider-selection-title">选择要连接的分组</h3>
+                    <span>
+                      未勾选的分组不会创建 API Key，也不会出现在供应商中。
+                    </span>
+                  </div>
+                  <span>{selectedGroups.length} 个已选</span>
+                </div>
+                {providerSelectionLoading ? (
+                  <div className="tuzi-account-panel__loading">
+                    <Loader2 size={18} className="is-spinning" />
+                    <span>正在读取可用分组</span>
+                  </div>
+                ) : providerSelectionFailed ? null : availableGroups.length ? (
+                  <div className="tuzi-account-panel__provider-options">
+                    {availableGroups.map((group) => (
+                      <label
+                        key={group.group}
+                        className={
+                          selectedGroups.includes(group.group)
+                            ? 'is-selected'
+                            : undefined
+                        }
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedGroups.includes(group.group)}
+                          onChange={() =>
+                            setSelectedGroups((current) =>
+                              current.includes(group.group)
+                                ? current.filter((item) => item !== group.group)
+                                : [...current, group.group]
+                            )
+                          }
+                        />
+                        <span>
+                          <strong>{group.displayName}</strong>
+                          <small>{group.group}</small>
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="tuzi-account-panel__empty">暂无可用分组</div>
+                )}
+                <div className="tuzi-account-panel__provider-selection-actions">
+                  <button
+                    type="button"
+                    disabled={
+                      loading ||
+                      providerSelectionLoading ||
+                      providerSelectionFailed ||
+                      (!account && !systemUserId)
+                    }
+                    onClick={applyProviderSelection}
+                  >
+                    {loading ? (
+                      <Loader2 size={16} className="is-spinning" />
+                    ) : null}
+                    应用分组并连接
+                  </button>
+                </div>
+              </section>
+            ) : null}
             {error ? (
               <div className="tuzi-account-panel__error" role="alert">
                 <AlertCircle size={20} />
@@ -978,14 +1327,36 @@ export function TuziAccountPanel({
                 <button
                   type="button"
                   disabled={loading || !systemToken}
-                  onClick={() => void load(true)}
+                  onClick={() =>
+                    providerSelectionRequired.current ||
+                    refreshProvidersOnNextLoad.current
+                      ? void load(
+                          false,
+                          false,
+                          undefined,
+                          true,
+                          refreshProvidersOnNextLoad.current
+                        )
+                      : void load(
+                          true,
+                          false,
+                          account
+                            ? getTuziProviderGroupSelection(account.id) ||
+                                providers.map((provider) => provider.group)
+                            : systemUserId
+                            ? getTuziProviderGroupSelection(systemUserId) ||
+                              providers.map((provider) => provider.group)
+                            : providers.map((provider) => provider.group)
+                        )
+                  }
                 >
                   重试
                 </button>
               </div>
             ) : null}
 
-            {!systemToken || (!loading && (!account || error)) ? (
+            {providerSelectionPending ? null : !systemToken ||
+              (!loading && (!account || error)) ? (
               <div className="tuzi-account-panel__not-configured">
                 <KeyRound size={24} aria-hidden="true" />
                 <strong>
@@ -1195,6 +1566,11 @@ export function TuziAccountPanel({
                           <button
                             type="button"
                             className="tuzi-account-panel__log-row"
+                            aria-label={
+                              (expandedLogId === log.id ? '收起' : '展开') +
+                              '日志 ' +
+                              log.id
+                            }
                             aria-expanded={expandedLogId === log.id}
                             style={logGridStyle}
                             onClick={() =>
@@ -1204,29 +1580,122 @@ export function TuziAccountPanel({
                             }
                           >
                             {visibleLogColumns.map((column) => {
+                              const expanded = expandedLogId === log.id;
                               if (column.id === 'time') {
+                                const timeParts = formatLogTimeParts(
+                                  log.createdAt
+                                );
                                 return (
-                                  <time key={column.id}>
-                                    {formatLogTime(log.createdAt)}
+                                  <time
+                                    key={column.id}
+                                    className="tuzi-account-panel__log-time"
+                                  >
+                                    <ChevronRight
+                                      size={15}
+                                      aria-hidden="true"
+                                      className={
+                                        expanded ? 'is-expanded' : undefined
+                                      }
+                                    />
+                                    <span>
+                                      <strong>{timeParts.date}</strong>
+                                      <small>{timeParts.time}</small>
+                                    </span>
                                   </time>
                                 );
                               }
-                              if (column.id === 'model') {
+                              if (column.id === 'channel') {
+                                const channel = logChannelLabel(log);
                                 return (
-                                  <strong key={column.id}>
-                                    {log.modelName || '系统记录'}
-                                  </strong>
+                                  <span
+                                    key={column.id}
+                                    className="tuzi-account-panel__log-badge"
+                                    data-tone={logBadgeTone(channel)}
+                                    title={channel}
+                                  >
+                                    {channel}
+                                  </span>
+                                );
+                              }
+                              if (column.id === 'user') {
+                                const user = logUserLabel(log, account);
+                                return (
+                                  <span
+                                    key={column.id}
+                                    className="tuzi-account-panel__log-user"
+                                    title={user}
+                                  >
+                                    <span
+                                      className="tuzi-account-panel__log-user-avatar"
+                                      data-tone={logBadgeTone(user)}
+                                      aria-hidden="true"
+                                    >
+                                      {user === '-'
+                                        ? '?'
+                                        : user.charAt(0).toUpperCase()}
+                                    </span>
+                                    <span>{user}</span>
+                                  </span>
+                                );
+                              }
+                              if (
+                                column.id === 'token' ||
+                                column.id === 'group'
+                              ) {
+                                const value =
+                                  column.id === 'token'
+                                    ? logTokenLabel(log)
+                                    : logGroupLabel(log);
+                                return (
+                                  <span
+                                    key={column.id}
+                                    className="tuzi-account-panel__log-badge tuzi-account-panel__log-badge--muted"
+                                    data-tone={logBadgeTone(value)}
+                                    title={value}
+                                  >
+                                    {value}
+                                  </span>
+                                );
+                              }
+                              if (column.id === 'model') {
+                                const model = log.modelName || '系统记录';
+                                return (
+                                  <span
+                                    key={column.id}
+                                    className="tuzi-account-panel__log-model"
+                                    title={model}
+                                  >
+                                    <Activity size={14} aria-hidden="true" />
+                                    <strong>{model}</strong>
+                                  </span>
+                                );
+                              }
+                              if (column.id === 'useTime') {
+                                const duration = log.useTime || 0;
+                                return (
+                                  <span
+                                    key={column.id}
+                                    className="tuzi-account-panel__log-duration"
+                                    data-tone={
+                                      duration < 101
+                                        ? 'fast'
+                                        : duration < 300
+                                        ? 'medium'
+                                        : 'slow'
+                                    }
+                                  >
+                                    {formatUseTime(log)}
+                                  </span>
                                 );
                               }
                               if (column.id === 'details') {
                                 return (
                                   <span
                                     key={column.id}
-                                    className="tuzi-account-panel__log-detail-preview"
+                                    className="tuzi-account-panel__log-summary"
+                                    title={logSummary(log)}
                                   >
-                                    {expandedLogId === log.id
-                                      ? '收起详情'
-                                      : '查看详情'}
+                                    {logSummary(log)}
                                   </span>
                                 );
                               }
@@ -1244,20 +1713,10 @@ export function TuziAccountPanel({
                               }
 
                               const value =
-                                column.id === 'channel'
-                                  ? logChannelLabel(log)
-                                  : column.id === 'user'
-                                  ? logUserLabel(log, account)
-                                  : column.id === 'token'
-                                  ? logTokenLabel(log)
-                                  : column.id === 'group'
-                                  ? logGroupLabel(log)
-                                  : column.id === 'type'
+                                column.id === 'type'
                                   ? formatLogType(log)
                                   : column.id === 'callStatus'
                                   ? log.callStatus || '-'
-                                  : column.id === 'useTime'
-                                  ? formatUseTime(log)
                                   : column.id === 'input'
                                   ? formatInteger(log.promptTokens || 0)
                                   : column.id === 'output'

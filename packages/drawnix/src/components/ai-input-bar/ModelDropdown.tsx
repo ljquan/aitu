@@ -15,6 +15,7 @@ import React, {
   useEffect,
   useMemo,
 } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { copyToClipboard } from '../../utils/runtime-helpers';
 import { createPortal } from 'react-dom';
 import {
@@ -22,6 +23,7 @@ import {
   ChevronDown,
   Copy,
   ExternalLink,
+  Loader2,
   Plus,
   Search,
   X,
@@ -72,18 +74,26 @@ import { queueProviderSettingsNavigation } from '../settings-dialog/provider-set
 
 const lazyProviderModelLoads = new Map<string, Promise<void>>();
 
-function ensureProviderModels(profile?: ProviderProfile | null): void {
+function ensureProviderModels(
+  profile?: ProviderProfile | null
+): Promise<void> | null {
   if (
     !profile?.id.startsWith('tuzi-managed-') ||
     !profile.apiKey.trim() ||
     !profile.baseUrl.trim()
   ) {
-    return;
+    return null;
   }
 
   const state = runtimeModelDiscovery.getState(profile.id);
-  if (state.discoveredModels.length > 0 || state.status === 'loading') return;
-  if (lazyProviderModelLoads.has(profile.id)) return;
+  if (state.discoveredModels.length > 0 || state.status === 'loading') {
+    const inFlightLoad =
+      lazyProviderModelLoads.get(profile.id) ||
+      runtimeModelDiscovery.getInFlightDiscovery(profile.id);
+    return inFlightLoad?.then(() => undefined) || null;
+  }
+  const existingLoad = lazyProviderModelLoads.get(profile.id);
+  if (existingLoad) return existingLoad;
 
   const load = runtimeModelDiscovery
     .discover(profile.id, profile.baseUrl, profile.apiKey)
@@ -100,6 +110,7 @@ function ensureProviderModels(profile?: ProviderProfile | null): void {
       lazyProviderModelLoads.delete(profile.id);
     });
   lazyProviderModelLoads.set(profile.id, load);
+  return load;
 }
 
 function normalizeSearchText(value?: string | null): string {
@@ -264,6 +275,10 @@ export const ModelDropdown: React.FC<ModelDropdownProps> = ({
   const [highlightedIndex, setHighlightedIndex] = useState(0);
   const [activeProviderId, setActiveProviderId] = useState<string | null>(null);
   const [activeVendor, setActiveVendor] = useState<string | null>(null);
+  const [loadingProviderId, setLoadingProviderId] = useState<string | null>(
+    null
+  );
+  const loadingRequestRef = useRef(0);
   const {
     contextMenu,
     open: openContextMenuAt,
@@ -282,6 +297,35 @@ export const ModelDropdown: React.FC<ModelDropdownProps> = ({
       ),
     [effectiveProviderProfiles]
   );
+
+  const loadProviderModels = useCallback((profile?: ProviderProfile | null) => {
+    if (profile?.id.startsWith('tuzi-managed-')) {
+      setLoadingProviderId(profile.id);
+    }
+    const load = ensureProviderModels(profile);
+    if (!load || !profile) {
+      if (profile?.id.startsWith('tuzi-managed-')) {
+        setLoadingProviderId(null);
+      }
+      return load;
+    }
+
+    const requestId = loadingRequestRef.current + 1;
+    loadingRequestRef.current = requestId;
+    void load.then(
+      () => {
+        if (loadingRequestRef.current === requestId) {
+          setLoadingProviderId(null);
+        }
+      },
+      () => {
+        if (loadingRequestRef.current === requestId) {
+          setLoadingProviderId(null);
+        }
+      }
+    );
+    return load;
+  }, []);
   const modelOrderMap = useMemo(
     () =>
       new Map(
@@ -341,38 +385,6 @@ export const ModelDropdown: React.FC<ModelDropdownProps> = ({
       null
     );
   }, [activeProvider, activeVendor]);
-
-  // 确保高亮项可见
-  useEffect(() => {
-    if (isOpen && listRef.current) {
-      const highlightedElement = listRef.current.querySelector(
-        `[data-model-index="${highlightedIndex}"]`
-      ) as HTMLElement | null;
-      if (highlightedElement) {
-        const listContainer = listRef.current;
-        const itemTop = highlightedElement.offsetTop;
-        const itemHeight = highlightedElement.offsetHeight;
-        const containerScrollTop = listContainer.scrollTop;
-        const containerHeight = listContainer.offsetHeight;
-        const containerPaddingTop = 4; // 与 SCSS 中的 padding 一致
-
-        if (highlightedIndex === 0) {
-          // 强制滚回到最顶部，处理 padding
-          listContainer.scrollTop = 0;
-        } else if (itemTop - containerPaddingTop < containerScrollTop) {
-          // 在上方不可见
-          listContainer.scrollTop = itemTop - containerPaddingTop;
-        } else if (
-          itemTop + itemHeight >
-          containerScrollTop + containerHeight
-        ) {
-          // 在下方不可见
-          listContainer.scrollTop =
-            itemTop + itemHeight - containerHeight + containerPaddingTop;
-        }
-      }
-    }
-  }, [highlightedIndex, isOpen]);
 
   // 获取当前模型配置
   const currentModel =
@@ -444,6 +456,47 @@ export const ModelDropdown: React.FC<ModelDropdownProps> = ({
     () => (isSearching ? filteredModelList : activeCategory?.models || []),
     [isSearching, filteredModelList, activeCategory]
   );
+  const shouldVirtualizeModels = displayedModels.length > 50;
+  const modelVirtualizer = useVirtualizer({
+    count: shouldVirtualizeModels ? displayedModels.length : 0,
+    getScrollElement: () => listRef.current,
+    estimateSize: () => 72,
+    overscan: 6,
+    getItemKey: (index) => getModelKey(displayedModels[index]),
+  });
+  const virtualItems = shouldVirtualizeModels
+    ? modelVirtualizer.getVirtualItems()
+    : [];
+
+  // 确保键盘高亮项可见；大列表由 virtualizer 负责定位未挂载的模型项。
+  useEffect(() => {
+    if (!isOpen || !listRef.current) return;
+    if (shouldVirtualizeModels) {
+      modelVirtualizer.scrollToIndex(highlightedIndex, { align: 'auto' });
+      return;
+    }
+
+    const highlightedElement = listRef.current.querySelector(
+      `[data-model-index="${highlightedIndex}"]`
+    ) as HTMLElement | null;
+    if (!highlightedElement) return;
+
+    const listContainer = listRef.current;
+    const itemTop = highlightedElement.offsetTop;
+    const itemHeight = highlightedElement.offsetHeight;
+    const containerScrollTop = listContainer.scrollTop;
+    const containerHeight = listContainer.offsetHeight;
+    const containerPaddingTop = 4;
+
+    if (highlightedIndex === 0) {
+      listContainer.scrollTop = 0;
+    } else if (itemTop - containerPaddingTop < containerScrollTop) {
+      listContainer.scrollTop = itemTop - containerPaddingTop;
+    } else if (itemTop + itemHeight > containerScrollTop + containerHeight) {
+      listContainer.scrollTop =
+        itemTop + itemHeight - containerHeight + containerPaddingTop;
+    }
+  }, [highlightedIndex, isOpen, modelVirtualizer, shouldVirtualizeModels]);
 
   // 供应商标签列表（第一列）
   const providerTabs = useMemo(
@@ -490,9 +543,9 @@ export const ModelDropdown: React.FC<ModelDropdownProps> = ({
       const group = providerGroups.find((g) => g.providerId === providerId);
       setActiveVendor(group?.vendorCategories[0]?.vendor ?? null);
       setHighlightedIndex(0);
-      ensureProviderModels(providerProfileMap.get(providerId));
+      loadProviderModels(providerProfileMap.get(providerId));
     },
-    [providerGroups, providerProfileMap]
+    [loadProviderModels, providerGroups, providerProfileMap]
   );
 
   // 切换厂商分类
@@ -599,8 +652,9 @@ export const ModelDropdown: React.FC<ModelDropdownProps> = ({
         if (selectedVendorHint) {
           setActiveVendor(selectedVendorHint);
         }
-        ensureProviderModels(providerProfileMap.get(selectedProviderHint));
-        ensureProviderModels(providerProfileMap.get(nextProviderId));
+        // 预取当前供应商，同时把实际展示的供应商绑定到 loading 覆盖层。
+        void ensureProviderModels(providerProfileMap.get(selectedProviderHint));
+        loadProviderModels(providerProfileMap.get(nextProviderId));
       }
       if (next) {
         // 打开时清空搜索，默认展示当前供应商/分类
@@ -622,6 +676,7 @@ export const ModelDropdown: React.FC<ModelDropdownProps> = ({
       providerGroups,
       providerProfileMap,
       selectedVendorHint,
+      loadProviderModels,
     ]
   );
 
@@ -1088,7 +1143,17 @@ export const ModelDropdown: React.FC<ModelDropdownProps> = ({
                   onScroll={closeContextMenu}
                 >
                   {displayedModels.length > 0 ? (
-                    displayedModels.map((model, index) => {
+                    (shouldVirtualizeModels
+                      ? virtualItems
+                      : displayedModels
+                    ).map((entry, virtualIndex) => {
+                      const index = shouldVirtualizeModels
+                        ? (entry as (typeof virtualItems)[number]).index
+                        : virtualIndex;
+                      const model = displayedModels[index];
+                      const virtualItem = shouldVirtualizeModels
+                        ? (entry as (typeof virtualItems)[number])
+                        : null;
                       const modelKey = getModelKey(model);
                       const isSelected =
                         modelKey === (selectedSelectionKey || selectedModel);
@@ -1097,6 +1162,22 @@ export const ModelDropdown: React.FC<ModelDropdownProps> = ({
                         <div
                           key={modelKey}
                           data-model-index={index}
+                          ref={
+                            virtualItem
+                              ? (node) => modelVirtualizer.measureElement(node)
+                              : undefined
+                          }
+                          style={
+                            virtualItem
+                              ? {
+                                  position: 'absolute',
+                                  top: 0,
+                                  left: 0,
+                                  width: '100%',
+                                  transform: `translateY(${virtualItem.start}px)`,
+                                }
+                              : undefined
+                          }
                           className={`model-dropdown__item ${
                             isSelected ? 'model-dropdown__item--selected' : ''
                           } ${
@@ -1169,7 +1250,37 @@ export const ModelDropdown: React.FC<ModelDropdownProps> = ({
                         : emptyText || 'No matching models'}
                     </div>
                   )}
+                  {shouldVirtualizeModels && displayedModels.length > 0 ? (
+                    <div
+                      aria-hidden="true"
+                      style={{
+                        height: modelVirtualizer.getTotalSize(),
+                        pointerEvents: 'none',
+                      }}
+                    />
+                  ) : null}
                 </div>
+                {loadingProviderId !== null ? (
+                  <div
+                    className="model-dropdown__loading-overlay"
+                    role="status"
+                    aria-live="polite"
+                    aria-label={
+                      language === 'zh' ? '正在加载模型' : 'Loading models'
+                    }
+                  >
+                    <Loader2
+                      className="model-dropdown__loading-icon"
+                      size={18}
+                      aria-hidden="true"
+                    />
+                    <span>
+                      {language === 'zh'
+                        ? '正在加载模型...'
+                        : 'Loading models...'}
+                    </span>
+                  </div>
+                ) : null}
               </div>
             </VendorTabPanel>
           </div>

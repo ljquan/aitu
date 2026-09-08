@@ -1,9 +1,31 @@
 // @vitest-environment jsdom
 import React from 'react';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ModelVendor, type ModelConfig } from '../../constants/model-config';
 import { ModelDropdown } from './ModelDropdown';
+
+const { discoverMock, applySelectionMock } = vi.hoisted(() => ({
+  discoverMock: vi.fn(),
+  applySelectionMock: vi.fn(),
+}));
+
+vi.mock('../../utils/runtime-model-discovery', () => ({
+  runtimeModelDiscovery: {
+    getState: () => ({
+      status: 'idle',
+      discoveredModels: [],
+    }),
+    discover: discoverMock,
+    applySelection: applySelectionMock,
+  },
+}));
 
 vi.mock('../../hooks/use-drawnix', () => ({
   useDrawnix: () => ({ setAppState: vi.fn() }),
@@ -24,6 +46,12 @@ vi.mock('../../utils/settings-manager', () => ({
   TUZI_ORIGINAL_PROVIDER_PROFILE_ID: 'tuzi-original',
   TUZI_DEFAULT_PROVIDER_NAME: 'Tuzi',
   TUZI_PROVIDER_ICON_URL: 'https://tuzi.example/icon.png',
+  providerCatalogsSettings: {
+    get: () => [],
+    addListener: () => {},
+    removeListener: () => {},
+    update: async () => {},
+  },
   createModelRef: (profileId: string | null, modelId: string) => ({
     profileId,
     modelId,
@@ -53,6 +81,8 @@ vi.mock('../shared/ModelBenchmarkBadge', () => ({
 describe('ModelDropdown', () => {
   afterEach(() => {
     vi.restoreAllMocks();
+    discoverMock.mockReset();
+    applySelectionMock.mockReset();
     cleanup();
   });
 
@@ -265,5 +295,65 @@ describe('ModelDropdown', () => {
 
     expect(menu.textContent).toContain('Tuzi Provider');
     expect(menu.textContent).toContain('vip');
+  });
+
+  it('模型查询未完成时强制显示加载动画，完成后移除加载状态', async () => {
+    let resolveDiscovery: ((models: ModelConfig[]) => void) | undefined;
+    discoverMock.mockImplementation(
+      () =>
+        new Promise<ModelConfig[]>((resolve) => {
+          resolveDiscovery = resolve;
+        })
+    );
+
+    const managedModel: ModelConfig = {
+      ...baseModel,
+      sourceProfileId: 'tuzi-managed-default',
+      sourceProfileName: 'Tuzi 默认分组',
+      selectionKey: 'tuzi-managed-default::gpt-image-2',
+    };
+
+    const { container } = render(
+      <ModelDropdown
+        selectedModel={managedModel.id}
+        selectedSelectionKey={managedModel.selectionKey}
+        models={[managedModel]}
+        providerProfilesOverride={[
+          {
+            id: 'tuzi-managed-default',
+            name: 'Tuzi 默认分组',
+            baseUrl: 'https://tuzi.example/v1',
+            apiKey: 'sk-test',
+            enabled: true,
+            providerType: 'openai-compatible',
+            authType: 'bearer',
+          },
+        ]}
+        onSelect={vi.fn()}
+      />
+    );
+
+    fireEvent.mouseDown(
+      container.querySelector(
+        '.model-dropdown__trigger--minimal'
+      ) as HTMLElement
+    );
+
+    expect(discoverMock).toHaveBeenCalledTimes(1);
+    expect(await screen.findByText('正在加载模型...')).toBeTruthy();
+    const loadingStatus = document.querySelector(
+      '.model-dropdown__loading-overlay'
+    ) as HTMLElement;
+    expect(loadingStatus).toBeTruthy();
+    expect(
+      loadingStatus.querySelector('.model-dropdown__loading-icon')
+    ).not.toBeNull();
+
+    resolveDiscovery?.([managedModel]);
+    await waitFor(() => {
+      expect(
+        document.querySelector('.model-dropdown__loading-overlay')
+      ).toBeNull();
+    });
   });
 });

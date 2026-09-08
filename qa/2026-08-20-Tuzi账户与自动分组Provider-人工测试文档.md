@@ -2,7 +2,7 @@
 
 **创建日期**：2026-08-20
 
-**测试范围**：验证 OpenTu 嵌入 Tuzi 后的 Session 登录、账户信息、日志读取、按授权分组自动创建 Provider、更新 Key、模型调用，以及本机和局域网访问下的登录态一致性。
+**测试范围**：验证 OpenTu 嵌入 Tuzi 后的 Session 登录、账户信息、日志读取、按用户选择的授权分组创建 Provider、更新 Key、模型调用，以及本机和局域网访问下的登录态一致性。
 
 **关联变更**：`openspec/changes/add-tuzi-session-account-workspace`
 
@@ -36,11 +36,12 @@
 
 ## 已执行验证
 
-- [x] `npx nx typecheck drawnix` 通过。
-- [x] Tuzi 账户面板、Tuzi Session API、托管 Provider 和设置管理共 4 个测试文件、22 个测试通过。
+- [x] `pnpm exec tsc --noEmit -p packages/drawnix/tsconfig.json` 通过。
+- [x] `pnpm exec nx build drawnix` 通过，包括 Web 类型检查、Web 应用、Service Worker 和 Drawnix 库构建。
+- [x] Tuzi 账户面板、模型下拉、Tuzi Session API、托管 Provider 和模型发现共 7 个测试文件、59 个测试通过。
 - [x] 覆盖凭据化 GET/POST、Session 过期映射、账户/日志响应解析和托管 Provider 同步。
 - [x] 覆盖账户面板隐藏“近 30 天消费”和“可用模型”，顶部显示登录/同步状态，余额页支持换新 Key，日志页支持分页查看。
-- [x] 覆盖日志页展示时间、渠道、用户、模型、输出、详情、金额列；日志详情仅在点击日志行后展开，计费过程和原始日志 JSON 需要再次点击才显示。
+- [x] 覆盖日志页按 API 站风格展示时间、渠道、用户、分组、模型、用时、详情、金额列；时间支持展开箭头，渠道/分组使用标签，用户显示头像，详情仅在点击日志行后展开。
 - [x] 覆盖日志页提供“列设置”，可选择展示时间、渠道、用户、令牌、分组、类型、调用状态、模型、用时、输入、输出、IP、重试、详情、金额、Request ID 和上游 Request ID。
 - [x] 覆盖模型下拉中会显示已启用且配置完整但尚未同步出模型的供应商分组。
 - [x] 覆盖设置页供应商开关支持关闭 default，但会阻止关闭最后一个启用中的供应商。
@@ -49,23 +50,23 @@
 - [x] 覆盖公开 Tuzi API 域名不被当前页面主机改写。
 - [x] 覆盖换新 Key 请求明确要求后端删除旧 Token，并在后端明确返回删除失败时阻止成功状态。
 - [x] 本地 CORS 接口验证返回指定 Origin 和 `Access-Control-Allow-Credentials: true`。
-- [ ] 真实浏览器登录、自动建 Key、更新 Key、模型调用和跨设备访问待人工执行。
+- [ ] 真实浏览器登录、分组勾选后建 Key、更新 Key、模型调用和跨设备访问待人工执行。
 
 建议回归命令：
 
 ```bash
 cd /Users/lkj/Desktop/working/opentu
 
-npx nx typecheck drawnix
+pnpm exec tsc --noEmit -p packages/drawnix/tsconfig.json
 
-npx vitest run \
+NODE_OPTIONS=--no-experimental-webstorage pnpm exec vitest run \
   packages/drawnix/src/components/settings-dialog/TuziAccountPanel.test.tsx \
-  packages/drawnix/src/services/__tests__/tuzi-session-api.test.ts \
-  packages/drawnix/src/services/__tests__/tuzi-managed-providers.test.ts \
-  packages/drawnix/src/utils/__tests__/settings-manager.test.ts \
-  packages/drawnix/src/utils/__tests__/model-grouping.test.ts \
   packages/drawnix/src/components/ai-input-bar/ModelDropdown.test.tsx \
-  packages/drawnix/src/components/settings-dialog/__tests__/provider-toggle-utils.test.ts
+  packages/drawnix/src/services/__tests__/tuzi-managed-providers.test.ts \
+  packages/drawnix/src/services/__tests__/tuzi-managed-provider-models.test.ts \
+  packages/drawnix/src/services/__tests__/tuzi-session-api.test.ts \
+  packages/drawnix/src/services/__tests__/tuzi-session-provider-sync.test.ts \
+  packages/drawnix/src/utils/__tests__/runtime-model-discovery.test.ts
 ```
 
 ## 场景 1：本机 localhost 登录与账户加载
@@ -82,9 +83,9 @@ npx vitest run \
 - [ ] “账户余额”页显示正确额度、累计用量和请求次数。
 - [ ] “账户余额”页可以看到授权分组及“换新 Key”按钮。
 - [ ] “日志”页显示最近调用，并可通过分页查看全部记录。
-- [ ] “日志”页表头包含时间、渠道、用户、模型、输出、详情、金额。
+- [ ] “日志”页按 API 站风格显示时间、渠道、用户、分组、模型、用时、详情、金额；金额与右侧边框保持间距。
 - [ ] “日志”页提供“列设置”，可勾选要展示的字段，并至少保留一列。
-- [ ] “日志”页默认不直接展开详情；点击日志行或“查看详情”后显示摘要字段，计费过程和原始日志 JSON 仍保持收起，分别点击“展开内容”后才显示。
+- [ ] “日志”页默认不直接展开详情；点击日志行后显示计费摘要，计费过程和原始日志 JSON 仍保持收起，分别点击“展开内容”后才显示。
 - [ ] “日志”页可通过上一页/下一页切换分页，页码和当前显示范围同步更新。
 - [ ] 授权分组数量与 Tuzi 账户权限一致。
 - [ ] 不显示“近 30 天消费”和“可用模型”区块。
@@ -142,19 +143,20 @@ npx vitest run \
 
 **状态**：交互逻辑和类型检查已验证；完整浏览器流程待人工。
 
-## 场景 5：首次登录自动创建分组 Provider
+## 场景 5：首次登录选择分组并创建 Provider
 
 1. 使用没有 OpenTu 托管 Token 的测试账户登录。
-2. 第一次打开 OpenTu 的 Tuzi 账户页。
-3. 检查“分组供应商”和 OpenTu 现有供应商配置。
-4. 在 Tuzi API 后端查询该用户现有 Token 记录。
+2. 第一次打开 OpenTu 的 Tuzi 账户页，等待可用分组列表出现。
+3. 只勾选需要连接的授权分组，点击“应用分组并连接”。
+4. 检查“分组供应商”和 OpenTu 现有供应商配置。
+5. 在 Tuzi API 后端查询该用户现有 Token 记录。
 
 **预期结果**：
 
-- [ ] 每个用户授权分组自动创建或复用一个托管 Token。
-- [ ] OpenTu 为每个分组同步一个现有 Provider 配置。
+- [ ] 只有用户勾选的授权分组创建或复用托管 Token。
+- [ ] OpenTu 只为勾选的分组同步 Provider 配置。
 - [ ] Provider URL 使用固定 Tuzi API 地址。
-- [ ] 用户不需要手动创建、复制或填写 API Key。
+- [ ] 用户不需要手动创建、复制或填写 API Key；未勾选分组不显示换新 Key 操作。
 - [ ] 重复打开或刷新不重复创建 Token，不增加重复 Provider。
 - [ ] 未授权分组不会创建 Token 或 Provider。
 - [ ] 不新增数据库表，Token 继续写入 Tuzi API 现有 Token 存储。
@@ -313,7 +315,7 @@ npx vitest run \
 - [ ] 本机 `localhost` 完整流程通过。
 - [ ] 局域网另一台电脑完整流程通过。
 - [ ] Session 过期、重新登录和刷新恢复通过。
-- [ ] 自动建 Provider 幂等且仅覆盖授权分组。
+- [ ] 自动建 Provider 幂等且仅覆盖用户已选并获授权的分组。
 - [ ] 更新 Key 后新 Key 可用、旧 Key 按设计失效。
 - [ ] 至少一个文本模型和一个图片模型真实调用通过，logs 与额度记录一致。
 - [ ] 独立模式回归通过。

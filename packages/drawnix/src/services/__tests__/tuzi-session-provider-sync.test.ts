@@ -9,11 +9,13 @@ const {
   synchronizeTuziManagedProviders,
   discoverChangedTuziProviderModels,
   getProfiles,
+  getSystemUserId,
 } = vi.hoisted(() => ({
   ensureManagedProviders: vi.fn(),
   synchronizeTuziManagedProviders: vi.fn(),
   discoverChangedTuziProviderModels: vi.fn(),
   getProfiles: vi.fn(),
+  getSystemUserId: vi.fn(),
 }));
 
 vi.mock('../tuzi-embedded-config', () => ({
@@ -21,6 +23,7 @@ vi.mock('../tuzi-embedded-config', () => ({
 }));
 vi.mock('../tuzi-token-auth', () => ({
   hasTuziSystemToken: () => true,
+  getTuziSystemUserId: getSystemUserId,
 }));
 vi.mock('../tuzi-session-api', () => ({
   TuziSessionApiError: class TuziSessionApiError extends Error {
@@ -44,24 +47,35 @@ describe('syncTuziSessionProviders', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     resetTuziSessionProviderSyncCache();
+    getSystemUserId.mockReturnValue('1');
     getProfiles.mockReturnValue([]);
     synchronizeTuziManagedProviders.mockResolvedValue(undefined);
     discoverChangedTuziProviderModels.mockResolvedValue(undefined);
   });
 
-  it('ensures every authorized group and replaces local managed providers', async () => {
+  it('keeps legacy managed group selection when no saved choice exists', async () => {
     const providers = [
       { id: 'tuzi-managed-default', group: 'default', apiKey: 'sk-default' },
       { id: 'tuzi-managed-vip', group: 'vip', apiKey: 'sk-vip' },
     ];
+    getProfiles.mockReturnValue(
+      providers.map((provider) => ({
+        ...provider,
+        name: provider.group,
+        pricingGroup: provider.group,
+      }))
+    );
     ensureManagedProviders.mockResolvedValue(providers);
 
     await expect(syncTuziSessionProviders()).resolves.toBe(true);
-    expect(ensureManagedProviders).toHaveBeenCalledTimes(1);
+    expect(ensureManagedProviders).toHaveBeenCalledWith(['default', 'vip']);
     expect(synchronizeTuziManagedProviders).toHaveBeenCalledWith(providers);
     expect(discoverChangedTuziProviderModels).toHaveBeenCalledWith(
       providers,
-      new Map()
+      new Map([
+        ['tuzi-managed-default', 'sk-default'],
+        ['tuzi-managed-vip', 'sk-vip'],
+      ])
     );
   });
 
