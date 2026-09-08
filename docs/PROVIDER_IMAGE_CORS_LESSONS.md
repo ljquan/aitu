@@ -1,6 +1,6 @@
 # 多供应商生图 CORS 预检失败排障经验
 
-更新日期：2026-07-30
+更新日期：2026-09-08
 
 ## 典型现象
 
@@ -31,19 +31,21 @@ Request-ID-CORS 节点不得混入普通请求的全局备用列表，避免改�
 ## 修复原则
 
 - 自定义头必须由共享 provider transport 统一判断，不能散落在各 adapter。
-- 正式图片 POST 优先通过固定同源代理保持原配置节点；部署不支持代理时才确定性路由到兼容可信节点。
-- 正式 POST 只发送一次；网络错误和 HTTP 错误不跨节点自动重提。
-- 只读恢复 GET 不携带 Request ID，可在可信节点间按故障容错。
+- 官方生产页面的同步图片 POST 通过固定同源代理保持原配置节点；部署不支持代理时保持直连并省略不兼容的 Request ID，不改写到其他节点。
+- 传输层不会因网络结果不明或 HTTP 错误自动重提正式 POST；明确 `model_not_found` 后的既有模型别名纠正单独处理。
+- 只读恢复 GET 不携带 Request ID，故障后只在下一轮查询原配置节点。
 - 绝对第三方 URL、非可信供应商不得收到任务 ID 或 Tuzi 凭据。
-- 本地、局域网、官方域名、Vercel 和 Netlify 使用同一固定代理路由；自定义公网部署需配置代理并设置 `VITE_TUZI_SAME_ORIGIN_PROXY=1`。
+- 本地和局域网开发沿用既有代理；`opentu.ai`、`pr.opentu.ai`、Vercel 和 Netlify 只为同步图片提交与恢复查询选择固定代理，其他媒体保持原路由。
+- `web.opentu.ai`、`share.opentu.ai` 等独立服务不自动启用代理，避免代理配置缺失时落入 SPA 页面。
+- 自定义公网部署只有在自行提供固定路由并设置 `VITE_TUZI_SAME_ORIGIN_PROXY=1` 时才可使用同源代理。
 
 ## 排障顺序
 
 1. 用无自定义头请求验证 Base URL、Token、模型和请求体。
 2. 单独检查带 `x-request-id` 的 OPTIONS。
-3. 在浏览器 Network 中确认最终 Request URL 和 Request Headers。
+3. 在浏览器 Network 中确认最终 Request URL 和 Request Headers；官方普通节点应命中 `/__opentu_tuzi_proxy__/`，兼容节点应保持直连。
 4. 区分请求头 `X-Request-Id` 与响应头 `X-Oneapi-Request-Id`。
-5. 确认失败后没有向其他节点发送第二个图片 POST。
+5. 确认网络结果不明后没有向原节点或其他节点发送第二个图片 POST。
 6. 刷新恢复场景另行确认结果 GET 不携带 Request ID。
 
 ## 安全与性能

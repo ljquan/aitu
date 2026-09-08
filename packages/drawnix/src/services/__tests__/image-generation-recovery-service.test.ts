@@ -191,6 +191,42 @@ describe('image generation recovery service', () => {
     );
   });
 
+  it('queries a main Tuzi task through the fixed proxy on opentu.ai', async () => {
+    vi.stubGlobal('location', { hostname: 'opentu.ai' });
+    const plan = createPlan();
+    plan.provider.baseUrl = 'https://api.tu-zi.com/v1';
+    const fetcher = vi.fn(async () =>
+      Response.json({
+        status: 'succeeded',
+        request_id: 'submission-main',
+        data: [{ url: 'https://images.example.com/result-main.png' }],
+      })
+    );
+    const onSucceeded = vi.fn();
+    const service = new ImageGenerationRecoveryService({
+      fetcher,
+      resolveInvocationPlan: vi.fn(() => plan),
+      jitterRatio: 0,
+    });
+
+    service.start(
+      createTask('task-main', 'submission-main', Date.now(), plan),
+      {
+        onSucceeded,
+        onFailed: vi.fn(),
+      }
+    );
+    await vi.waitFor(() => expect(onSucceeded).toHaveBeenCalledTimes(1));
+
+    const [url, init] = fetcher.mock.calls[0] || [];
+    expect(String(url)).toBe(
+      '/__opentu_tuzi_proxy__/api/v1/images/generations/result?request_id=submission-main'
+    );
+    const headers = new Headers(init?.headers);
+    expect(headers.get('Authorization')).toBe('Bearer secret-token');
+    expect(headers.has('X-Request-Id')).toBe(false);
+  });
+
   it('re-resolves the same provider and model when a persisted binding ID no longer exists', async () => {
     const fetcher = vi.fn(async () =>
       Response.json({

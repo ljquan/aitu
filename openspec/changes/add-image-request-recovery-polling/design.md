@@ -6,12 +6,12 @@
 GET /v1/images/generations/result?request_id=<submissionRequestId>
 ```
 
-公网浏览器只有在用户配置节点的 CORS 放行 `X-Request-Id` 时，才能在正式 POST 中携带该请求头。直接跨域已验证兼容节点为 `bus`、`bus2`、`bus3` 和 `business.tu-zi.com`；其他配置节点保持原地址请求，但不启用该次提交的结果恢复。
+公网浏览器只有在用户配置节点的 CORS 放行 `X-Request-Id`，或部署提供固定同源代理时，才能在正式 POST 中携带该请求头。直接跨域已验证兼容节点为 `bus`、`bus2`、`bus3` 和 `business.tu-zi.com`；官方部署将六个普通可信节点一一映射到固定代理路径。
 
 ## Goals / Non-Goals
 
 - Goals:
-  - 用户配置兼容节点时，在图片正式请求头中携带 Request ID。
+  - 用户配置兼容节点或官方固定代理节点时，在图片正式请求头中携带 Request ID。
   - 页面刷新或同页面正式提交结果未知后，找回同一次提交的结果并渲染回原卡片。
   - 不重复提交、不泄露凭据，并限制轮询并发、响应体和内存占用。
 - Non-Goals:
@@ -23,12 +23,13 @@ GET /v1/images/generations/result?request_id=<submissionRequestId>
 
 ### 1. 正式 POST 只提交一次
 
-普通可信 Tuzi 节点集合与 Request-ID-CORS 兼容节点集合分开维护。传输层始终保留用户配置的 Base URL，不使用同源代理或全局备用节点。
+普通可信 Tuzi 节点集合与 Request-ID-CORS 兼容节点集合分开维护。`opentu.ai`、`pr.opentu.ai`、Vercel 和 Netlify 的生产页面只对六个普通可信节点的同步图片提交和恢复查询使用一一映射的同源路径；代理仍指向用户配置的原上游节点。其他媒体请求和第三方地址保持原路由，传输层不使用全局备用节点。本地开发和显式启用固定代理的自托管部署沿用既有代理规则，其他 `*.opentu.ai` 独立服务不自动假设具备代理。
 
 当图片正式请求携带 Request ID 时：
 
-- 配置节点已兼容 CORS：保持该节点并附加 Request ID。
-- 配置节点不兼容 CORS：保持该节点但不附加 Request ID，因此该次提交不进入结果恢复。
+- 配置节点已兼容 CORS：直连该节点并附加 Request ID。
+- 配置节点是六个普通可信节点且部署支持固定代理：通过该节点的一一映射代理附加 Request ID。
+- 配置节点不兼容 CORS 且部署不支持固定代理：保持直连但不附加 Request ID，因此该次提交不进入结果恢复。
 - 配置节点不可信或请求路径逃逸到第三方绝对 URL：不附加 Request ID。
 - 网络错误、5xx 或 404 都不得改写地址或切换节点，避免请求偏离用户配置、重复生成和计费。
 
@@ -36,7 +37,7 @@ GET /v1/images/generations/result?request_id=<submissionRequestId>
 provider base URL 或 submitPath 后缀。任务在 POST 前持久化实际选中的 binding；
 若最终目标因绝对 URL 等原因不能携带 Request ID，则该任务不得进入固定结果查询。
 
-共享传输层对 GET、HEAD、POST 和其他方法都只请求用户配置节点。网络错误保留原错误，HTTP 响应原样返回，不自动切换 Tuzi 节点。
+共享传输层对 GET、HEAD、POST 和其他方法都只请求用户配置节点；固定代理只是到同一上游的传输路径。网络错误保留原错误，HTTP 响应原样返回，不自动切换 Tuzi 节点。
 
 GET 请求始终移除任意大小写形式的 `X-Request-Id`。
 
@@ -108,4 +109,5 @@ Custom HTTP 表单文件字段在 provider 正式提交前读取，因此不得�
 
 - `processing_or_not_found` 不能证明请求一定存在，因此只读等待到原 15 分钟截止，不自动重提。
 - 原配置节点短暂不可用时，恢复查询只能等待后续轮询，不会切换到其他节点。
+- 官方部署的代理路径若误回网页内容，会得到明确代理配置错误，不会回退为重复 POST。
 - 配置或 Token 在刷新后已失效时无法继续查询，任务会得到明确配置/鉴权失败，而不是永久处理中。

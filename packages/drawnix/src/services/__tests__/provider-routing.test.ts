@@ -61,6 +61,15 @@ const tuziRequestIdTransportContext = {
   baseUrl: 'https://bus.tu-zi.com/v1',
 } as const;
 
+const tuziFixedProxyRoutes = [
+  ['https://api.tu-zi.com', 'api'],
+  ['https://apius.tu-zi.com', 'apius'],
+  ['https://apicdn.tu-zi.com', 'apicdn'],
+  ['https://api.sydney-ai.com', 'sydney'],
+  ['https://api.ourzhishi.top', 'ourzhishi'],
+  ['https://apisz.ourzhishi.top', 'ourzhishi-sz'],
+] as const;
+
 function sendTuzi(
   request: Parameters<typeof providerTransport.send>[1]
 ): Promise<Response> {
@@ -532,48 +541,165 @@ describe('provider routing', () => {
     ).toBe(false);
   });
 
-  it('keeps the configured main Tuzi endpoint and omits Request ID', () => {
-    const context: ProviderProfileSnapshot = {
-      id: 'provider-tuzi',
-      name: 'Tuzi',
-      providerType: 'openai-compatible',
-      baseUrl: 'https://api.tu-zi.com/v1',
-      apiKey: 'secret',
-      authType: 'bearer',
-    };
-    const request = {
-      path: '/images/generations',
-      method: 'POST',
-      requestId: 'public-task-id',
-    };
-
-    expect(canAttachProviderRequestIdHeader(context, request)).toBe(false);
-
-    const prepared = providerTransport.prepareRequest(context, request);
-    expect(prepared.url).toBe('https://api.tu-zi.com/v1/images/generations');
-    expect(prepared.headers['X-Request-Id']).toBeUndefined();
-  });
-
-  it('keeps a failed main Tuzi submission on the configured endpoint', async () => {
-    const networkError = new Error('Failed to fetch');
-    const fetcher = vi.fn<typeof fetch>().mockRejectedValue(networkError);
-
-    await expect(
-      sendTuzi({
+  it.each(tuziFixedProxyRoutes)(
+    'routes a recoverable image submission for %s through fixed proxy %s',
+    (baseUrl, proxyRoute) => {
+      vi.stubGlobal('location', { hostname: 'opentu.ai' });
+      const context: ProviderProfileSnapshot = {
+        id: 'provider-tuzi',
+        name: 'Tuzi',
+        providerType: 'openai-compatible',
+        baseUrl: `${baseUrl}/v1`,
+        apiKey: 'secret',
+        authType: 'bearer',
+      };
+      const request = {
         path: '/images/generations',
         method: 'POST',
-        requestId: 'main-endpoint-task-id',
-        fetcher,
-      })
-    ).rejects.toBe(networkError);
+        requestId: 'public-task-id',
+      };
 
-    expect(fetcher).toHaveBeenCalledTimes(1);
-    expect(String(fetcher.mock.calls[0]?.[0])).toBe(
-      'https://api.tu-zi.com/v1/images/generations'
-    );
-    expect(fetcher.mock.calls[0]?.[1]?.headers).not.toHaveProperty(
-      'X-Request-Id'
-    );
+      try {
+        expect(canAttachProviderRequestIdHeader(context, request)).toBe(true);
+
+        const prepared = providerTransport.prepareRequest(context, request);
+        expect(prepared.url).toBe(
+          `/__opentu_tuzi_proxy__/${proxyRoute}/v1/images/generations`
+        );
+        expect(prepared.headers['X-Request-Id']).toBe('public-task-id');
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    }
+  );
+
+  it.each(['pr.opentu.ai', 'preview.vercel.app', 'preview.netlify.app'])(
+    'enables the fixed image proxy on supported deployment %s',
+    (hostname) => {
+      vi.stubGlobal('location', { hostname });
+
+      try {
+        const prepared = providerTransport.prepareRequest(
+          tuziTransportContext,
+          {
+            path: '/images/generations',
+            method: 'POST',
+            requestId: 'supported-deployment-task-id',
+          }
+        );
+
+        expect(prepared.url).toBe(
+          '/__opentu_tuzi_proxy__/api/v1/images/generations'
+        );
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    }
+  );
+
+  it.each(['/images/generations', '/images/edits'])(
+    'keeps a failed proxied image submission to %s single-shot and recoverable',
+    async (path) => {
+      vi.stubGlobal('location', { hostname: 'opentu.ai' });
+      const networkError = new Error('Failed to fetch');
+      const fetcher = vi.fn<typeof fetch>().mockRejectedValue(networkError);
+
+      try {
+        await expect(
+          sendTuzi({
+            path,
+            method: 'POST',
+            requestId: 'main-endpoint-task-id',
+            fetcher,
+          })
+        ).rejects.toMatchObject({
+          code: IMAGE_SUBMISSION_OUTCOME_UNKNOWN_CODE,
+          name: 'ImageSubmissionOutcomeUnknownError',
+        });
+
+        expect(fetcher).toHaveBeenCalledTimes(1);
+        expect(String(fetcher.mock.calls[0]?.[0])).toBe(
+          `/__opentu_tuzi_proxy__/api/v1${path}`
+        );
+        expect(fetcher.mock.calls[0]?.[1]?.headers).toMatchObject({
+          'X-Request-Id': 'main-endpoint-task-id',
+        });
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    }
+  );
+
+  it('normalizes a versioned image path without losing recovery eligibility', async () => {
+    vi.stubGlobal('location', { hostname: 'opentu.ai' });
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockRejectedValue(new Error('Failed to fetch'));
+
+    try {
+      await expect(
+        sendTuzi({
+          path: '/v1/images/generations',
+          method: 'POST',
+          requestId: 'versioned-path-task-id',
+          fetcher,
+        })
+      ).rejects.toMatchObject({
+        code: IMAGE_SUBMISSION_OUTCOME_UNKNOWN_CODE,
+      });
+
+      expect(fetcher).toHaveBeenCalledTimes(1);
+      expect(String(fetcher.mock.calls[0]?.[0])).toBe(
+        '/__opentu_tuzi_proxy__/api/v1/images/generations'
+      );
+      expect(fetcher.mock.calls[0]?.[1]?.headers).toMatchObject({
+        'X-Request-Id': 'versioned-path-task-id',
+      });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it.each(['/chat/completions', '/audio/speech', '/videos'])(
+    'keeps non-recoverable Tuzi request %s on the configured endpoint',
+    (path) => {
+      vi.stubGlobal('location', { hostname: 'opentu.ai' });
+
+      try {
+        const prepared = providerTransport.prepareRequest(
+          tuziTransportContext,
+          {
+            path,
+            method: 'POST',
+            requestId: 'non-image-task-id',
+          }
+        );
+
+        expect(prepared.url).toBe(`https://api.tu-zi.com/v1${path}`);
+        expect(prepared.headers['X-Request-Id']).toBeUndefined();
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    }
+  );
+
+  it('routes image recovery GET through the same fixed proxy without a header', () => {
+    vi.stubGlobal('location', { hostname: 'opentu.ai' });
+
+    try {
+      const prepared = providerTransport.prepareRequest(tuziTransportContext, {
+        path: '/images/generations/result',
+        method: 'GET',
+        query: { request_id: 'main-endpoint-task-id' },
+      });
+
+      expect(prepared.url).toBe(
+        '/__opentu_tuzi_proxy__/api/v1/images/generations/result?request_id=main-endpoint-task-id'
+      );
+      expect(prepared.headers['X-Request-Id']).toBeUndefined();
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it('does not mix Request-ID CORS nodes into normal Tuzi fallback routing', () => {
@@ -587,8 +713,9 @@ describe('provider routing', () => {
   });
 
   it.each(TUZI_API_REQUEST_ID_CORS_ENDPOINTS)(
-    'keeps Request-ID submission on compatible node $url',
+    'keeps Request-ID submission direct on compatible node $url',
     ({ url }) => {
+      vi.stubGlobal('location', { hostname: 'opentu.ai' });
       const context: ProviderProfileSnapshot = {
         id: 'provider-tuzi',
         name: 'Tuzi',
@@ -603,10 +730,42 @@ describe('provider routing', () => {
         requestId: 'compatible-task-id',
       };
 
-      expect(canAttachProviderRequestIdHeader(context, request)).toBe(true);
-      const prepared = providerTransport.prepareRequest(context, request);
-      expect(prepared.url).toBe(`${url}/v1/images/generations`);
-      expect(prepared.headers['X-Request-Id']).toBe('compatible-task-id');
+      try {
+        expect(canAttachProviderRequestIdHeader(context, request)).toBe(true);
+        const prepared = providerTransport.prepareRequest(context, request);
+        expect(prepared.url).toBe(`${url}/v1/images/generations`);
+        expect(prepared.headers['X-Request-Id']).toBe('compatible-task-id');
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    }
+  );
+
+  it.each(['self-hosted.example.com', 'web.opentu.ai', 'share.opentu.ai'])(
+    'keeps the configured endpoint on unsupported host %s',
+    (hostname) => {
+      vi.stubGlobal('location', { hostname });
+      const request = {
+        path: '/images/generations',
+        method: 'POST',
+        requestId: 'unsupported-host-task-id',
+      };
+
+      try {
+        expect(
+          canAttachProviderRequestIdHeader(tuziTransportContext, request)
+        ).toBe(false);
+        const prepared = providerTransport.prepareRequest(
+          tuziTransportContext,
+          request
+        );
+        expect(prepared.url).toBe(
+          'https://api.tu-zi.com/v1/images/generations'
+        );
+        expect(prepared.headers['X-Request-Id']).toBeUndefined();
+      } finally {
+        vi.unstubAllGlobals();
+      }
     }
   );
 
@@ -651,6 +810,24 @@ describe('provider routing', () => {
     ).rejects.toBe(networkError);
 
     expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not proxy a main Tuzi image submission when recovery is disabled', () => {
+    vi.stubGlobal('location', { hostname: 'opentu.ai' });
+
+    try {
+      const prepared = providerTransport.prepareRequest(tuziTransportContext, {
+        path: '/images/generations',
+        method: 'POST',
+        requestId: 'disabled-main-endpoint-recovery',
+        allowImageSubmissionOutcomeRecovery: false,
+      });
+
+      expect(prepared.url).toBe('https://api.tu-zi.com/v1/images/generations');
+      expect(prepared.headers['X-Request-Id']).toBeUndefined();
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it.each([
