@@ -370,6 +370,43 @@ describe('TuziAccountPanel', () => {
     expect(synchronizeTuziManagedProviders).not.toHaveBeenCalled();
   });
 
+  it('keeps a failed provider-group request distinct from an empty group list', async () => {
+    const { TuziSessionApiError } = await import(
+      '../../services/tuzi-session-api'
+    );
+    const { TuziAccountPanel } = await import('./TuziAccountPanel');
+
+    render(<TuziAccountPanel />);
+    await screen.findByText('可用额度');
+    getProviderGroups.mockRejectedValueOnce(
+      new TuziSessionApiError('REQUEST_FAILED', 'Tuzi API 请求超时，请稍后重试')
+    );
+
+    const tokenInput = document.querySelector('#tuzi-system-token');
+    expect(tokenInput).not.toBeNull();
+    fireEvent.change(tokenInput as HTMLInputElement, {
+      target: { value: 'system-token' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '替换令牌' }));
+
+    expect(await screen.findByText('数据加载失败')).not.toBeNull();
+    expect(screen.queryByText('暂无可用分组')).toBeNull();
+    expect(
+      (
+        screen.getByRole('button', {
+          name: '应用分组并连接',
+        }) as HTMLButtonElement
+      ).disabled
+    ).toBe(true);
+
+    fireEvent.click(screen.getByRole('button', { name: '重试' }));
+
+    expect(
+      await screen.findByRole('checkbox', { name: /default/ })
+    ).not.toBeNull();
+    expect(screen.queryByText('数据加载失败')).toBeNull();
+  });
+
   it('refreshes the visible account and managed groups after replacing the token', async () => {
     const onProvidersChanged = vi.fn();
     const { TuziAccountPanel } = await import('./TuziAccountPanel');

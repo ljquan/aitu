@@ -306,6 +306,60 @@ describe('TuziSessionApiClient', () => {
     );
   });
 
+  it('retries one transient provider-group read failure', async () => {
+    const fetcher = vi
+      .fn()
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            success: true,
+            data: [{ group: 'default', display_name: '默认分组' }],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        )
+      );
+    const client = new TuziSessionApiClient(config, fetcher as typeof fetch);
+
+    await expect(client.getProviderGroups()).resolves.toEqual([
+      { group: 'default', displayName: '默认分组' },
+    ]);
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not retry a rejected provider-group authorization', async () => {
+    const fetcher = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            success: false,
+            error: { code: 'TOKEN_INVALID', message: '令牌无效' },
+          }),
+          { status: 401, headers: { 'Content-Type': 'application/json' } }
+        )
+    );
+    const client = new TuziSessionApiClient(config, fetcher as typeof fetch);
+
+    await expect(client.getProviderGroups()).rejects.toMatchObject({
+      code: 'TOKEN_INVALID',
+      status: 401,
+    });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it('stops after one retry when provider-group reads keep failing', async () => {
+    const fetcher = vi
+      .fn()
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'));
+    const client = new TuziSessionApiClient(config, fetcher as typeof fetch);
+
+    await expect(client.getProviderGroups()).rejects.toMatchObject({
+      code: 'REQUEST_FAILED',
+    });
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+
   it('rotates managed providers with an explicit old-token delete action', async () => {
     const fetcher = vi.fn(
       async () =>

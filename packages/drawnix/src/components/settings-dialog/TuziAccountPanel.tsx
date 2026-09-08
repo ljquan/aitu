@@ -552,6 +552,7 @@ export function TuziAccountPanel({
     useState(false);
   const [providerSelectionLoading, setProviderSelectionLoading] =
     useState(false);
+  const [providerSelectionFailed, setProviderSelectionFailed] = useState(false);
   const [displayConfig, setDisplayConfig] = useState<TuziDisplayConfig>(
     DEFAULT_DISPLAY_CONFIG
   );
@@ -612,6 +613,7 @@ export function TuziAccountPanel({
     setSelectedGroups([]);
     setProviderSelectionPending(false);
     setProviderSelectionLoading(false);
+    setProviderSelectionFailed(false);
     providerSelectionRequired.current = true;
     setLoading(true);
     setProvidersLoading(false);
@@ -646,6 +648,7 @@ export function TuziAccountPanel({
     setSelectedGroups([]);
     setProviderSelectionPending(false);
     setProviderSelectionLoading(false);
+    setProviderSelectionFailed(false);
     providerSelectionRequired.current = true;
     setProvidersLoading(false);
     modelsRequestVersion.current += 1;
@@ -713,6 +716,7 @@ export function TuziAccountPanel({
         // the second phase and must not hide this first, actionable screen.
         setProviderSelectionPending(true);
         setProviderSelectionLoading(true);
+        setProviderSelectionFailed(false);
       }
       let hasCachedAccount = false;
       try {
@@ -736,6 +740,7 @@ export function TuziAccountPanel({
             )
           );
           setProviderSelectionLoading(false);
+          setProviderSelectionFailed(false);
           providerSelectionRequired.current = false;
           refreshProvidersOnNextLoad.current = false;
           return;
@@ -845,6 +850,7 @@ export function TuziAccountPanel({
           providerSelectionRequired.current = true;
           refreshProvidersOnNextLoad.current = true;
           setProviderSelectionLoading(false);
+          setProviderSelectionFailed(true);
         }
         if (!hasCachedAccount) {
           setAccount(null);
@@ -891,7 +897,7 @@ export function TuziAccountPanel({
   ]);
 
   const applyProviderSelection = useCallback(() => {
-    if (loading || providerSelectionLoading) return;
+    if (loading || providerSelectionLoading || providerSelectionFailed) return;
     const selectionUserId = account?.id || systemUserId;
     if (!selectionUserId) return;
     saveTuziProviderGroupSelection(selectionUserId, selectedGroups);
@@ -902,6 +908,7 @@ export function TuziAccountPanel({
     account,
     load,
     loading,
+    providerSelectionFailed,
     providerSelectionLoading,
     selectedGroups,
     systemUserId,
@@ -1251,7 +1258,7 @@ export function TuziAccountPanel({
                     <Loader2 size={18} className="is-spinning" />
                     <span>正在读取可用分组</span>
                   </div>
-                ) : availableGroups.length ? (
+                ) : providerSelectionFailed ? null : availableGroups.length ? (
                   <div className="tuzi-account-panel__provider-options">
                     {availableGroups.map((group) => (
                       <label
@@ -1289,6 +1296,7 @@ export function TuziAccountPanel({
                     disabled={
                       loading ||
                       providerSelectionLoading ||
+                      providerSelectionFailed ||
                       (!account && !systemUserId)
                     }
                     onClick={applyProviderSelection}

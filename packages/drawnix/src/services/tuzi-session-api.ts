@@ -95,6 +95,8 @@ export interface TuziDisplayConfig {
 
 type JsonRecord = Record<string, unknown>;
 const TUZI_REQUEST_TIMEOUT_MS = 15_000;
+const TUZI_PROVIDER_GROUPS_REQUEST_TIMEOUT_MS = 6_000;
+const TUZI_PROVIDER_GROUPS_RETRY_DELAY_MS = 250;
 
 function asRecord(value: unknown): JsonRecord | null {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -158,7 +160,8 @@ export class TuziSessionApiClient {
     path: string,
     query?: URLSearchParams,
     method: 'GET' | 'POST' = 'GET',
-    body?: string
+    body?: string,
+    timeoutMs = TUZI_REQUEST_TIMEOUT_MS
   ): Promise<unknown> {
     if (!this.systemToken) {
       throw new TuziSessionApiError('NOT_CONFIGURED', '请先填写系统访问令牌');
@@ -181,7 +184,7 @@ export class TuziSessionApiClient {
     const controller =
       typeof AbortController !== 'undefined' ? new AbortController() : null;
     const timeoutId = controller
-      ? setTimeout(() => controller.abort(), TUZI_REQUEST_TIMEOUT_MS)
+      ? setTimeout(() => controller.abort(), timeoutMs)
       : undefined;
     try {
       response = await this.fetcher.call(globalThis, url.toString(), {
@@ -308,13 +311,34 @@ export class TuziSessionApiClient {
 
   async getProviderGroups(): Promise<TuziProviderGroup[]> {
     let data: unknown;
-    try {
-      data = await this.request('/api/opentu/provider-groups');
-    } catch (error) {
-      if (error instanceof TuziSessionApiError && error.status === 404) {
-        return [];
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        data = await this.request(
+          '/api/opentu/provider-groups',
+          undefined,
+          'GET',
+          undefined,
+          TUZI_PROVIDER_GROUPS_REQUEST_TIMEOUT_MS
+        );
+        break;
+      } catch (error) {
+        if (error instanceof TuziSessionApiError && error.status === 404) {
+          return [];
+        }
+        const retryable =
+          error instanceof TuziSessionApiError &&
+          error.code === 'REQUEST_FAILED' &&
+          (error.status === undefined ||
+            error.status === 408 ||
+            error.status === 429 ||
+            error.status >= 500);
+        if (!retryable || attempt === 1) {
+          throw error;
+        }
+        await new Promise<void>((resolve) =>
+          setTimeout(resolve, TUZI_PROVIDER_GROUPS_RETRY_DELAY_MS)
+        );
       }
-      throw error;
     }
     if (!Array.isArray(data)) return [];
     return data.flatMap((item) => {
