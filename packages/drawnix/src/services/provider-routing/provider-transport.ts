@@ -27,6 +27,13 @@ const TUZI_SAME_ORIGIN_PROXY_ROUTES: Readonly<Record<string, string>> = {
 };
 const TUZI_SAME_ORIGIN_PROXY_PREFIX = '/__opentu_tuzi_proxy__';
 const LOCAL_DEV_HOSTS: readonly string[] = ['localhost', '127.0.0.1', '::1'];
+const TUZI_IMAGE_SUBMISSION_PATH_PATTERN =
+  /^\/(?:v\d+(?:beta\d*)?\/)?images\/(?:generations|edits)\/?$/i;
+const TUZI_IMAGE_RECOVERY_PATH_PATTERN = /^\/images\/generations\/result\/?$/i;
+const OPENTU_IMAGE_RECOVERY_PROXY_HOSTS = new Set([
+  'opentu.ai',
+  'pr.opentu.ai',
+]);
 
 export function isLocalDevHostname(hostname?: string): boolean {
   if (!hostname) return false;
@@ -82,6 +89,60 @@ function rewriteBaseUrlForSameOriginProxy(baseUrl: string): string {
     globalThis.location?.hostname,
     import.meta.env.DEV && import.meta.env.MODE !== 'test',
     import.meta.env.VITE_TUZI_SAME_ORIGIN_PROXY === '1'
+  );
+}
+
+function canUseTuziImageRecoveryProxy(
+  context: ResolvedProviderContext,
+  path: string
+): boolean {
+  const hostname = globalThis.location?.hostname;
+  if (
+    !hostname ||
+    !isTrustedTuziApiBaseUrl(context.baseUrl) ||
+    /^https?:\/\//i.test(path) ||
+    !rewriteTuziBaseUrlForSameOriginProxy(
+      context.baseUrl,
+      hostname,
+      false,
+      true
+    ).startsWith(`${TUZI_SAME_ORIGIN_PROXY_PREFIX}/`)
+  ) {
+    return false;
+  }
+  return (
+    OPENTU_IMAGE_RECOVERY_PROXY_HOSTS.has(hostname) ||
+    hostname.endsWith('.vercel.app') ||
+    hostname.endsWith('.netlify.app')
+  );
+}
+
+function isTuziImageSubmissionProxyRequest(
+  context: ResolvedProviderContext,
+  request: Pick<
+    ProviderTransportRequest,
+    'path' | 'method' | 'allowImageSubmissionOutcomeRecovery'
+  >
+): boolean {
+  const requestPath = request.path.split(/[?#]/, 1)[0] || '';
+  return (
+    canUseTuziImageRecoveryProxy(context, request.path) &&
+    isPostRequestMethod(request.method) &&
+    request.allowImageSubmissionOutcomeRecovery !== false &&
+    TUZI_IMAGE_SUBMISSION_PATH_PATTERN.test(requestPath)
+  );
+}
+
+function isTuziImageRecoveryProxyRequest(
+  context: ResolvedProviderContext,
+  request: ProviderTransportRequest
+): boolean {
+  const requestPath = request.path.split(/[?#]/, 1)[0] || '';
+  return (
+    canUseTuziImageRecoveryProxy(context, request.path) &&
+    (request.method || 'GET').toUpperCase() === 'GET' &&
+    Boolean(request.query?.request_id) &&
+    TUZI_IMAGE_RECOVERY_PATH_PATTERN.test(requestPath)
   );
 }
 
@@ -699,7 +760,7 @@ function isRecoverableTuziImageRequestIdSubmission(
     isTuziRequestIdSubmission(context, request) &&
     attachedRequestId === request.requestId &&
     isPostRequestMethod(request.method) &&
-    /\/images\/(?:generations|edits)\/?$/i.test(requestPath)
+    TUZI_IMAGE_SUBMISSION_PATH_PATTERN.test(requestPath)
   );
 }
 
@@ -707,20 +768,45 @@ function allowsNetworkFallback(request: ProviderTransportRequest): boolean {
   return isReadOnlyRequestMethod(request.method);
 }
 
-function routeTuziRequestIdSubmission(
+function routeTuziImageRecoveryRequest(
   context: ResolvedProviderContext,
   request: ProviderTransportRequest
 ): ResolvedProviderContext {
-  void request;
-  return context;
+  if (
+    !(
+      (request.requestId &&
+        isTuziImageSubmissionProxyRequest(context, request)) ||
+      isTuziImageRecoveryProxyRequest(context, request)
+    )
+  ) {
+    return context;
+  }
+
+  const proxiedBaseUrl = rewriteTuziBaseUrlForSameOriginProxy(
+    context.baseUrl,
+    globalThis.location?.hostname,
+    false,
+    true
+  );
+  if (proxiedBaseUrl === context.baseUrl) {
+    return context;
+  }
+
+  return { ...context, baseUrl: proxiedBaseUrl };
 }
 
 /**
- * X-Request-Id 只在明确放行该请求头的可信 Tuzi 节点上启用。
+ * X-Request-Id 只在可信固定代理或明确放行该请求头的 Tuzi 节点上启用。
  */
 export function canAttachProviderRequestIdHeader(
   context: ResolvedProviderContext,
-  request: Pick<ProviderTransportRequest, 'path' | 'method' | 'baseUrlStrategy'>
+  request: Pick<
+    ProviderTransportRequest,
+    | 'path'
+    | 'method'
+    | 'baseUrlStrategy'
+    | 'allowImageSubmissionOutcomeRecovery'
+  >
 ): boolean {
   const resolvedBaseUrl = applyBaseUrlStrategy(
     context.baseUrl,
@@ -730,7 +816,8 @@ export function canAttachProviderRequestIdHeader(
   return (
     isPostRequestMethod(request.method) &&
     isTrustedTuziRequestTarget(context, request) &&
-    (!/^https?:\/\//i.test(requestUrl) ||
+    (isTuziImageSubmissionProxyRequest(context, request) ||
+      !/^https?:\/\//i.test(requestUrl) ||
       isTuziRequestIdCorsBaseUrl(requestUrl))
   );
 }
@@ -740,7 +827,7 @@ export class ProviderTransport {
     context: ResolvedProviderContext,
     request: ProviderTransportRequest
   ): PreparedProviderTransportRequest {
-    const routedContext = routeTuziRequestIdSubmission(context, request);
+    const routedContext = routeTuziImageRecoveryRequest(context, request);
     const resolvedBaseUrl = applyBaseUrlStrategy(
       routedContext.baseUrl,
       request.baseUrlStrategy
@@ -766,7 +853,7 @@ export class ProviderTransport {
     const finalHeaders = applyRequestIdHeader(
       authenticatedHeaders,
       request.requestId,
-      canAttachProviderRequestIdHeader(routedContext, request),
+      canAttachProviderRequestIdHeader(context, request),
       Boolean(request.requestId) || isReadOnlyRequestMethod(request.method)
     );
 

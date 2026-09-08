@@ -2,7 +2,7 @@
 
 ### Requirement: Trusted Tuzi Image Submissions SHALL Carry A Stable Request ID
 
-The system SHALL persist the current image submission Request ID before the formal POST and SHALL attach it as `X-Request-Id` only when the user-configured trusted Tuzi target is Request-ID-CORS-compatible. The system SHALL NOT change the configured provider address to enable this header.
+The system SHALL persist the current image submission Request ID before the formal POST and SHALL attach it as `X-Request-Id` only when the user-configured trusted Tuzi target is Request-ID-CORS-compatible or is reached through its fixed same-origin proxy. A proxy route SHALL preserve the configured upstream node.
 
 #### Scenario: First formal submission to a compatible configured endpoint
 
@@ -12,15 +12,24 @@ The system SHALL persist the current image submission Request ID before the form
 - **AND** SHALL persist `imageSubmissionAttempted=true` and the invocation route before sending
 - **AND** the request SHALL contain exactly one `X-Request-Id` with that value
 
-#### Scenario: Configured trusted node lacks Request-ID CORS support
+#### Scenario: Supported deployment uses the configured node's fixed proxy
 
 - **GIVEN** the configured Tuzi node is trusted but does not allow `X-Request-Id` in browser preflight
+- **AND** the deployment provides its fixed same-origin proxy mapping
+- **WHEN** the formal image POST is prepared
+- **THEN** the system SHALL route through the fixed mapping for that configured node
+- **AND** SHALL attach `X-Request-Id`
+- **AND** SHALL submit the image POST only once
+- **AND** network or HTTP failure SHALL NOT trigger another image POST on a different node
+
+#### Scenario: Deployment lacks a fixed proxy mapping
+
+- **GIVEN** the configured Tuzi node does not allow `X-Request-Id` in browser preflight
+- **AND** the deployment does not provide its fixed same-origin proxy mapping
 - **WHEN** the formal image POST is prepared
 - **THEN** the system SHALL send the request directly to the configured node
 - **AND** SHALL NOT attach `X-Request-Id`
 - **AND** SHALL NOT enable automatic result recovery for that submission
-- **AND** SHALL submit the image POST only once
-- **AND** network or HTTP failure SHALL NOT trigger another image POST on a different node
 
 #### Scenario: Compatible trusted node is configured
 
