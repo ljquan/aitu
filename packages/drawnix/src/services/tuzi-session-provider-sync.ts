@@ -1,9 +1,10 @@
 import { isTuziEmbeddedMode } from './tuzi-embedded-config';
-import { hasTuziSystemToken } from './tuzi-token-auth';
+import { getTuziSystemUserId, hasTuziSystemToken } from './tuzi-token-auth';
 import { synchronizeTuziManagedProviders } from './tuzi-managed-providers';
 import { TuziSessionApiClient } from './tuzi-session-api';
 import { discoverChangedTuziProviderModels } from './tuzi-managed-provider-models';
 import { providerProfilesSettings } from '../utils/settings-manager';
+import { getTuziProviderGroupSelection } from './tuzi-provider-selection';
 
 let activeSync: Promise<boolean> | null = null;
 let lastSuccessfulSyncAt = 0;
@@ -25,14 +26,32 @@ export function syncTuziSessionProviders(options?: {
 
   activeSync = (async () => {
     try {
+      const userId = getTuziSystemUserId();
+      let selectedGroups: string[] | null | undefined = userId
+        ? getTuziProviderGroupSelection(userId)
+        : undefined;
+      if (selectedGroups === null && userId) {
+        selectedGroups = providerProfilesSettings
+          .get()
+          .filter((profile) => profile.id.startsWith('tuzi-managed-'))
+          .map((profile) => profile.pricingGroup || profile.name)
+          .filter(Boolean);
+        if (userId && selectedGroups.length > 0) {
+          selectedGroups = [...new Set(selectedGroups)];
+        }
+      }
+      if (selectedGroups === null) {
+        return true;
+      }
       const previousApiKeys = new Map(
         providerProfilesSettings
           .get()
           .filter((profile) => profile.id.startsWith('tuzi-managed-'))
           .map((profile) => [profile.id, profile.apiKey])
       );
-      const providers =
-        await new TuziSessionApiClient().ensureManagedProviders();
+      const providers = await new TuziSessionApiClient().ensureManagedProviders(
+        selectedGroups
+      );
       await synchronizeTuziManagedProviders(providers);
       if (options?.discoverModels !== false) {
         await discoverChangedTuziProviderModels(providers, previousApiKeys);

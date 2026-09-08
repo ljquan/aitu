@@ -37,17 +37,18 @@ describe('Tuzi managed provider model synchronization', () => {
   });
 
   it('discovers and enables every model returned for the group key', async () => {
-    await expect(discoverAndUseAllTuziProviderModels(provider)).resolves.toBe(2);
+    await expect(discoverAndUseAllTuziProviderModels(provider)).resolves.toBe(
+      2
+    );
 
     expect(discover).toHaveBeenCalledWith(
       provider.id,
       'http://localhost:3100/v1',
-      'sk-new'
+      'sk-new',
+      [],
+      { selectAll: true }
     );
-    expect(applySelection).toHaveBeenCalledWith(provider.id, [
-      'model-a',
-      'model-b',
-    ]);
+    expect(applySelection).not.toHaveBeenCalled();
   });
 
   it('only refreshes models for first-time or changed keys', async () => {
@@ -63,7 +64,9 @@ describe('Tuzi managed provider model synchronization', () => {
     expect(discover).toHaveBeenCalledWith(
       provider.id,
       expect.any(String),
-      provider.apiKey
+      provider.apiKey,
+      [],
+      { selectAll: true }
     );
   });
 

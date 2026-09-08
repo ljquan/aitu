@@ -33,6 +33,7 @@ import { isTuziEmbeddedMode } from '../services/tuzi-embedded-config';
 import { hasTuziSystemToken } from '../services/tuzi-token-auth';
 
 const LEGACY_CACHE_KEY = 'drawnix-runtime-model-discovery';
+const MODEL_DISCOVERY_TIMEOUT_MS = 15_000;
 
 export interface RemoteModelListItem {
   id: string;
@@ -80,6 +81,20 @@ export interface ManualRuntimeModelInput {
   label?: string;
   description?: string;
   invocation?: ManualRuntimeModelInvocationInput;
+}
+
+export interface RuntimeModelDiscoveryOptions {
+  selectAll?: boolean;
+  signal?: AbortSignal;
+}
+
+function isAbortSignal(value: unknown): value is AbortSignal {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'aborted' in value &&
+    typeof (value as AbortSignal).addEventListener === 'function'
+  );
 }
 
 interface LegacyPersistedRuntimeModelDiscoveryState {
@@ -156,24 +171,42 @@ async function fetchRemoteModelList(
   apiKey: string,
   signal?: AbortSignal
 ): Promise<string> {
-  const response = await fetch(`${baseUrl}/models`, {
-    signal,
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-    },
-  });
+  const controller =
+    typeof AbortController !== 'undefined' ? new AbortController() : null;
+  const timeoutId = controller
+    ? setTimeout(() => controller.abort(), MODEL_DISCOVERY_TIMEOUT_MS)
+    : undefined;
+  const abortFromCaller = () => controller?.abort();
+  if (signal?.aborted) abortFromCaller();
+  signal?.addEventListener('abort', abortFromCaller, { once: true });
+  try {
+    const response = await fetch(`${baseUrl}/models`, {
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+      },
+      ...(controller ? { signal: controller.signal } : {}),
+    });
 
-  const rawText = await response.text();
-  if (!response.ok) {
-    throw new Error(
-      extractDiscoveryErrorMessage(
-        rawText,
-        `获取模型列表失败: HTTP ${response.status}`
-      )
-    );
+    const rawText = await response.text();
+    if (!response.ok) {
+      throw new Error(
+        extractDiscoveryErrorMessage(
+          rawText,
+          `获取模型列表失败: HTTP ${response.status}`
+        )
+      );
+    }
+
+    return rawText;
+  } catch (error) {
+    if (controller?.signal.aborted && !signal?.aborted) {
+      throw new Error('模型列表请求超时，请稍后重试');
+    }
+    throw error;
+  } finally {
+    if (timeoutId !== undefined) clearTimeout(timeoutId);
+    signal?.removeEventListener('abort', abortFromCaller);
   }
-
-  return rawText;
 }
 
 function buildModelDiscoveryBaseUrls(
@@ -1385,6 +1418,7 @@ function removeLegacyPersistedState(): void {
 class RuntimeModelDiscoveryStore {
   private catalogStates = new Map<string, RuntimeModelDiscoveryState>();
   private listeners = new Set<() => void>();
+  private inFlightDiscoveries = new Map<string, Promise<ModelConfig[]>>();
   private revision = 0;
 
   constructor() {
@@ -1546,6 +1580,15 @@ class RuntimeModelDiscoveryStore {
 
   getRevision(): number {
     return this.revision;
+  }
+
+  getInFlightDiscovery(profileId: string): Promise<ModelConfig[]> | null {
+    for (const [key, discovery] of this.inFlightDiscoveries) {
+      if (key.startsWith(`${profileId}::`)) {
+        return discovery;
+      }
+    }
+    return null;
   }
 
   getState(
@@ -1868,16 +1911,65 @@ class RuntimeModelDiscoveryStore {
     baseUrl: string,
     apiKey: string,
     fallbackBaseUrls: string[] = [],
-    signal?: AbortSignal
+    optionsOrSignal: RuntimeModelDiscoveryOptions | AbortSignal = {}
   ): Promise<ModelConfig[]> {
     const trimmedApiKey = apiKey.trim();
     if (!trimmedApiKey) {
       throw new Error('缺少 API Key');
     }
 
-    const state = this.getCatalogState(profileId);
     const normalizedBaseUrl = normalizeModelApiBaseUrl(baseUrl);
     const signature = buildDiscoverySignature(normalizedBaseUrl, trimmedApiKey);
+    const options = isAbortSignal(optionsOrSignal)
+      ? { signal: optionsOrSignal }
+      : optionsOrSignal;
+
+    if (options.signal) {
+      return this.discoverInternal(
+        profileId,
+        normalizedBaseUrl,
+        trimmedApiKey,
+        signature,
+        fallbackBaseUrls,
+        options
+      );
+    }
+
+    const discoveryKey = `${profileId}::${signature}::selectAll=${
+      options.selectAll === true ? '1' : '0'
+    }`;
+    const existingDiscovery = this.inFlightDiscoveries.get(discoveryKey);
+    if (existingDiscovery) {
+      return existingDiscovery;
+    }
+
+    const discovery = this.discoverInternal(
+      profileId,
+      normalizedBaseUrl,
+      trimmedApiKey,
+      signature,
+      fallbackBaseUrls,
+      options
+    );
+    this.inFlightDiscoveries.set(discoveryKey, discovery);
+    const clearInFlight = () => {
+      if (this.inFlightDiscoveries.get(discoveryKey) === discovery) {
+        this.inFlightDiscoveries.delete(discoveryKey);
+      }
+    };
+    void discovery.then(clearInFlight, clearInFlight);
+    return discovery;
+  }
+
+  private async discoverInternal(
+    profileId: string,
+    normalizedBaseUrl: string,
+    trimmedApiKey: string,
+    signature: string,
+    fallbackBaseUrls: string[],
+    options: RuntimeModelDiscoveryOptions
+  ): Promise<ModelConfig[]> {
+    const state = this.getCatalogState(profileId);
 
     this.setCatalogState(
       profileId,
@@ -1895,7 +1987,7 @@ class RuntimeModelDiscoveryStore {
       normalizedBaseUrl,
       trimmedApiKey,
       fallbackBaseUrls,
-      signal
+      options.signal
     );
 
     let parsed: unknown;
@@ -1934,15 +2026,16 @@ class RuntimeModelDiscoveryStore {
         .filter((model) => (model.tags || []).includes('manual'))
         .map((model) => model.id)
     );
-    const selectedModelIds =
-      state.signature === signature
-        ? normalizeSelectedModelIds(discoveredModels, state.selectedModelIds)
-        : normalizeSelectedModelIds(
-            discoveredModels,
-            state.selectedModelIds.filter((modelId) =>
-              manualModelIds.has(modelId)
-            )
-          );
+    const selectedModelIds = options.selectAll
+      ? discoveredModels.map((model) => model.id)
+      : state.signature === signature
+      ? normalizeSelectedModelIds(discoveredModels, state.selectedModelIds)
+      : normalizeSelectedModelIds(
+          discoveredModels,
+          state.selectedModelIds.filter((modelId) =>
+            manualModelIds.has(modelId)
+          )
+        );
     const models = buildSelectedModels(discoveredModels, selectedModelIds);
 
     this.setCatalogState(profileId, {

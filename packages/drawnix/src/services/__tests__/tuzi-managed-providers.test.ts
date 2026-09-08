@@ -145,4 +145,28 @@ describe('synchronizeTuziManagedProviders', () => {
       { profileId: 'custom-provider' },
     ]);
   });
+
+  it('does not broadcast settings when managed providers are unchanged', async () => {
+    const provider = {
+      id: 'tuzi-managed-image',
+      group: 'image',
+      displayName: '图片分组',
+      apiKey: 'sk-new-image',
+      status: 1,
+      rotatedAt: 1700000000,
+    };
+
+    await synchronizeTuziManagedProviders([provider]);
+    const updatedProfiles = update.mock.calls[0][0];
+    const updatedCatalogs = catalogUpdate.mock.calls[0][0];
+    update.mockClear();
+    catalogUpdate.mockClear();
+    get.mockReturnValue(updatedProfiles);
+    catalogGet.mockReturnValue(updatedCatalogs);
+
+    await synchronizeTuziManagedProviders([provider]);
+
+    expect(update).not.toHaveBeenCalled();
+    expect(catalogUpdate).not.toHaveBeenCalled();
+  });
 });

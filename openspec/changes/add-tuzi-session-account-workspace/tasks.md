@@ -21,14 +21,15 @@
 
 ## 4. Managed group Providers
 
-- [x] 4.1 Add Session-authenticated provider catalog and ensure/rotate orchestration using existing Token storage.
+- [x] 4.1 Add Session-authenticated provider catalog and selective ensure/rotate orchestration using existing Token storage.
 - [ ] 4.2 Add idempotency, group authorization, rotation and no-secret-logging tests.
 - [x] 4.3 Read authorized groups and pricing metadata and synchronize existing OpenTu Provider profiles and bindings.
 - [x] 4.4 Add refresh/rotation controls without changing standalone Provider behavior.
+- [x] 4.5 Let users choose authorized groups before first connection or system-token replacement, and create managed Tokens and Providers only for selected groups.
 
 ## 5. Verification
 
 - [x] 5.1 Run focused Go tests and backend build checks.
 - [x] 5.2 Run focused Vitest tests, type checks, and frontend build.
 - [ ] 5.3 Start both local services and verify managed Provider synchronization.
-- [ ] 5.4 Review final diffs and update QA/documentation status.
+- [x] 5.4 Review final diffs and update QA/documentation status.

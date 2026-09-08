@@ -13,13 +13,13 @@ export async function discoverAndUseAllTuziProviderModels(
     await runtimeModelDiscovery.discover(
       provider.id,
       tuziV1BaseUrl(),
-      provider.apiKey
+      provider.apiKey,
+      [],
+      { selectAll: true }
     );
-    const allModels = runtimeModelDiscovery.getState(provider.id).discoveredModels;
-    runtimeModelDiscovery.applySelection(
-      provider.id,
-      allModels.map((model) => model.id)
-    );
+    const allModels = runtimeModelDiscovery.getState(
+      provider.id
+    ).discoveredModels;
     return allModels.length;
   } catch (error) {
     const message = error instanceof Error ? error.message : '模型同步失败';

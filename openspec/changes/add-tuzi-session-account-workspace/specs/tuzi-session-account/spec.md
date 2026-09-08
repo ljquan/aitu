@@ -57,7 +57,14 @@ The system SHALL derive OpenTu managed Providers from the authenticated user's a
 #### Scenario: First embedded load
 
 - **WHEN** an authenticated embedded user loads OpenTu Provider settings
-- **THEN** Tuzi API SHALL ensure at most one enabled managed Token for each authorized group and OpenTu SHALL synchronize the resulting Provider profile to the fixed Tuzi `/v1` URL
+- **THEN** OpenTu SHALL first display the user's authorized groups without creating managed Tokens
+- **AND** after the user confirms a selection, Tuzi API SHALL ensure at most one enabled managed Token for each selected authorized group and OpenTu SHALL synchronize only the resulting Provider profiles to the fixed Tuzi `/v1` URL
+
+#### Scenario: Unselected authorized group
+
+- **WHEN** an authenticated user does not select an otherwise authorized group during first connection or token replacement
+- **THEN** Tuzi API SHALL NOT create a managed Token for that group
+- **AND** OpenTu SHALL NOT create or display a managed Provider or replacement-Key control for that group
 
 #### Scenario: Unauthorized group
 

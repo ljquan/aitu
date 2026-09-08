@@ -57,13 +57,9 @@ export function DrawnixDeferredRuntime({
       return;
     }
 
-    const timer = window.setTimeout(() => {
+    return runWhenIdle(() => {
       modelPricingService.warmupProfiles(providerProfiles);
-    }, 0);
-
-    return () => {
-      window.clearTimeout(timer);
-    };
+    }, 5_000);
   }, [providerProfiles]);
 
   useEffect(() => {

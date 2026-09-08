@@ -108,6 +108,38 @@
     }
   }
 
+  &__refresh {
+    width: 30px;
+    height: 30px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: 1px solid var(--tuzi-panel-border);
+    border-radius: 6px;
+    color: #344054;
+    background: #fff;
+    cursor: pointer;
+    transition: background-color 0.14s ease, border-color 0.14s ease,
+      color 0.14s ease;
+
+    &:hover:not(:disabled) {
+      border-color: #cfd7e2;
+      background: #f8fafc;
+    }
+
+    &:disabled {
+      color: #a7b0be;
+      cursor: not-allowed;
+      background: #f8fafc;
+    }
+
+    &:focus-visible {
+      outline: 2px solid #84b6ff;
+      outline-offset: 1px;
+    }
+  }
+
   &__body {
     min-height: 0;
     flex: 1 1 auto;
@@ -419,6 +451,102 @@
     border-top: 1px solid var(--tuzi-panel-border);
   }
 
+  &__provider-selection {
+    margin-top: 18px;
+    padding: 16px;
+    border: 1px solid #c7d7fe;
+    border-radius: 8px;
+    background: #f7f9ff;
+
+    .tuzi-account-panel__section-heading {
+      align-items: flex-start;
+
+      h3 {
+        margin-bottom: 4px;
+      }
+
+      span {
+        display: block;
+      }
+    }
+  }
+
+  &__provider-options {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    gap: 8px;
+
+    label {
+      min-width: 0;
+      display: flex;
+      align-items: flex-start;
+      gap: 9px;
+      padding: 10px;
+      border: 1px solid var(--tuzi-panel-border);
+      border-radius: 6px;
+      background: #fff;
+      cursor: pointer;
+
+      input {
+        margin: 2px 0 0;
+      }
+
+      span {
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+
+      strong {
+        overflow: hidden;
+        color: #111827;
+        font-size: 13px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      small {
+        overflow: hidden;
+        color: var(--tuzi-panel-muted);
+        font-size: 11px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      &.is-selected {
+        border-color: #f3b34c;
+        background: #fffaf0;
+      }
+    }
+  }
+
+  &__provider-selection-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 12px;
+
+    button {
+      min-height: 34px;
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 7px 12px;
+      border: 1px solid #3478e5;
+      border-radius: 6px;
+      color: #fff;
+      background: #3478e5;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+
+      &:disabled {
+        cursor: not-allowed;
+        opacity: 0.6;
+      }
+    }
+  }
+
   &__section--logs {
     margin-top: 0;
     padding-top: 0;
@@ -641,7 +769,7 @@
     display: grid;
     grid-template-columns: var(--tuzi-log-columns);
     align-items: center;
-    gap: 14px;
+    gap: 10px;
   }
 
   &__log-head {
@@ -650,7 +778,7 @@
     z-index: 1;
     width: max(920px, 100%);
     min-height: 42px;
-    padding: 0 14px;
+    padding: 0 26px 0 14px;
     border-bottom: 1px solid var(--tuzi-panel-border);
     background: #f8fafc;
     color: var(--tuzi-panel-muted);
@@ -668,8 +796,8 @@
 
   &__log-row {
     width: 100%;
-    min-height: 56px;
-    padding: 10px 14px;
+    min-height: 60px;
+    padding: 10px 26px 10px 14px;
     border: 0;
     background: #fff;
     color: inherit;
@@ -677,44 +805,15 @@
     cursor: pointer;
     transition: background-color 0.14s ease;
 
-    time,
-    span {
-      color: #52627a;
-      font-size: 12.5px;
-    }
-
-    > div {
-      min-width: 0;
-      display: flex;
-      flex-direction: column;
-      gap: 3px;
-
-      strong,
-      span {
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-      }
-
-      strong {
-        font-size: 13px;
-      }
-    }
-
-    > time,
-    > span,
-    > strong {
-      color: #111827;
-      font-size: 15px;
-      font-weight: 700;
-      letter-spacing: 0;
-    }
-
     > time,
     > span,
     > strong {
       min-width: 0;
       overflow: hidden;
+      color: #344054;
+      font-size: 12.5px;
+      font-weight: 500;
+      letter-spacing: 0;
       text-overflow: ellipsis;
       white-space: nowrap;
     }
@@ -722,6 +821,14 @@
     > span,
     > time {
       font-variant-numeric: tabular-nums;
+    }
+
+    > .tuzi-account-panel__log-summary {
+      display: -webkit-box;
+      overflow: hidden;
+      white-space: normal;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 2;
     }
 
     &:hover {
@@ -738,12 +845,207 @@
     }
   }
 
-  &__log-detail-preview {
-    color: #315f9f;
+  &__log-time {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+
+    > svg {
+      flex: 0 0 auto;
+      color: #98a2b3;
+      transition: transform 0.15s ease;
+
+      &.is-expanded {
+        transform: rotate(90deg);
+      }
+    }
+
+    > span {
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+    }
+
+    strong,
+    small {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    strong {
+      color: #344054;
+      font-size: 12.5px;
+      font-weight: 600;
+    }
+
+    small {
+      color: #98a2b3;
+      font-size: 11px;
+      font-weight: 500;
+    }
+  }
+
+  &__log-badge {
+    max-width: 100%;
+    width: max-content;
+    min-height: 24px;
+    display: inline-flex;
+    align-items: center;
+    justify-self: start;
+    padding: 3px 8px;
+    border: 1px solid transparent;
+    border-radius: 999px;
+    overflow: hidden;
+    font-size: 11.5px;
     font-weight: 650;
+    line-height: 1;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+
+    &[data-tone='0'] {
+      border-color: #bfd7ff;
+      color: #175cd3;
+      background: #eff6ff;
+    }
+
+    &[data-tone='1'] {
+      border-color: #a6f4c5;
+      color: #067647;
+      background: #ecfdf3;
+    }
+
+    &[data-tone='2'] {
+      border-color: #fedf89;
+      color: #b54708;
+      background: #fffaeb;
+    }
+
+    &[data-tone='3'] {
+      border-color: #d9d6fe;
+      color: #5925dc;
+      background: #f4f3ff;
+    }
+
+    &[data-tone='4'] {
+      border-color: #fecdc9;
+      color: #b42318;
+      background: #fef3f2;
+    }
+
+    &[data-tone='5'] {
+      border-color: #a5f0fc;
+      color: #0e7090;
+      background: #ecfdff;
+    }
+  }
+
+  &__log-badge--muted {
+    border-color: #d0d5dd;
+    color: #475467;
+    background: #f9fafb;
+  }
+
+  &__log-user {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+
+    > span:last-child {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+  }
+
+  &__log-user-avatar {
+    width: 26px;
+    height: 26px;
+    flex: 0 0 26px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    color: #fff;
+    background: #475467;
+    font-size: 11px;
+    font-weight: 750;
+
+    &[data-tone='0'] {
+      background: #2e90fa;
+    }
+
+    &[data-tone='1'] {
+      background: #12b76a;
+    }
+
+    &[data-tone='2'] {
+      background: #f79009;
+    }
+
+    &[data-tone='3'] {
+      background: #7f56d9;
+    }
+
+    &[data-tone='4'] {
+      background: #f04438;
+    }
+
+    &[data-tone='5'] {
+      background: #06aed4;
+    }
+  }
+
+  &__log-model {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+
+    svg {
+      flex: 0 0 auto;
+      color: #667085;
+    }
+
+    strong {
+      min-width: 0;
+      overflow: hidden;
+      color: #1d2939;
+      font-size: 12.5px;
+      font-weight: 650;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+  }
+
+  &__log-duration {
+    font-weight: 650;
+
+    &[data-tone='fast'] {
+      color: #067647;
+    }
+
+    &[data-tone='medium'] {
+      color: #b54708;
+    }
+
+    &[data-tone='slow'] {
+      color: #b42318;
+    }
+  }
+
+  &__log-summary {
+    color: #475467;
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1.45;
   }
 
   &__log-quota {
+    color: #101828;
+    font-size: 12.5px;
+    font-weight: 700;
     text-align: right;
     font-variant-numeric: tabular-nums;
   }

@@ -29,6 +29,40 @@ const DEFAULT_CAPABILITIES: ProviderProfile['capabilities'] = {
   supportsTools: true,
 };
 
+function valuesEqual(left: unknown, right: unknown): boolean {
+  if (Object.is(left, right)) return true;
+  if (Array.isArray(left) || Array.isArray(right)) {
+    if (
+      !Array.isArray(left) ||
+      !Array.isArray(right) ||
+      left.length !== right.length
+    ) {
+      return false;
+    }
+    return left.every((value, index) => valuesEqual(value, right[index]));
+  }
+  if (
+    !left ||
+    !right ||
+    typeof left !== 'object' ||
+    typeof right !== 'object'
+  ) {
+    return false;
+  }
+  const leftRecord = left as Record<string, unknown>;
+  const rightRecord = right as Record<string, unknown>;
+  const leftKeys = Object.keys(leftRecord);
+  const rightKeys = Object.keys(rightRecord);
+  return (
+    leftKeys.length === rightKeys.length &&
+    leftKeys.every(
+      (key) =>
+        Object.prototype.hasOwnProperty.call(rightRecord, key) &&
+        valuesEqual(leftRecord[key], rightRecord[key])
+    )
+  );
+}
+
 function tuziV1BaseUrl(): string {
   return `${tuziEmbeddedConfig.apiBaseUrl?.replace(/\/+$/, '') || ''}/v1`;
 }
@@ -105,13 +139,15 @@ export async function synchronizeTuziManagedProviders(
   providers.forEach((provider) => {
     if (!knownIds.has(provider.id)) merged.push(toProfile(provider, template));
   });
-  await providerProfilesSettings.update(merged);
+  if (!valuesEqual(existing, merged)) {
+    await providerProfilesSettings.update(merged);
+  }
   const validProfileIds = new Set(merged.map((profile) => profile.id));
   const existingCatalogs = providerCatalogsSettings.get();
   const retainedCatalogs = existingCatalogs.filter((catalog) =>
     validProfileIds.has(catalog.profileId)
   );
-  if (retainedCatalogs.length !== existingCatalogs.length) {
+  if (!valuesEqual(retainedCatalogs, existingCatalogs)) {
     await providerCatalogsSettings.update(retainedCatalogs);
   }
 }
