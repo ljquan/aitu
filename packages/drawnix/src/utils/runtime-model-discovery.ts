@@ -7,6 +7,7 @@ import {
   DEFAULT_AUDIO_MODEL_ID,
   DEFAULT_VIDEO_MODEL_ID,
   DEFAULT_TEXT_MODEL_ID,
+  GPT_IMAGE_25_MODEL_IDS,
   getStaticModelsByType,
   getStaticModelConfig,
   isDefaultModelHidden,
@@ -1160,6 +1161,9 @@ function adaptRuntimeModel(model: RemoteModelListItem): ModelConfig | null {
   const staticConfig = getStaticModelConfig(model.id);
   if (staticConfig) {
     const clonedConfig = cloneModelConfig(staticConfig);
+    if (GPT_IMAGE_25_MODEL_IDS.includes(staticConfig.id)) {
+      return clonedConfig;
+    }
     const categoryType = inferModelTypeFromCategory(model.category);
     if (!categoryType || categoryType === staticConfig.type) {
       return clonedConfig;

@@ -46,9 +46,9 @@ describe('model-config image size options', () => {
         },
       ]);
 
-      expect(getSizeOptionsForModel(modelId).map((option) => option.value)).toEqual(
-        expected
-      );
+      expect(
+        getSizeOptionsForModel(modelId).map((option) => option.value)
+      ).toEqual(expected);
     }
   });
 
@@ -68,6 +68,43 @@ describe('model-config image size options', () => {
       'medium',
       'high',
     ]);
+  });
+
+  it.each(['gpt-image-2.5-1k', 'gpt-image-2.5', 'gpt-image-2.5-vip'])(
+    '将 %s 注册为仅支持官方像素尺寸的 GPT 图片模型',
+    (modelId) => {
+      const model = getStaticModelConfig(modelId);
+      const params = getCompatibleParams(modelId);
+
+      expect(model).toMatchObject({
+        id: modelId,
+        type: 'image',
+        vendor: ModelVendor.GPT,
+      });
+      expect(
+        getSizeOptionsForModel(modelId).map((option) => option.value)
+      ).toEqual(['auto', '1024x1024', '1024x1536', '1536x1024']);
+      expect(params.some((param) => param.id === 'resolution')).toBe(false);
+      expect(
+        params
+          .find((param) => param.id === 'quality')
+          ?.options?.map((option) => option.value)
+      ).toEqual(['auto', 'low', 'medium', 'high']);
+    }
+  );
+
+  it('在静态图片模型目录中公开全部 GPT Image 2.5 模型', () => {
+    const imageModelIds = getStaticModelsByType('image').map(
+      (model) => model.id
+    );
+
+    expect(imageModelIds).toEqual(
+      expect.arrayContaining([
+        'gpt-image-2.5-1k',
+        'gpt-image-2.5',
+        'gpt-image-2.5-vip',
+      ])
+    );
   });
 
   it('不再内置已下架的 GPT Image 旧模型', () => {
