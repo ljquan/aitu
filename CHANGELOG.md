@@ -1,3 +1,16 @@
+## 1.1.7 (2026-09-09)
+
+### 🔧 Chores
+
+- 优化 Tuzi 账户同步与模型加载体验 (#254) ([bbb28924](https://github.com/ljquan/opentu/commit/bbb28924))
+- 修复生产环境图片请求恢复与轮询路由 (#253) ([9ad433b0](https://github.com/ljquan/opentu/commit/9ad433b0))
+- 修复 AI 生图、批量生图与视频结果无法渲染 (#252) ([c8fb074c](https://github.com/ljquan/opentu/commit/c8fb074c))
+
+### ❤️  Thank You
+
+- Liang <13642533686@163.com>
+- selwen-0102 <2548530499@qq.com>
+
 ## 1.1.6 (2026-09-07)
 
 ### 🚀 Features

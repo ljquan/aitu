@@ -1,9 +1,10 @@
 {
-  "version": "1.1.6",
-  "buildTime": "2026-09-07T06:27:22.382Z",
+  "version": "1.1.7",
+  "buildTime": "2026-09-09T03:04:15.273Z",
   "gitCommit": "unknown",
   "changelog": [
-    "support dragging images into reference inputs (#251)",
-    "融合 AI 语义分层与图片生成增强 (#250)"
+    "修复 AI 生图、批量生图与视频结果无法渲染 (#252)",
+    "优化 Tuzi 账户同步与模型加载体验 (#254)",
+    "修复生产环境图片请求恢复与轮询路由 (#253)"
   ]
 }

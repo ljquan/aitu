@@ -1,6 +1,21 @@
 {
   "versions": [
     {
+      "version": "1.1.7",
+      "date": "2026-09-09",
+      "changes": {
+        "features": [],
+        "fixes": [],
+        "improvements": [
+          "优化 Tuzi 账户同步与模型加载体验 (#254)",
+          "修复生产环境图片请求恢复与轮询路由 (#253)",
+          "修复 AI 生图、批量生图与视频结果无法渲染 (#252)"
+        ]
+      },
+      "type": "patch",
+      "highlights": "构建修复与稳定性改进"
+    },
+    {
       "version": "1.1.6",
       "date": "2026-09-07",
       "changes": {
@@ -984,19 +999,6 @@
       },
       "type": "patch",
       "highlights": "为 API Key 输入框添加显示/隐藏切换功能"
-    },
-    {
-      "version": "0.6.86",
-      "date": "2026-04-28",
-      "changes": {
-        "features": [],
-        "fixes": [],
-        "improvements": [
-          "更新版本号至 0.6.85 并同步构建时间"
-        ]
-      },
-      "type": "patch",
-      "highlights": "构建修复与稳定性改进"
     }
   ]
 }
