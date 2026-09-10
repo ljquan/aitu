@@ -727,6 +727,15 @@ describe('runtime-model-discovery', () => {
                   owned_by: 'openai',
                   category: '生图',
                 },
+                ...[
+                  'gpt-image-2.5-1k',
+                  'gpt-image-2.5',
+                  'gpt-image-2.5-vip',
+                ].map((id) => ({
+                  id,
+                  owned_by: 'openai',
+                  category: '文本',
+                })),
               ],
             }),
         };
@@ -792,6 +801,15 @@ describe('runtime-model-discovery', () => {
       id: 'gpt-image-2',
       type: 'image',
     });
+    for (const modelId of [
+      'gpt-image-2.5-1k',
+      'gpt-image-2.5',
+      'gpt-image-2.5-vip',
+    ]) {
+      expect(models.find((model) => model.id === modelId)).toMatchObject({
+        type: 'image',
+      });
+    }
   });
 
   it('不会把 OpenAI 自有 omni 模型误归类为 Gemini', async () => {

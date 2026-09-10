@@ -117,6 +117,57 @@ describe('ai-generation-preferences-service', () => {
     });
   });
 
+  it.each([
+    ['auto', 'auto', 'auto'],
+    ['1:1', '1024x1024', '1:1'],
+    ['2:3', '1024x1536', '2:3'],
+    ['3:2', '1536x1024', '3:2'],
+    ['3:4', '1024x1536', '2:3'],
+    ['4:3', '1536x1024', '3:2'],
+    ['4:5', '1024x1536', '2:3'],
+    ['5:4', '1536x1024', '3:2'],
+    ['9:16', '1024x1536', '2:3'],
+    ['16:9', '1536x1024', '3:2'],
+    ['1:4', 'auto', 'auto'],
+    ['21:9', 'auto', 'auto'],
+  ])(
+    'GPT Image 2.5 将图片工具比例 %s 映射为官方尺寸 %s',
+    async (aspectRatio, expectedSize, expectedAspectRatio) => {
+      const {
+        loadScopedAIImageToolPreferences,
+        loadScopedAIInputModelParams,
+        saveAIImageToolPreferences,
+      } = await import('../ai-generation-preferences-service');
+
+      saveAIImageToolPreferences({
+        currentModel: 'gpt-image-2.5',
+        currentSelectionKey: 'provider-a::gpt-image-2.5',
+        extraParams: {},
+        aspectRatio,
+      });
+
+      expect(
+        loadScopedAIImageToolPreferences(
+          'gpt-image-2.5',
+          'provider-a::gpt-image-2.5'
+        )
+      ).toMatchObject({
+        extraParams: {
+          size: expectedSize,
+          quality: 'auto',
+        },
+        aspectRatio: expectedAspectRatio,
+      });
+      expect(
+        loadScopedAIInputModelParams(
+          'image',
+          'gpt-image-2.5',
+          'provider-a::gpt-image-2.5'
+        )
+      ).toMatchObject({ size: expectedSize });
+    }
+  );
+
   it('将 GPT Image 的旧 quality 档位偏好迁移到 resolution', async () => {
     localStorage.setItem(
       'aitu_ai_image_tool_preferences',

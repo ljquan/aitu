@@ -70,6 +70,8 @@ import {
   getCompatibleParams,
   getSizeOptionsForModel,
 } from '../../constants/model-config';
+import { matchFrameSizeForModel } from '../../utils/frame-size-matcher';
+import { sizeToAspectRatio } from '../../services/media-api/utils';
 import { useSelectableModels } from '../../hooks/use-runtime-models';
 import { getPinnedSelectableModel } from '../../utils/runtime-model-discovery';
 import {
@@ -121,7 +123,7 @@ function getAspectRatioFromSizeParam(size?: string): string | undefined {
   if (!size) return undefined;
   if (size === 'auto') return DEFAULT_ASPECT_RATIO;
 
-  const aspectRatio = size.replace(/[xX]/g, ':');
+  const aspectRatio = sizeToAspectRatio(size.toLowerCase());
   return ASPECT_RATIO_OPTIONS.some((option) => option.value === aspectRatio)
     ? aspectRatio
     : undefined;
@@ -147,14 +149,19 @@ function applyAspectRatioToParams(
     return params;
   }
 
-  const nextSize =
+  let nextSize =
     nextAspectRatio === DEFAULT_ASPECT_RATIO
       ? 'auto'
       : convertAspectRatioToSize(nextAspectRatio);
+  const sizeOptions = getSizeOptionsForModel(modelId);
   if (
-    !nextSize ||
-    !getSizeOptionsForModel(modelId).some((option) => option.value === nextSize)
+    nextSize !== 'auto' &&
+    !sizeOptions.some((option) => option.value === nextSize)
   ) {
+    const [width, height] = nextAspectRatio.split(':').map(Number);
+    nextSize = matchFrameSizeForModel(width, height, modelId);
+  }
+  if (!nextSize || !sizeOptions.some((option) => option.value === nextSize)) {
     return params;
   }
 

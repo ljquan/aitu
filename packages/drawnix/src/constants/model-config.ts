@@ -453,6 +453,40 @@ export const IMAGE_MODEL_MORE_OPTIONS: ModelConfig[] = [
     tags: ['new'],
   },
   {
+    id: 'gpt-image-2.5-1k',
+    label: 'gpt-image-2.5-1k',
+    shortCode: 'gpt251k',
+    description: 'OpenAI GPT Image 2.5 1K 图片生成模型',
+    type: 'image',
+    vendor: ModelVendor.GPT,
+    supportsTools: true,
+    imageDefaults: IMAGE_DEFAULT_PARAMS,
+    tags: ['new'],
+  },
+  {
+    id: 'gpt-image-2.5',
+    label: 'gpt-image-2.5',
+    shortCode: 'gpt25',
+    description: 'OpenAI GPT Image 2.5 图片生成模型',
+    type: 'image',
+    vendor: ModelVendor.GPT,
+    supportsTools: true,
+    imageDefaults: IMAGE_DEFAULT_PARAMS,
+    tags: ['new'],
+  },
+  {
+    id: 'gpt-image-2.5-vip',
+    label: 'gpt-image-2.5-vip',
+    shortCode: 'gpt25v',
+    description: 'OpenAI GPT Image 2.5 VIP 图片生成模型',
+    type: 'image',
+    vendor: ModelVendor.GPT,
+    isVip: true,
+    supportsTools: true,
+    imageDefaults: IMAGE_DEFAULT_PARAMS,
+    tags: ['new'],
+  },
+  {
     id: 'bfl-flux-2-pro',
     label: 'Flux 2 Pro',
     shortLabel: 'flux-2-pro',
@@ -1882,8 +1916,18 @@ export const GPT_IMAGE_2_MODEL_IDS = [
   'gpt-image2',
 ];
 
+/** GPT Image 2.5 模型 ID（仅支持官方三种像素尺寸） */
+export const GPT_IMAGE_25_MODEL_IDS = [
+  'gpt-image-2.5-1k',
+  'gpt-image-2.5',
+  'gpt-image-2.5-vip',
+];
+
 /** 所有 GPT 图片模型 ID */
-const GPT_IMAGE_MODEL_IDS = [...GPT_IMAGE_2_MODEL_IDS];
+const GPT_IMAGE_MODEL_IDS = [
+  ...GPT_IMAGE_2_MODEL_IDS,
+  ...GPT_IMAGE_25_MODEL_IDS,
+];
 const MJ_IMAGE_MODEL_IDS = ['mj-imagine'];
 const GEMINI_31_FLASH_IMAGE_MODEL_IDS = ['gemini-3.1-flash-image-preview'];
 
@@ -2591,6 +2635,23 @@ export const IMAGE_PARAMS: ParamConfig[] = [
     ],
     defaultValue: 'auto',
     compatibleModels: GPT_IMAGE_2_MODEL_IDS,
+    modelType: 'image',
+  },
+  // GPT Image 2.5 官方像素尺寸
+  {
+    id: 'size',
+    label: '图片尺寸',
+    shortLabel: '尺寸',
+    description: '生成图片的官方像素尺寸',
+    valueType: 'enum',
+    options: [
+      { value: 'auto', label: '自动' },
+      { value: '1024x1024', label: '1024x1024' },
+      { value: '1024x1536', label: '1024x1536' },
+      { value: '1536x1024', label: '1536x1024' },
+    ],
+    defaultValue: 'auto',
+    compatibleModels: GPT_IMAGE_25_MODEL_IDS,
     modelType: 'image',
   },
   // GPT Image 2 分辨率档位（由 adapter 结合宽高比映射为官方像素 size）

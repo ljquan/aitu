@@ -79,6 +79,34 @@ describe('tuzi GPT image adapter', () => {
     });
   });
 
+  it.each(['gpt-image-2.5-1k', 'gpt-image-2.5', 'gpt-image-2.5-vip'])(
+    'builds %s requests with only supported sizes',
+    (modelId) => {
+      expect(
+        buildTuziGPTImageRequestBody({
+          model: modelId,
+          prompt: 'Draw a clean product photo',
+          size: '1024x1536',
+        })
+      ).toEqual({
+        model: modelId,
+        prompt: 'Draw a clean product photo',
+        size: '1024x1536',
+      });
+
+      expect(
+        buildTuziGPTImageRequestBody({
+          model: modelId,
+          prompt: 'Draw a clean product photo',
+          size: '2048x2048',
+        })
+      ).toEqual({
+        model: modelId,
+        prompt: 'Draw a clean product photo',
+      });
+    }
+  );
+
   it('treats legacy 1K/2K/4K quality values as resolution compatibility hints', () => {
     expect(
       buildTuziGPTImageRequestBody({
@@ -161,12 +189,20 @@ describe('tuzi GPT image adapter', () => {
 
   it('uses the provider binding model id instead of a stale image2 task alias', async () => {
     const controller = new AbortController();
-    mocks.sendAdapterRequest.mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        data: [{ url: 'https://example.com/tuzi.png' }],
-      }),
-    });
+    mocks.sendAdapterRequest.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: [
+            {
+              url: 'https://example.com/tuzi.png',
+              width: 1024,
+              height: 1024,
+            },
+          ],
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      )
+    );
 
     await tuziGPTImageAdapter.generateImage(
       {
@@ -223,7 +259,13 @@ describe('tuzi GPT image adapter', () => {
       .mockResolvedValueOnce(
         new Response(
           JSON.stringify({
-            data: [{ url: 'https://example.com/tuzi.png' }],
+            data: [
+              {
+                url: 'https://example.com/tuzi.png',
+                width: 1024,
+                height: 1024,
+              },
+            ],
           }),
           { status: 200, headers: { 'Content-Type': 'application/json' } }
         )
