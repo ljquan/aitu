@@ -35,7 +35,7 @@
 - [素材库渲染性能经验](./MEDIA_LIBRARY_RENDER_PERFORMANCE_LESSONS.md)：列表、预览和性能优化。
 - [异步任务供应商路由经验](./ASYNC_TASK_PROVIDER_ROUTE_LESSONS.md)：多供应商异步任务提交、恢复查询和路由快照规则。
 - [模型分类优先级经验](./MODEL_CATEGORY_PRIORITY_LESSONS.md)：接口 `category`、`image` 词根和 endpoint 的判定顺序。
-- [图片请求 ID](./IMAGE_REQUEST_ID_LESSONS.md)：本地任务 UUID 的生成、图片提交透传与回归边界。
+- [图片请求 ID](./2026-09-10-图片Request-ID与刷新恢复-经验文档.md)：本地任务 UUID 的生成、图片提交透传与回归边界。
 - [AI 生图、批量生图与视频结果无法渲染修复交接文档](./2026-09-07-AI生图批量生图与视频无法渲染-交接文档.md)：多结果展开、媒体缓存有效性、缓存失败降级和视频签名 URL 修复。
 - [批量出图预览单张删除经验](./BATCH_IMAGE_GENERATION_PREVIEW_DELETE_LESSONS.md)：单张结果删除、任务解绑、状态重算与画布边界。
 - [AI 任务队列多结果插入画布修复](./2026-08-21-AI任务队列多结果插入画布修复-交接文档.md)：单任务多 URL 展开、无 DOM 暂存、原子提交和跨供应商回归边界。

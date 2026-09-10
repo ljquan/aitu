@@ -14,6 +14,7 @@ import {
   readProviderResponseText,
 } from '../provider-routing';
 import { canAttachProviderRequestIdHeader } from '../provider-routing';
+import { sendAdapterRequest } from '../model-adapters/context';
 import {
   TUZI_API_FALLBACK_ENDPOINTS,
   TUZI_API_REQUEST_ID_CORS_ENDPOINTS,
@@ -596,6 +597,77 @@ describe('provider routing', () => {
       }
     }
   );
+
+  it('keeps a GPT Image 2.5 submission on the fixed proxy with its stable Request ID', async () => {
+    vi.stubGlobal('location', { hostname: 'opentu.ai' });
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(
+        Response.json({ data: [{ url: 'https://example.com/image.png' }] })
+      );
+
+    try {
+      await sendAdapterRequest(
+        {
+          baseUrl: 'https://api.tu-zi.com/v1',
+          operation: 'image',
+          apiKey: 'secret',
+          authType: 'bearer',
+          requestId: 'gpt-image-25-task-id',
+          fetcher,
+          binding: {
+            id: 'gpt-image-25-binding',
+            profileId: 'provider-tuzi',
+            modelId: 'gpt-image-2.5',
+            operation: 'image',
+            protocol: 'openai.images.generations',
+            requestSchema: 'tuzi.image.gpt-generation-json',
+            responseSchema: 'openai.image.data',
+            submitPath: '/images/generations',
+            priority: 900,
+            confidence: 'high',
+            source: 'template',
+          },
+        },
+        {
+          path: '/images/generations',
+          baseUrlStrategy: 'ensure-v1',
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: 'gpt-image-2.5',
+            prompt: 'test',
+          }),
+        }
+      );
+
+      expect(fetcher).toHaveBeenCalledTimes(1);
+      expect(fetcher.mock.calls[0]?.[0]).toBe(
+        '/__opentu_tuzi_proxy__/api/v1/images/generations'
+      );
+      expect(fetcher.mock.calls[0]?.[1]?.headers).toMatchObject({
+        Authorization: 'Bearer secret',
+        'X-Request-Id': 'gpt-image-25-task-id',
+      });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('blocks a supported fixed-proxy image submission without a Request ID', () => {
+    vi.stubGlobal('location', { hostname: 'opentu.ai' });
+
+    try {
+      expect(() =>
+        providerTransport.prepareRequest(tuziTransportContext, {
+          path: '/images/generations',
+          method: 'POST',
+        })
+      ).toThrow('Tuzi 图片提交缺少 Request ID');
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
 
   it.each(['/images/generations', '/images/edits'])(
     'keeps a failed proxied image submission to %s single-shot and recoverable',
@@ -1783,27 +1855,29 @@ describe('provider routing', () => {
       .mockResolvedValueOnce(Response.json({ data: [{ url: 'image.png' }] }));
 
     try {
-      const response = await providerTransport.send(
-        {
-          profileId: 'provider-tuzi',
-          profileName: 'Tuzi',
-          providerType: 'openai-compatible',
-          baseUrl: 'https://api.tu-zi.com/v1',
-          apiKey: 'secret',
-          authType: 'bearer',
-        },
-        {
-          path: '/images/generations',
-          method: 'POST',
-          body: '{}',
-          fetcher,
-        }
-      );
+      await expect(
+        providerTransport.send(
+          {
+            profileId: 'provider-tuzi',
+            profileName: 'Tuzi',
+            providerType: 'openai-compatible',
+            baseUrl: 'https://api.tu-zi.com/v1',
+            apiKey: 'secret',
+            authType: 'bearer',
+          },
+          {
+            path: '/images/generations',
+            method: 'POST',
+            requestId: 'html-response-task-id',
+            body: '{}',
+            fetcher,
+          }
+        )
+      ).rejects.toThrow('Tuzi 同源代理未生效');
 
-      expect(response.ok).toBe(true);
       expect(fetcher).toHaveBeenCalledTimes(1);
       expect(String(fetcher.mock.calls[0]?.[0])).toBe(
-        'https://api.tu-zi.com/v1/images/generations'
+        '/__opentu_tuzi_proxy__/api/v1/images/generations'
       );
     } finally {
       vi.unstubAllGlobals();
