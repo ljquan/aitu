@@ -1,8 +1,6 @@
 {
-  "version": "1.1.8",
-  "buildTime": "2026-09-10T01:17:51.320Z",
-  "gitCommit": "ce9ddf1497a5fb8bcb2f98e040cdab0a06778598",
-  "changelog": [
-    "接入 Tuzi GPT Image 2.5 图片模型 (#255)"
-  ]
+  "version": "1.1.9",
+  "buildTime": "2026-09-10T16:16:51.609Z",
+  "gitCommit": "b0d039b428e91c56e21edb450ffbb08c5d2d91e9",
+  "changelog": ["修复：加固 Tuzi 同源代理与请求标识 (#256)"]
 }

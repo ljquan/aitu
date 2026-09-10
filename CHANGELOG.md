@@ -1,3 +1,13 @@
+## 1.1.9 (2026-09-10)
+
+### 🔧 Chores
+
+- 修复：加固 Tuzi 同源代理与请求标识 (#256) ([b0d039b4](https://github.com/ljquan/opentu/commit/b0d039b4))
+
+### ❤️  Thank You
+
+- selwen-0102 <2548530499@qq.com>
+
 ## 1.1.8 (2026-09-10)
 
 ### 🔧 Chores
