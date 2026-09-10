@@ -1,10 +1,8 @@
 {
-  "version": "1.1.7",
-  "buildTime": "2026-09-09T03:04:15.273Z",
-  "gitCommit": "unknown",
+  "version": "1.1.8",
+  "buildTime": "2026-09-10T01:17:51.320Z",
+  "gitCommit": "ce9ddf1497a5fb8bcb2f98e040cdab0a06778598",
   "changelog": [
-    "修复 AI 生图、批量生图与视频结果无法渲染 (#252)",
-    "优化 Tuzi 账户同步与模型加载体验 (#254)",
-    "修复生产环境图片请求恢复与轮询路由 (#253)"
+    "接入 Tuzi GPT Image 2.5 图片模型 (#255)"
   ]
 }

@@ -1,6 +1,19 @@
 {
   "versions": [
     {
+      "version": "1.1.8",
+      "date": "2026-09-10",
+      "changes": {
+        "features": [],
+        "fixes": [],
+        "improvements": [
+          "接入 Tuzi GPT Image 2.5 图片模型 (#255)"
+        ]
+      },
+      "type": "patch",
+      "highlights": "构建修复与稳定性改进"
+    },
+    {
       "version": "1.1.7",
       "date": "2026-09-09",
       "changes": {
@@ -983,22 +996,6 @@
       },
       "type": "patch",
       "highlights": "改进动态导入错误恢复机制并优化错误处理"
-    },
-    {
-      "version": "0.6.87",
-      "date": "2026-04-28",
-      "changes": {
-        "features": [
-          "为 API Key 输入框添加显示/隐藏切换功能"
-        ],
-        "fixes": [
-          "stabilize GPT image generation requests",
-          "retry failed image generation anchors"
-        ],
-        "improvements": []
-      },
-      "type": "patch",
-      "highlights": "为 API Key 输入框添加显示/隐藏切换功能"
     }
   ]
 }

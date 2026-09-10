@@ -1,3 +1,13 @@
+## 1.1.8 (2026-09-10)
+
+### 🔧 Chores
+
+- 接入 Tuzi GPT Image 2.5 图片模型 (#255) ([ce9ddf14](https://github.com/ljquan/opentu/commit/ce9ddf14))
+
+### ❤️  Thank You
+
+- selwen-0102 <2548530499@qq.com>
+
 ## 1.1.7 (2026-09-09)
 
 ### 🔧 Chores
