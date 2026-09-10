@@ -109,4 +109,4 @@ Tuzi `default` 分组的 GPT Image 简化 JSON 格式对文生图和参考图请
 - `packages/drawnix/src/utils/provider-base-url.ts`
 - `packages/drawnix/src/services/__tests__/provider-routing.test.ts`
 - `packages/drawnix/src/services/__tests__/tuzi-gpt-image-adapter.test.ts`
-- `docs/PROVIDER_IMAGE_CORS_LESSONS.md`
+- `docs/2026-09-10-多供应商生图CORS预检失败-排障文档.md`

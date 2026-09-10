@@ -774,8 +774,7 @@ function routeTuziImageRecoveryRequest(
 ): ResolvedProviderContext {
   if (
     !(
-      (request.requestId &&
-        isTuziImageSubmissionProxyRequest(context, request)) ||
+      isTuziImageSubmissionProxyRequest(context, request) ||
       isTuziImageRecoveryProxyRequest(context, request)
     )
   ) {
@@ -793,6 +792,31 @@ function routeTuziImageRecoveryRequest(
   }
 
   return { ...context, baseUrl: proxiedBaseUrl };
+}
+
+function assertValidTuziImageSubmissionTransport(
+  context: ResolvedProviderContext,
+  request: ProviderTransportRequest,
+  url: string,
+  headers: Record<string, string>
+): void {
+  if (!isTuziImageSubmissionProxyRequest(context, request)) {
+    return;
+  }
+
+  if (!request.requestId) {
+    throw new Error('Tuzi 图片提交缺少 Request ID，已阻止无法恢复的正式请求');
+  }
+  if (!url.startsWith(`${TUZI_SAME_ORIGIN_PROXY_PREFIX}/`)) {
+    throw new Error('Tuzi 图片提交未进入同源代理，已阻止跨域正式请求');
+  }
+
+  const attachedRequestId = Object.entries(headers).find(
+    ([name]) => name.toLowerCase() === 'x-request-id'
+  )?.[1];
+  if (attachedRequestId !== request.requestId) {
+    throw new Error('Tuzi 图片提交的 Request ID 未正确附加');
+  }
 }
 
 /**
@@ -855,6 +879,12 @@ export class ProviderTransport {
       request.requestId,
       canAttachProviderRequestIdHeader(context, request),
       Boolean(request.requestId) || isReadOnlyRequestMethod(request.method)
+    );
+    assertValidTuziImageSubmissionTransport(
+      context,
+      request,
+      url,
+      finalHeaders
     );
 
     return {
