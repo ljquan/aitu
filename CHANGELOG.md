@@ -1,3 +1,13 @@
+## 1.1.10 (2026-09-11)
+
+### 🔧 Chores
+
+- 修复：提高生产图片同源代理请求体上限 (#257) ([9b015af4](https://github.com/ljquan/opentu/commit/9b015af4))
+
+### ❤️  Thank You
+
+- selwen-0102 <2548530499@qq.com>
+
 ## 1.1.9 (2026-09-10)
 
 ### 🔧 Chores

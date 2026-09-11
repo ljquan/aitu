@@ -1,6 +1,8 @@
 {
-  "version": "1.1.9",
-  "buildTime": "2026-09-10T16:16:51.609Z",
-  "gitCommit": "b0d039b428e91c56e21edb450ffbb08c5d2d91e9",
-  "changelog": ["修复：加固 Tuzi 同源代理与请求标识 (#256)"]
+  "version": "1.1.10",
+  "buildTime": "2026-09-11T17:27:11.876Z",
+  "gitCommit": "unknown",
+  "changelog": [
+    "修复：提高生产图片同源代理请求体上限 (#257)"
+  ]
 }

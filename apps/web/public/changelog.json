@@ -1,6 +1,19 @@
 {
   "versions": [
     {
+      "version": "1.1.10",
+      "date": "2026-09-11",
+      "changes": {
+        "features": [],
+        "fixes": [],
+        "improvements": [
+          "修复：提高生产图片同源代理请求体上限 (#257)"
+        ]
+      },
+      "type": "patch",
+      "highlights": "构建修复与稳定性改进"
+    },
+    {
       "version": "1.1.9",
       "date": "2026-09-10",
       "changes": {
@@ -975,24 +988,6 @@
       },
       "type": "patch",
       "highlights": "构建修复与稳定性改进"
-    },
-    {
-      "version": "0.6.89",
-      "date": "2026-04-29",
-      "changes": {
-        "features": [
-          "添加PPT生成参考图片支持并修复React组件卸载问题"
-        ],
-        "fixes": [
-          "修复图片生成完成后画布自动插入卡住"
-        ],
-        "improvements": [
-          "添加 mermaid 依赖用于图表渲染",
-          "更新应用版本号至0.6.88并同步构建时间"
-        ]
-      },
-      "type": "patch",
-      "highlights": "添加PPT生成参考图片支持并修复React组件卸载问题"
     }
   ]
 }
